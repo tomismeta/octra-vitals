@@ -372,7 +372,7 @@ Programmed-Circle readiness is live, not manifest-only. `/api/native-readiness` 
 
 Deploy and submit reports include native fee/staging telemetry from `octra_recommendedFee`, `staging_stats`, and `staging_estimateOu`. Treat this as operator telemetry; it does not replace explicit write confirmation and receipt verification.
 
-Asset publishing remains single-transaction by default for easiest troubleshooting. Set `VITALS_SITE_ASSET_SUBMIT_BATCH=1` only after the target RPC has been probed for `octra_submitBatch` support in that environment.
+Asset publishing remains single-transaction by default for easiest troubleshooting. Set `VITALS_SITE_ASSET_SUBMIT_BATCH=1` only after the target RPC has been probed for `octra_submitBatch` support in that environment. Batch mode reduces RPC submit round trips, but it still produces one signed asset transaction, nonce, transaction hash, confirmation, and `circle_asset` readback per file. Treat any rejected batch item, missing transaction confirmation, or `/api/site-integrity` mismatch as a failed asset publish.
 
 ## Systemd
 

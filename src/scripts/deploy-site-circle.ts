@@ -69,8 +69,8 @@ function base58Encode(bytes: Buffer): string {
   return encoded;
 }
 
-function circleIdOfDeploy(deployer: string, nonce: number, payload: unknown): string {
-  const payloadHash = h256Hex("octra:circle_deploy_payload:v1", [Buffer.from(JSON.stringify(payload))]);
+function circleIdOfDeployPayloadJson(deployer: string, nonce: number, payloadJson: string): string {
+  const payloadHash = h256Hex("octra:circle_deploy_payload:v1", [Buffer.from(payloadJson)]);
   const seed = h256Raw("octra:circle_deploy_id:v1", [
     Buffer.from(deployer),
     u64be(nonce),
@@ -192,6 +192,101 @@ function txSummary(tx: any): Record<string, unknown> | null {
   return summary;
 }
 
+function recordValue(value: unknown): Record<string, unknown> | null {
+  return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : null;
+}
+
+function numberValue(value: unknown): number | null {
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  if (typeof value === "string" && value.trim().length > 0) {
+    const parsed = Number(value);
+    if (Number.isFinite(parsed)) return parsed;
+  }
+  return null;
+}
+
+function stringValue(value: unknown): string | null {
+  return typeof value === "string" && value.length > 0 ? value : null;
+}
+
+function batchResultTxHash(result: unknown): string | null {
+  const row = recordValue(result);
+  if (!row) return null;
+  return stringValue(row.tx_hash) || stringValue(row.hash) || stringValue(row.transaction_hash);
+}
+
+function batchResultAccepted(result: unknown): boolean | null {
+  const row = recordValue(result);
+  if (!row) return null;
+  const status = stringValue(row.status)?.toLowerCase() || "";
+  if (/^(accepted|submitted|ok|success|confirmed)$/.test(status)) return true;
+  if (/reject|error|fail/.test(status)) return false;
+  if (row.error || row.reason || row.reject_reason || row.reject_type) return false;
+  return null;
+}
+
+interface PreparedAssetTx {
+  path: string;
+  nonce: number;
+  ou: string;
+  op_type: string;
+  tx_hash: string;
+  tx_json: Record<string, unknown>;
+}
+
+function validateBatchSubmitResult(batchSubmitResult: unknown, assetTxs: PreparedAssetTx[]) {
+  const response = recordValue(batchSubmitResult);
+  const results = Array.isArray(response?.results) ? response.results : [];
+  const total = numberValue(response?.total);
+  const accepted = numberValue(response?.accepted);
+  const rejected = numberValue(response?.rejected);
+  const errors: string[] = [];
+
+  if (!response) errors.push("batch response was not an object");
+  if (total !== null && total !== assetTxs.length) errors.push(`batch total ${total} did not match asset count ${assetTxs.length}`);
+  if (accepted !== null && accepted !== assetTxs.length) errors.push(`batch accepted ${accepted} did not match asset count ${assetTxs.length}`);
+  if (rejected !== null && rejected !== 0) errors.push(`batch rejected ${rejected} asset transaction(s)`);
+  if (results.length > 0 && results.length !== assetTxs.length) {
+    errors.push(`batch result count ${results.length} did not match asset count ${assetTxs.length}`);
+  }
+  if (total === null && accepted === null && rejected === null && results.length === 0) {
+    errors.push("batch response did not include counts or per-transaction results");
+  }
+
+  const perAsset = assetTxs.map((asset, index) => {
+    const result = results[index] || null;
+    const returnedHash = batchResultTxHash(result);
+    const acceptedResult = batchResultAccepted(result);
+    const row = recordValue(result);
+    const status = stringValue(row?.status);
+    if (acceptedResult === false) {
+      errors.push(`batch result ${index} for ${asset.path} was not accepted`);
+    }
+    const confirmationTxHash = returnedHash || asset.tx_hash;
+    return {
+      path: asset.path,
+      nonce: asset.nonce,
+      prepared_tx_hash: asset.tx_hash,
+      tx_hash: confirmationTxHash,
+      batch_result_index: index,
+      status,
+      returned_tx_hash: returnedHash,
+      hash_source: returnedHash ? "batch_result" : "prepared_transaction",
+      accepted: acceptedResult
+    };
+  });
+
+  return {
+    ok: errors.length === 0,
+    total,
+    accepted,
+    rejected,
+    result_count: results.length,
+    errors,
+    per_asset: perAsset
+  };
+}
+
 async function pollTx(hash: string, attempts = 45): Promise<any> {
   let latest: any = null;
   for (let attempt = 0; attempt < attempts; attempt += 1) {
@@ -277,21 +372,12 @@ const circleIdPayload = {
     max_wasm_bytes: String(limits.max_wasm_bytes || "33554432")
   }
 };
-const deployPayload = {
-  runtime: circleIdPayload.runtime,
-  privacy_class: circleIdPayload.privacy_class,
-  browser_mode: circleIdPayload.browser_mode,
-  resource_mode: circleIdPayload.resource_mode,
-  limits: circleIdPayload.limits,
-  ...(circleIdPayload.code_b64 ? { code_b64: circleIdPayload.code_b64 } : {}),
-  ...(circleIdPayload.policy_hash ? { policy_hash: circleIdPayload.policy_hash } : {}),
-  ...(circleIdPayload.members_root ? { members_root: circleIdPayload.members_root } : {}),
-  ...(circleIdPayload.export_policy ? { export_policy: circleIdPayload.export_policy } : {})
-};
+const deployPayload = circleIdPayload;
+const deployPayloadJson = JSON.stringify(deployPayload);
 
 let nonce = deployerAddress ? await nextNonce(deployerAddress) : 0;
 const deployNeeded = !configuredCircleId;
-const circleId = configuredCircleId || (deployerAddress ? circleIdOfDeploy(deployerAddress, nonce, circleIdPayload) : "pending");
+const circleId = configuredCircleId || (deployerAddress ? circleIdOfDeployPayloadJson(deployerAddress, nonce, deployPayloadJson) : "pending");
 const assets = await Promise.all((siteManifest.assets || []).map(async (assetPath: string) => {
   const filePath = join(appDir, assetPath.replace(/^\//, ""));
   const bytes = assetPath === "/vitals.manifest.json"
@@ -342,6 +428,7 @@ if (!deployEnabled) {
     asset_submission_mode: batchAssets ? "batch" : "single",
     circle_id_payload: circleIdPayload,
     deploy_payload: deployPayload,
+    deploy_payload_json: deployPayloadJson,
     fee_telemetry: nativeWriteTelemetry,
     asset_mode: sealedAssets ? "sealed" : "plain",
     sealed_asset_profile: sealedAssets ? {
@@ -372,7 +459,7 @@ if (!deployEnabled) {
       ou: String(deploy.ou || "200000"),
       timestamp: Date.now() / 1000,
       op_type: "deploy_circle",
-      message: JSON.stringify(deployPayload)
+      message: deployPayloadJson
     };
     deploySubmission = await submitCall(wallet, deployTx);
     deployConfirmation = await requireConfirmed(deploySubmission.tx_hash, "Site Circle deploy");
@@ -419,19 +506,30 @@ if (!deployEnabled) {
   });
 
   const assetSubmissions = [];
+  let batchSubmitResult: unknown = null;
+  let batchValidation: ReturnType<typeof validateBatchSubmitResult> | null = null;
   if (batchAssets && assetTxs.length > 0) {
-    const batchSubmitResult = await octraRpc<any>("octra_submitBatch", [assetTxs.map((asset) => asset.tx_json)]);
-    const results = Array.isArray(batchSubmitResult?.results) ? batchSubmitResult.results : [];
+    batchSubmitResult = await octraRpc<any>("octra_submitBatch", [assetTxs.map((asset) => asset.tx_json)]);
+    batchValidation = validateBatchSubmitResult(batchSubmitResult, assetTxs);
+    if (!batchValidation.ok) {
+      throw new Error(`octra_submitBatch did not accept every asset transaction: ${stableJson(batchValidation)}`);
+    }
+    const batchResponse = recordValue(batchSubmitResult);
+    const results = Array.isArray(batchResponse?.results) ? batchResponse.results : [];
     for (const [index, asset] of assetTxs.entries()) {
-      const confirmation = await requireConfirmed(asset.tx_hash, `asset upload ${asset.path}`);
+      const perAssetValidation = batchValidation.per_asset[index];
+      const txHash = stringValue(perAssetValidation?.tx_hash) || asset.tx_hash;
+      const confirmation = await requireConfirmed(txHash, `asset upload ${asset.path}`);
       assetSubmissions.push({
         path: asset.path,
         nonce: asset.nonce,
         ou: asset.ou,
         op_type: asset.op_type,
-        tx_hash: asset.tx_hash,
+        prepared_tx_hash: asset.tx_hash,
+        tx_hash: txHash,
         submit_result: results[index] || batchSubmitResult,
         batch_result_index: index,
+        batch_validation: perAssetValidation,
         tx: txSummary(confirmation)
       });
     }
@@ -464,6 +562,9 @@ if (!deployEnabled) {
     asset_submission_mode: batchAssets ? "batch" : "single",
     circle_id_payload: circleIdPayload,
     deploy_payload: deployPayload,
+    deploy_payload_json: deployPayloadJson,
+    batch_submit_result: batchSubmitResult,
+    batch_validation: batchValidation,
     fee_telemetry: nativeWriteTelemetry,
     asset_mode: sealedAssets ? "sealed" : "plain",
     sealed_asset_profile: sealedAssets ? {
