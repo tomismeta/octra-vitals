@@ -145,6 +145,34 @@ test("operator notifier alerts on stale or non-program latest data", () => {
   assert.equal(alerts.some((alert) => alert.id === "snapshot_stale_gateway"), true);
 });
 
+test("operator notifier does not add conservation alert when latest fetch aborts", () => {
+  const alerts = detectOperatorAlerts(healthySummary({
+    gateway: {
+      ...healthySummary().gateway,
+      latest_ok: false,
+      latest_status_code: null,
+      latest_error: "This operation was aborted",
+      latest_snapshot_id: null,
+      latest_snapshot_index: null,
+      latest_observed_at: null,
+      latest_age_ms: null,
+      latest_source: null,
+      latest_fresh: null,
+      readback_matches: null,
+      conservation_status: null,
+      conservation_flags: [],
+      conservation_largest_abs_delta_raw: null,
+      native_status: null
+    }
+  }), {
+    max_snapshot_age_ms: 45 * 60_000,
+    disk_used_percent: 75,
+    diagnostic_requests_current_hour: 300
+  });
+  assert.equal(alerts.some((alert) => alert.id === "gateway_latest"), true);
+  assert.equal(alerts.some((alert) => alert.id === "conservation_unavailable"), false);
+});
+
 test("operator notifier does not page when gateway receipt readback is temporarily unavailable", () => {
   const alerts = detectOperatorAlerts(healthySummary({
     gateway: {

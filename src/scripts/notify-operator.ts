@@ -542,7 +542,7 @@ async function fetchJson(url: string, timeoutMs: number): Promise<FetchResult> {
 
 async function summarizeGateway(gatewayUrl: string): Promise<GatewaySummary> {
   const base = gatewayUrl.replace(/\/$/, "");
-  const timeoutMs = envNumber("VITALS_NOTIFY_REQUEST_TIMEOUT_MS", 15_000);
+  const timeoutMs = envNumber("VITALS_NOTIFY_REQUEST_TIMEOUT_MS", 30_000);
   const [latest, integrity] = await Promise.all([
     fetchJson(`${base}/api/latest`, timeoutMs),
     fetchJson(`${base}/api/site-integrity`, timeoutMs)
@@ -615,7 +615,7 @@ export function detectOperatorAlerts(summary: OperatorSummary, thresholds: Alert
       message: "latest gateway receipt readback does not match expected values"
     });
   }
-  if (!summary.gateway.conservation_status) {
+  if (summary.gateway.latest_ok && !summary.gateway.conservation_status) {
     alerts.push({
       id: "conservation_unavailable",
       severity: "critical",
