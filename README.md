@@ -1,10 +1,20 @@
 # Octra Vitals
 
-Octra Vitals is a public, Octra-native supply and bridge reconciliation surface.
+Octra Vitals is a public, Octra-native supply and bridge reconciliation surface: a financial instrument that proves itself.
 
 It observes Octra, Ethereum, and relayer RPC sources, commits canonical snapshots into an Octra AML program, and serves a static browser UI that verifies and explains the latest state. The goal is not to replace explorers, RPCs, or bridge internals. The goal is to make the important accounting relationships visible, source-linked, and hard to silently fake.
 
 The current public shape is a programmed Site Circle: the Circle hosts the app assets and also carries the AML state program that stores the latest snapshot plus a bounded recent-history window.
+
+## Verification Boundary
+
+Do not trust the dashboard. The dashboard is designed to prove itself to you.
+
+In a normal browser, Octra Vitals is integrity-verified and gateway-tamper-evident: the page re-derives canonical hashes, checks the payload/evidence/source-reference commitments, recomputes the conservation verdict, and links the on-chain anchors needed for independent inspection.
+
+In a Circle-native client, the trust boundary is stronger: the app can read the programmed Site Circle directly, route around the HTTPS gateway, and verify against the chain-native state surface.
+
+The gateway remains a compatibility shim for normal browsers. It translates HTTPS requests into verified Octra program reads; it is not the source of truth.
 
 ## What It Shows
 
@@ -31,6 +41,8 @@ Octra Vitals is built around a few constraints.
 **Program-backed state.** Production mode requires `program_required` reads from the Vitals AML program. If the program state is unavailable, the app shows unavailable rather than rendering fallback numbers.
 
 **Hash-gated payloads.** The AML program stores canonical snapshot strings and hashes for payload, evidence manifest, source references, summary row, and recent-history window. The gateway and browser verify those hashes before rendering.
+
+**Conservation verdicts.** The app does not only display balances. It recomputes accounting identities and renders whether supply and bridge claims reconcile against the signed snapshot verdict.
 
 **Bounded on-chain history.** AML state stores the latest full snapshot and a fixed recent summary window. Long raw evidence retention belongs on the host or external archival systems, not in AML.
 
@@ -75,13 +87,13 @@ Runs as a HTTPS shim for normal browsers. It serves Circle assets, reads program
 
 **Browser App**
 
-Renders the accounting view, trend window, provenance links, and proof references. It does not use sample values in production mode.
+Renders the accounting view, trend window, provenance links, raw evidence references, and proof references. It re-derives hashes and conservation checks before trusting production values, and it does not use sample values in production mode.
 
 ## Trust Model
 
 Octra Vitals is a reconciliation and proof surface, not a consensus light client.
 
-It trusts configured RPC endpoints for observation, then preserves exactly what was observed through canonical payloads, evidence hashes, source references, and AML commitments. When multiple program RPCs are configured, reads and write preflight/readback must agree. If only one canonical mainnet RPC exists, the system can run with one RPC while keeping the comparison path ready.
+It trusts configured RPC endpoints for observation, then preserves exactly what was observed through canonical payloads, evidence hashes, source references, raw evidence, and AML commitments. A normal browser can verify internal consistency and detect gateway tampering, but it still receives transport through the gateway. A Circle-native client can verify against the programmed Circle state surface directly. When multiple program RPCs are configured, reads and write preflight/readback must agree. If only one canonical mainnet RPC exists, the system can run with one RPC while keeping the comparison path ready.
 
 Bridge residuals are intentionally visible. A positive value for `locked - wOCT - unclaimed` is treated as reconciliation data, not automatically as a Vitals health issue. Red health is reserved for invalid identities such as overclaims, cap/burn mismatch, vault shortfall, missing required fields, or unit/decimal mismatch.
 
