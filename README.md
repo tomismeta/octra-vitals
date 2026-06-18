@@ -198,6 +198,7 @@ See:
 - `docs/architecture.md`
 - `docs/schema.md`
 - `docs/ops.md`
+- `docs/release-management.md`
 - `docs/mainnet-deployment.md`
 - `docs/costs.md`
 - `docs/adr-0001-programmed-site-circle.md`

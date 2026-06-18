@@ -690,6 +690,17 @@ async function loadCircleMetadata(circleId: string): Promise<CircleMetadata> {
   return promise;
 }
 
+async function loadCircleMetadataForStaticHeaders(circleId: string): Promise<CircleMetadata> {
+  const timeoutMs = Number(process.env.VITALS_CIRCLE_METADATA_HEADER_TIMEOUT_MS || 350);
+  const fallback = circleMetadataFromInfo(null, timeoutMs <= 0 ? "circle_info_deferred" : "circle_info_header_timeout");
+  const read = loadCircleMetadata(circleId);
+  if (timeoutMs <= 0) return fallback;
+  return Promise.race([
+    read,
+    new Promise<CircleMetadata>((resolve) => setTimeout(() => resolve(fallback), timeoutMs))
+  ]);
+}
+
 async function mapWithConcurrency<T, R>(items: T[], limit: number, fn: (item: T) => Promise<R>): Promise<R[]> {
   const results = new Array<R>(items.length);
   let next = 0;
@@ -1065,7 +1076,7 @@ async function readCircleStaticAsset(assetPath: string, circleId: string, releas
   const cached = staticAssetCache.get(cacheKey);
   if (cached && Date.now() - cached.cachedAt < cacheMs) return cached;
 
-  const circleMetadata = await loadCircleMetadata(circleId);
+  const circleMetadataRead = loadCircleMetadataForStaticHeaders(circleId);
   const circleAsset = await octraRpc<any>("circle_asset", [circleId, assetPath]);
   const bytes = extractCircleAssetBytes(circleAsset);
   if (!bytes) throw new Error(`circle asset ${assetPath} did not return bytes`);
@@ -1077,6 +1088,7 @@ async function readCircleStaticAsset(assetPath: string, circleId: string, releas
   if (expected && !hashMatches(actual, expected)) {
     throw new Error(`circle asset hash mismatch for ${assetPath}`);
   }
+  const circleMetadata = await circleMetadataRead;
   const value = {
     bytes,
     contentType: releaseContentType(assetPath, releaseAsset),

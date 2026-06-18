@@ -1,0 +1,112 @@
+# Release Management
+
+This project uses one codebase and environment-specific configuration. Devnet and
+mainnet are deployed runtimes, not long-lived branches.
+
+## Source Of Truth
+
+- GitHub `main` is the source of truth for release candidates.
+- Tags are public release markers. Use tags for mainnet releases, not for every
+  devnet rehearsal.
+- `/api/version` is the source of truth for what an environment is actually
+  running.
+- Always compare the deployed SHA to the local or GitHub SHA before deciding
+  whether an environment is current.
+
+Useful checks:
+
+```bash
+git rev-parse HEAD
+curl -fsS https://devnet.octra.live/api/version
+curl -fsS https://octra.live/api/version
+git log --oneline <deployed_sha>..HEAD
+```
+
+If `git log <deployed_sha>..HEAD` prints commits, that environment is behind the
+candidate even if the site looks visually close.
+
+## Promotion Flow
+
+1. Finish local changes on `main`.
+2. Run the local gate:
+
+   ```bash
+   npm run native:verify
+   ```
+
+3. Push `main` to GitHub.
+4. Deploy the exact same SHA to devnet.
+5. Publish the static assets to the devnet programmed Site Circle when app
+   assets changed.
+6. Verify devnet:
+
+   ```bash
+   curl -fsS https://devnet.octra.live/api/version
+   curl -fsS https://devnet.octra.live/api/latest
+   curl -fsS https://devnet.octra.live/api/history
+   curl -fsS https://devnet.octra.live/api/site-integrity
+   curl -fsS https://devnet.octra.live/api/native-readiness
+   ```
+
+7. Capture a devnet rehearsal report for mainnet-gated writes.
+8. Promote the same SHA to mainnet only after devnet is green and reviewed.
+9. Tag the release after mainnet is verified.
+
+## Deployment Objects
+
+Every change should be classified before deployment.
+
+| Layer | What changes | Normal deploy object |
+| --- | --- | --- |
+| Browser app | `app/index.html`, `app/app.js`, `app/style.css`, icons, manifest | Host release plus Circle asset publish |
+| Gateway shim | `src/gateway/**`, route behavior, headers, diagnostics | Host release, restart gateway |
+| Producer/updater | `src/lib/snapshot.ts`, collection, evidence, write path | Host release, updater timer/service |
+| Programmed Circle AML | `program-circle/main.aml`, AML schema/state logic | New program update or new Circle, explicit rehearsal |
+| Runtime config | env values, RPC URLs, Circle ids, timers | Host env update, no git change |
+| Docs/tests | README, docs, test-only files | GitHub only unless included in audit assets |
+
+If browser app assets changed, the Circle asset publish is required for
+`VITALS_STATIC_ASSET_SOURCE=circle_required`. If only gateway code changed, a
+host release and gateway restart are usually enough.
+
+## Devnet First
+
+Devnet is the proving lane. It should run the same architecture as mainnet:
+
+```text
+VITALS_STATE_TARGET_MODE=circle_program
+VITALS_STATE_SOURCE_MODE=program_required
+VITALS_STATIC_ASSET_SOURCE=circle_required
+```
+
+Environment differences should be configuration only: hostnames, Circle ids,
+wallets, allowed hosts, public origins, and RPC/network targets.
+
+Before a mainnet write, capture proof from the deployed devnet SHA:
+
+```bash
+DEPLOY_DEVNET_REHEARSAL_GATEWAY_URL=https://devnet.octra.live \
+bash deploy/mainnet/capture-devnet-rehearsal-report.sh
+```
+
+## Mainnet Guardrails
+
+- Do not deploy mainnet from memory. Run `release:plan` and compare SHAs first.
+- Do not deploy mainnet with uncommitted local changes.
+- Do not deploy a different commit than the one proven on devnet unless the
+  difference is intentionally reviewed.
+- Do not silently fall back to local assets or sample snapshots in production.
+- Keep mainnet wallet material only on the host in root-owned env files.
+
+## Drift Response
+
+When someone asks whether a change is live, answer from data:
+
+1. `git rev-parse HEAD`
+2. `curl /api/version` for devnet and mainnet
+3. `git log <deployed_sha>..HEAD`
+4. classify changed layers from the diff
+5. deploy the missing layer only after the target environment is clear
+
+This avoids confusing GitHub freshness, local freshness, Circle asset freshness,
+and host runtime freshness.
