@@ -1,0 +1,22 @@
+{
+  "name": "octra-vitals",
+  "mode": "public_resources",
+  "entry": "/index.html",
+  "assets": [
+    "/index.html",
+    "/style.css",
+    "/app.js",
+    "/manifest.json",
+    "/vitals.manifest.json",
+    "/producer.audit.json",
+    "/favicon.svg",
+    "/favicon.ico",
+    "/apple-touch-icon.png",
+    "/icon-192.png",
+    "/icon-512.png",
+    "/manifest.webmanifest",
+    "/robots.txt",
+    "/sitemap.xml",
+    "/og-image.png"
+  ]
+}

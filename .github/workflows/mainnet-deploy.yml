@@ -1,0 +1,91 @@
+name: Mainnet Deploy
+
+on:
+  workflow_dispatch:
+    inputs:
+      target_host:
+        description: "SSH host, with or without user@"
+        required: true
+        type: string
+      deployment_environment:
+        description: "GitHub environment and confirmation target"
+        required: true
+        default: stage
+        type: choice
+        options:
+          - stage
+          - mainnet
+      action:
+        description: "Deployment action"
+        required: true
+        default: verify_only
+        type: choice
+        options:
+          - verify_only
+          - plan_release
+          - push_release
+          - deploy_programmed_circle
+          - configure_runtime
+          - publish_assets
+          - submit_snapshot
+          - verify_runtime
+          - enable_timers
+          - full_cutover
+      gateway_port:
+        description: "Gateway listen port on the host"
+        required: true
+        default: "8000"
+        type: string
+      confirmation:
+        description: "Required for write actions: DEPLOY OCTRA VITALS STAGE or DEPLOY OCTRA VITALS MAINNET"
+        required: false
+        default: ""
+        type: string
+      enable_timers_ack:
+        description: "Required only for enable_timers: ENABLE OCTRA VITALS STAGE TIMERS or ENABLE OCTRA VITALS MAINNET TIMERS"
+        required: false
+        default: ""
+        type: string
+      devnet_rehearsal_ack:
+        description: "Required for mainnet write actions: DEVNET REHEARSAL PASSED FOR OCTRA VITALS MAINNET"
+        required: false
+        default: ""
+        type: string
+      devnet_rehearsal_report_b64:
+        description: "Required for mainnet write actions: base64 of build/devnet-rehearsal-report.json"
+        required: false
+        default: ""
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: octra-vitals-mainnet
+  cancel-in-progress: false
+
+jobs:
+  dispatch:
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.deployment_environment }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+      - run: npm ci
+      - name: Dispatch mainnet action
+        env:
+          MAINNET_ACTION: ${{ inputs.action }}
+          MAINNET_TARGET_HOST: ${{ inputs.target_host }}
+          MAINNET_GATEWAY_PORT: ${{ inputs.gateway_port }}
+          MAINNET_CONFIRMATION: ${{ inputs.confirmation }}
+          MAINNET_ENABLE_TIMERS_ACK: ${{ inputs.enable_timers_ack }}
+          MAINNET_DEVNET_REHEARSAL_ACK: ${{ inputs.devnet_rehearsal_ack }}
+          MAINNET_DEVNET_REHEARSAL_REPORT_B64: ${{ inputs.devnet_rehearsal_report_b64 }}
+          DEPLOY_ENVIRONMENT: ${{ inputs.deployment_environment }}
+          DEPLOY_SSH_USER: ${{ secrets.DEPLOY_SSH_USER }}
+          DEPLOY_SSH_PRIVATE_KEY: ${{ secrets.DEPLOY_SSH_PRIVATE_KEY }}
+          DEPLOY_UPDATER_ENV_B64: ${{ secrets.DEPLOY_UPDATER_ENV_B64 }}
+        run: bash deploy/mainnet/github-dispatch.sh

@@ -1,0 +1,23 @@
+{
+  "schema_version": "octra-vitals-app-manifest-v0",
+  "app_name": "Octra Vitals",
+  "app_version": "0.1.0",
+  "gateway_origin": "pending",
+  "octra_scan_address_url": "pending",
+  "octra_scan_tx_url": "pending",
+  "allow_sample_fallback": false,
+  "site_circle_id": "pending",
+  "state_target_mode": "state_program",
+  "programmed_circle_id": "pending",
+  "state_program_address": "pending",
+  "state_program_source_hash": "pending",
+  "state_program_bytecode_hash": "pending",
+  "state_program_verification_hash": "pending",
+  "state_program_verification_safety": "pending",
+  "entry": "/index.html",
+  "authority": {
+    "canonical_app": "site-circle",
+    "canonical_state": "vitals-state-program",
+    "gateway_role": "https-transport-adapter"
+  }
+}

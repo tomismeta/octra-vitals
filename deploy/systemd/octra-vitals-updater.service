@@ -1,0 +1,47 @@
+[Unit]
+Description=Octra Vitals snapshot updater
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=octra-vitals-operator
+Group=octra-vitals
+WorkingDirectory=/opt/octra-vitals/current
+Environment=VITALS_DATA_DIR=/var/lib/octra-vitals
+Environment=VITALS_GATEWAY_ROLE=production
+Environment=VITALS_STATE_SOURCE_MODE=program_required
+Environment=VITALS_SUBMIT=0
+Environment=VITALS_UPDATE_RETENTION_MAX_RUNS=672
+Environment=VITALS_UPDATE_RETENTION_MAX_AGE_MS=604800000
+Environment=VITALS_UPDATE_EVIDENCE_RETENTION_MAX_AGE_MS=31536000000
+Environment=NPM_CONFIG_CACHE=/var/lib/octra-vitals/npm-cache
+EnvironmentFile=-/etc/octra-vitals/updater.env
+ExecStart=/usr/bin/node /opt/octra-vitals/current/dist/scripts/run-snapshot-update.js
+TimeoutStartSec=600
+Restart=on-failure
+RestartSec=45s
+NoNewPrivileges=yes
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectSystem=strict
+ProtectHome=read-only
+ReadWritePaths=/var/lib/octra-vitals
+RestrictSUIDSGID=yes
+LockPersonality=yes
+RemoveIPC=yes
+CapabilityBoundingSet=
+AmbientCapabilities=
+ProtectProc=invisible
+ProcSubset=pid
+ProtectKernelLogs=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+ProtectClock=yes
+ProtectHostname=yes
+RestrictNamespaces=yes
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+RestrictRealtime=yes
+SystemCallArchitectures=native
+UMask=0007

@@ -1,0 +1,356 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Octra Vitals</title>
+<meta name="description" content="Live Octra network supply and bridge reconciliation, backed by programmed Circle snapshots." />
+<meta name="theme-color" content="#0000db" />
+<link rel="canonical" href="https://octra.live/" />
+<link rel="icon" href="./favicon.svg" type="image/svg+xml" />
+<link rel="icon" href="./favicon.ico" sizes="any" />
+<link rel="apple-touch-icon" href="./apple-touch-icon.png" />
+<link rel="manifest" href="./manifest.webmanifest" />
+<meta property="og:type" content="website" />
+<meta property="og:title" content="Octra Vitals" />
+<meta property="og:description" content="Live Octra network supply and bridge reconciliation, backed by programmed Circle snapshots." />
+<meta property="og:url" content="https://octra.live/" />
+<meta property="og:image" content="https://octra.live/og-image.png" />
+<meta name="twitter:card" content="summary_large_image" />
+<meta name="twitter:title" content="Octra Vitals" />
+<meta name="twitter:description" content="Live Octra network supply and bridge reconciliation, backed by programmed Circle snapshots." />
+<meta name="twitter:image" content="https://octra.live/og-image.png" />
+<link rel="stylesheet" href="./style.css?v=0.1.0" />
+</head>
+<body>
+<a class="skip" href="#understand">Skip to content</a>
+
+<!-- ============ STICKY NAV ============ -->
+<nav class="nav" aria-label="Primary">
+  <div class="nav-in">
+    <span class="brand">Octra&nbsp;<b>Vitals</b></span>
+    <div class="nav-links">
+      <a href="#understand"><span class="nstep">I</span><span class="full">Understand</span></a>
+      <a href="#monitor"><span class="nstep">II</span><span class="full">Monitor</span></a>
+      <a href="#verify"><span class="nstep">III</span><span class="full">Verify</span></a>
+    </div>
+    <a class="nav-clock" id="nav-snapshot" href="/api/latest" aria-label="Snapshot freshness">
+      <span class="dot" aria-hidden="true"></span>
+      <span class="freshness" id="nav-sid">Snapshot</span>
+      <span class="stamp" id="nav-obs">--:--</span>
+    </a>
+  </div>
+</nav>
+
+<div class="env-banner" id="env-banner" hidden aria-live="polite">
+  <div class="env-banner-track">
+    <span>DEVNET ENVIRONMENT · OCTRA VITALS DEVNET · DATA AND STATE ARE DEVNET ONLY · </span>
+    <span>DEVNET ENVIRONMENT · OCTRA VITALS DEVNET · DATA AND STATE ARE DEVNET ONLY · </span>
+    <span>DEVNET ENVIRONMENT · OCTRA VITALS DEVNET · DATA AND STATE ARE DEVNET ONLY · </span>
+  </div>
+</div>
+
+<main>
+<h1 class="sr-only">Octra Vitals — live Octra network supply and cross-chain bridge state</h1>
+
+<!-- ============================================================ -->
+<!-- ACT I — UNDERSTAND                                            -->
+<!-- ============================================================ -->
+<section class="act" id="understand">
+  <div class="wrap">
+    <div class="hero-head">
+      <div class="act-tag"><span class="step">ACT I</span><span class="kicker">Understand</span></div>
+      <h2>One billion OCT, and where every token lives.</h2>
+      <p class="lede">
+        Octra has a fixed ceiling of <b>1,000,000,000 OCT</b>. That cap divides
+        into tokens <b>in circulation</b> and tokens <b>burned</b>. Of what
+        circulates, most is public and a portion is encrypted. Some
+        circulating OCT is <b>locked on Octra</b> and represented as <b>wOCT
+        claims on Ethereum</b>.
+      </p>
+    </div>
+
+    <!-- conserved-cap hero: honest two-part unit chart -->
+    <figure class="cap-hero" aria-labelledby="cap-hero-cap">
+      <div id="cap-grid" role="img" aria-label="Unit chart of one thousand squares for the OCT cap, split into in-circulation, an encrypted crosshatched subset, and burned supply.">
+        Loading the cap chart…
+      </div>
+      <figcaption id="cap-hero-cap">
+        <b>Unit chart: 1,000 squares, one per 1,000,000 OCT.</b> Blue is
+        <b>in circulation</b>. Grey is <b>burned</b>. The <b>crosshatched</b>
+        blue squares are the encrypted supply inside the circulating side. The
+        bracket at left marks OCT <b>wrapped onto each destination chain</b> —
+        today, wrapped OCT (wOCT) on Ethereum.
+      </figcaption>
+    </figure>
+
+    <!-- the two headline parts -->
+    <div class="cap-parts">
+      <div class="cap-part">
+        <div class="pk"><span class="sw sw-blue"></span>In circulation<span class="pct" id="cp-circ-pct">—</span></div>
+        <div class="big" id="cp-circ-big">—</div>
+        <div class="sub" id="cp-circ-sub">—</div>
+      </div>
+      <div class="cap-part inert">
+        <div class="pk"><span class="sw sw-inert"></span>Burned<span class="pct" id="cp-nic-pct">—</span></div>
+        <div class="big" id="cp-nic-big">—</div>
+        <div class="sub" id="cp-nic-sub">—</div>
+      </div>
+    </div>
+
+    <!-- public/encrypted split  +  cross-chain flow -->
+    <div class="understand-2col">
+      <figure aria-labelledby="split-cap">
+        <p class="sub-head">The circulating supply, split by ledger</p>
+        <p class="sub-lede">Circulating supply obeys one rule: <b>public + encrypted = in circulation</b>.</p>
+        <div id="fig-split" role="img" aria-label="Circulating supply split into public and encrypted balances.">Loading…</div>
+        <figcaption id="split-cap"><b>Public balance plus encrypted balance equals in circulation.</b> The encrypted share is called out beside the partition.</figcaption>
+      </figure>
+
+      <figure aria-labelledby="flow-cap">
+        <p class="sub-head">Bridge claims: locked OCT ↔ wOCT on Ethereum</p>
+        <p class="sub-lede"><b>wOCT on Ethereum</b> is measured against <b>locked OCT collateral on Octra</b>. The two should move together; any remaining locked collateral is called out below.</p>
+        <div id="fig-flow" role="img" aria-label="Bridge claims between OCT locked on Octra and wOCT minted on Ethereum, with the small remaining locked collateral shown enlarged.">Loading…</div>
+        <figcaption id="flow-cap"><b>wOCT claims are backed by locked OCT collateral.</b> Remaining collateral is called out below: hatched is <b>relayer-unclaimed</b> (pending, claimable), dotted is <b>unclassified remaining collateral</b> (locked − wOCT − unclaimed).</figcaption>
+      </figure>
+    </div>
+  </div>
+</section>
+
+<!-- ============================================================ -->
+<!-- ACT II — MONITOR                                              -->
+<!-- ============================================================ -->
+<section class="act" id="monitor">
+  <div class="wrap">
+    <div class="act-tag"><span class="step">ACT II</span><span class="kicker">Monitor</span></div>
+    <h2>The current state, read across four clocks.</h2>
+    <p class="lede">
+      A cross-chain snapshot is read across <b>four clocks</b>: the Octra head,
+      the relayer’s finalized epoch, the recovery scanner, and the Ethereum
+      block. The strip below shows each metric with its current value, recent
+      path, and provenance clock. When enough snapshots exist, flat panels mark
+      stable state; with one distinct snapshot, the panels say <b>latest
+      snapshot only</b>.
+    </p>
+
+    <!-- four-clock reading line -->
+    <section class="readingline" aria-label="Provenance: four sampling clocks">
+      <div class="rl-label">Reading line · one snapshot across four clocks</div>
+      <div class="clocks" id="clocks"></div>
+    </section>
+
+    <!-- small multiples -->
+    <div class="sm-head">
+      <h3>Live state</h3>
+      <div class="rule"></div>
+    </div>
+    <div class="spark-mode" id="spark-mode" role="group" aria-label="Sparkline view">
+      <div class="sm-seg">
+        <button type="button" class="sm-opt" data-spark-mode="flow" aria-pressed="true"><span class="sm-glyph" aria-hidden="true">&#916;</span>&nbsp;flow</button>
+        <button type="button" class="sm-opt" data-spark-mode="trend" aria-pressed="false">trend</button>
+      </div>
+    </div>
+    <section class="grid-sm" id="grid-state" aria-label="Live-state small multiples"></section>
+
+    <p class="legend-note">
+      Each panel shows a metric, its current value, recent path, and provenance
+      clock. The flow view draws the change in each 15-minute interval from a zero
+      baseline; the trend view draws the level trajectory, scaled to the recent
+      window. The dot marks the latest point; the delta shows
+      magnitude.
+    </p>
+  </div>
+</section>
+
+<!-- ============================================================ -->
+<!-- ACT III — VERIFY                                             -->
+<!-- ============================================================ -->
+<section class="act" id="verify">
+  <div class="wrap">
+    <div class="act-tag"><span class="step">ACT III</span><span class="kicker">Verify</span></div>
+    <h2>Check the books.</h2>
+    <p class="lede">
+      Every figure above belongs to a reconciliation that must balance. The full
+      ledger, the two live identities, and the proof references sit below for
+      audit.
+    </p>
+
+    <details class="verify-expander" id="verify-details">
+      <summary class="verify-summary">
+        <span class="chev" aria-hidden="true">›</span>
+        <span class="vs-tx">
+          <h3>Verify the numbers</h3>
+          <p>The full supply &amp; bridge ledger, balancing identities, and on-chain provenance: program, site circle, evidence hashes, contract addresses.</p>
+        </span>
+        <span class="cta">Expand →</span>
+      </summary>
+
+      <div class="verify-body">
+
+        <div class="spark-mode" role="group" aria-label="Ledger sparkline view">
+          <div class="sm-seg">
+            <button type="button" class="sm-opt" data-spark-mode="flow" aria-pressed="true"><span class="sm-glyph" aria-hidden="true">&#916;</span>&nbsp;flow</button>
+            <button type="button" class="sm-opt" data-spark-mode="trend" aria-pressed="false">trend</button>
+          </div>
+        </div>
+
+        <!-- THE TWO BOOKS -->
+        <div class="books">
+
+          <!-- SUPPLY -->
+          <section class="book" aria-labelledby="h-supply">
+            <div class="bookhead">
+              <h4 id="h-supply">Book I · Supply of the cap</h4>
+              <span class="unit">OCT · 1e6 raw precision</span>
+            </div>
+            <div class="ledger" role="table" aria-label="Supply ledger">
+              <div class="row tot" role="row">
+                <div class="lbl"><span class="name">Maximum supply (hard cap)</span>
+                  <span class="meta">direct · <a data-link="ev-supply" href="#">on-chain constant</a></span></div>
+                <div class="fig" data-fig="max"></div>
+                <div class="l-spark" data-spark="flat-cap"></div>
+              </div>
+              <div class="row" role="row">
+                <div class="lbl"><span class="name"><span class="swatch sw-blue"></span>In circulation</span>
+                  <span class="meta">issued · <a data-link="ev-supply" href="#">Octra RPC</a> · share of cap</span></div>
+                <div class="fig" data-fig="circ"></div>
+                <div class="l-spark" data-spark="issued"></div>
+              </div>
+              <div class="row sub" role="row">
+                <div class="lbl"><span class="name">Public balance</span>
+                  <span class="meta">derived · issued − encrypted · share of circulating</span></div>
+                <div class="fig" data-fig="public"></div>
+                <div class="l-spark" data-spark="public"></div>
+              </div>
+              <div class="row sub" role="row">
+                <div class="lbl"><span class="name">Encrypted balance</span>
+                  <span class="meta"><a data-link="ev-supply" href="#">direct RPC</a> · FHE-encrypted · share of circulating</span></div>
+                <div class="fig" data-fig="encrypted"></div>
+                <div class="l-spark" data-spark="encrypted"></div>
+              </div>
+              <div class="row tot" role="row">
+                <div class="lbl"><span class="name"><span class="swatch sw-inert"></span>Burned</span>
+                  <span class="meta"><a data-link="ev-supply" href="#">direct RPC</a> burn field</span></div>
+                <div class="fig" data-fig="nic"></div>
+                <div class="l-spark" data-spark="flat-burn"></div>
+              </div>
+            </div>
+            <p class="note">
+              Burned is shown as one cap category. The proof path keeps the raw
+              cap, issued, and burn fields.
+            </p>
+          </section>
+
+          <!-- BRIDGE -->
+          <section class="book" aria-labelledby="h-bridge">
+            <div class="bookhead">
+              <h4 id="h-bridge">Book II · Bridge reconciliation</h4>
+              <span class="unit" id="bridge-route-unit">Octra → Ethereum</span>
+            </div>
+            <div class="ledger" role="table" aria-label="Bridge reconciliation ledger">
+              <div class="row tot" role="row">
+                <div class="lbl"><span class="name">Locked on Octra (ledger)</span>
+                  <span class="meta">direct · vault <a data-link="vault" href="#">—</a> · src chain <span data-route="src">—</span></span></div>
+                <div class="fig" data-fig="locked"></div>
+                <div class="l-spark" data-spark="locked"></div>
+              </div>
+              <div class="row sub" role="row">
+	                <div class="lbl"><span class="name"><span class="swatch sw-blue"></span>wOCT minted (Ethereum)</span>
+                  <span class="meta">direct RPC · <a data-link="woct" href="#">—</a> · eth_call · dst chain <span data-route="dst">—</span></span></div>
+                <div class="fig" data-fig="woct"></div>
+                <div class="l-spark" data-spark="woct"></div>
+              </div>
+              <div class="row sub" role="row">
+                <div class="lbl"><span class="name"><span class="swatch sw-pending"></span>Relayer-unclaimed</span>
+                  <span class="meta">derived · <a data-link="ev-unclaimed" href="#">relayer-pending</a> · claimable</span></div>
+                <div class="fig" data-fig="unclaimed"></div>
+                <div class="l-spark" data-spark="unclaimed"></div>
+              </div>
+              <div class="row sub" role="row">
+                <div class="lbl"><span class="name"><span class="swatch sw-inert"></span>Unclassified remaining collateral</span>
+                  <span class="meta">derived · max(locked − wOCT − unclaimed, 0)</span></div>
+                <div class="fig" data-fig="unclassified"></div>
+                <div class="l-spark" data-spark="flat-unclass"></div>
+              </div>
+              <div class="row tot" role="row">
+                <div class="lbl"><span class="name">Sum of bridge components</span>
+                  <span class="meta">wOCT + unclaimed + unclassified remaining collateral</span></div>
+                <div class="fig" data-fig="locked2"></div>
+                <div class="l-spark" data-spark="locked"></div>
+              </div>
+            </div>
+            <p class="note">
+              <b>Why a ledger, not a number.</b> The bridge is a cross-chain
+              balance sheet. wOCT claims and relayer-unclaimed claims must stay
+              within locked collateral. The vault <em>account</em> also holds a
+              small dust surplus over this ledger; any over-claim shows as an
+              alarm here.
+            </p>
+          </section>
+        </div>
+
+        <!-- TWO REAL IDENTITIES -->
+        <section class="recon" aria-labelledby="recon-h">
+          <h4 id="recon-h">The real checks</h4>
+          <p class="sub">These are the accounting statements that can break, including the signed bridge over-claim check.</p>
+          <div class="ids">
+            <div class="id">
+              <div class="lab">On Octra · issuance</div>
+              <div class="eq" id="id-issue"></div>
+              <div class="res" id="res-issue"></div>
+            </div>
+            <div class="id">
+              <div class="lab">Across boundary · custody</div>
+              <div class="eq" id="id-lock"></div>
+              <div class="res" id="res-lock"></div>
+            </div>
+            <div class="id">
+              <div class="lab">Vault backing · dust</div>
+              <div class="eq" id="id-vault"></div>
+              <div class="res" id="res-vault"></div>
+            </div>
+          </div>
+        </section>
+
+        <!-- PROVENANCE -->
+        <section class="prov" aria-labelledby="prov-h">
+          <h4 id="prov-h">Provenance &amp; proof references</h4>
+          <div class="hashes">
+            <div class="h"><span class="k">Snapshot status</span><span class="val" id="pv-status">—</span></div>
+            <div class="h"><span class="k">Snapshot</span><a class="val" data-link="snapshot" href="#" id="pv-snap">—</a></div>
+            <div class="h"><span class="k">Circle program</span><a class="val" data-link="program" href="#" id="pv-prog">—</a></div>
+            <div class="h"><span class="k">Site circle</span><a class="val" data-link="siteCircle" href="#" id="pv-circle">—</a></div>
+            <div class="h"><span class="k">Vault (Octra)</span><a class="val" data-link="vault" href="#" id="pv-vault">—</a></div>
+            <div class="h"><span class="k">wOCT (ERC-20)</span><a class="val" data-link="woct" href="#" id="pv-woct">—</a></div>
+            <div class="h"><span class="k">Ethereum bridge</span><a class="val" data-link="ethBridge" href="#" id="pv-ethbridge">—</a></div>
+            <div class="h"><span class="k">Validator</span><a class="val" data-link="validator" href="#" id="pv-validator">—</a></div>
+            <div class="h"><span class="k">Relayer mode</span><span class="val" id="pv-relayer">—</span></div>
+            <div class="h"><span class="k">Lifetime</span><span class="val" id="pv-lifetime">—</span></div>
+          </div>
+          <!-- accessibility: full numeric restatement -->
+          <table class="sr-only" id="datatable"><caption>Octra Vitals supply and bridge figures</caption></table>
+        </section>
+
+      </div>
+    </details>
+  </div>
+</section>
+
+</main>
+
+<!-- ============ COLOPHON ============ -->
+<footer class="colophon">
+  <div class="wrap colophon-row">
+    <div class="left">
+      <b>Octra Vitals</b> · live Octra network state.
+      Figures in OCT (1 OCT = 10<sup>6</sup> raw). Updated from program-backed
+      snapshots. Hashes and sources under Verify. Route: Octra → Ethereum. Not
+      investment advice.
+    </div>
+	    <div class="brand">Octra<b>·</b>Vitals · octra.live</div>
+  </div>
+</footer>
+
+<script src="./app.js?v=0.1.0" defer></script>
+</body>
+</html>

@@ -1,0 +1,193 @@
+{
+  "envelope": {
+    "schema_version": "octra-vitals-envelope-v0",
+    "snapshot_id": "vitals.2026-06-08T01:35:30Z",
+    "observed_at": "2026-06-08T01:35:30Z",
+    "payload_hash": "sha256:0a8520b93da41fd84e2788ab43eaca4405d1f39642c5aa4d3a5d86d44fa90491",
+    "evidence_manifest_hash": "sha256:0d46b719e0648e6b562aeabc9bccdb16b6171f17f878d608e5ee833d948051ef",
+    "canonicalization": "jcs-rfc8785-or-equivalent-v1",
+    "payload": {
+      "schema_version": "octra-vitals-snapshot-v0",
+      "units": {
+        "oct_decimals": 6,
+        "woct_decimals": 6
+      },
+      "octra": {
+        "epoch": 1049579,
+        "state_root": "6d7636925ab52692866d39298f796522b9a50a3828f4fc2791b50d999864a4377632c935fb59cff2f34185d41045d2119b16c1d4bbeea4874fcac2339a0d3ea1",
+        "txid_hi": "172089776",
+        "network_version": "v3.0.0-irmin",
+        "validator": "oct7xCozDD9JEsbeVpo5C7HXp2BJbKqfmNUHmDDCCTtWcGb",
+        "timestamp": "1780882530.641961"
+      },
+      "supply": {
+        "max_oct_raw": "1000000000000000",
+        "issued_oct_raw": "622250139356816",
+        "encrypted_oct_raw": "12413100000000",
+        "burned_oct_raw": "377749860643184",
+        "confirmed_burned_oct_raw": "377749860643184"
+      },
+      "bridge": {
+        "vault_address": "oct5MrNfjiXFNRDLwsodn8Zm9hDKNGAYt3eQDCQ52bSpCHq",
+        "vault_balance_oct_raw": "190995688272522",
+        "total_locked_oct_raw": "190995575051521",
+        "total_unlocked_oct_raw": "6842428742775",
+        "lock_nonce": "7791",
+        "unlock_count": "763",
+        "woct_supply_raw": "190499378773762",
+        "unclaimed_oct_raw": "369185457509"
+      },
+      "ethereum": {
+        "chain_id": 1,
+        "block_number": "0x18194bf",
+        "block_hash": "0x3d2ad5d03f178e17be2b2ed5dcff912373d7500831199424f9f8122011f8f3d5",
+        "woct_address": "0x4647e1fE715c9e23959022C2416C71867F5a6E80",
+        "bridge_address": "0xE7eD69b852fd2a1406080B26A37e8E04e7dA4caE"
+      },
+      "relayer": {
+        "latest_finalized_epoch": 1049578,
+        "latest_scanned_epoch": 1049566,
+        "recovery_updated_at": 1780882416,
+        "mode": "validator-signed-light-path",
+        "src_chain_id": 7777,
+        "dst_chain_id": 1,
+        "src_bridge_id": "0x381ab73c25fb8d4ec4c03e15dd630fab75b410afd90a9276ab81df81c38d2a8b",
+        "dst_bridge_id": "0xab33480ea300316d03f76278f05f08f011d41d60f5d49c6ff6d8489fbd60c794",
+        "token_id": "0x412ec1126381d672a9f42b8612e4bc9ee64f5b6467b991e61110203549cdd6de",
+        "validator_set_hash": "0x344ec0e209cb0299455fc483283a836990a6e369b5e3c1c59a1f6f34c828273b"
+      },
+      "routes": [
+        {
+          "route_id": "octra-7777:ethereum-1:woct",
+          "src_chain": "octra",
+          "src_chain_id": 7777,
+          "dst_chain": "ethereum",
+          "dst_chain_id": 1,
+          "asset": "wOCT",
+          "vault_address": "oct5MrNfjiXFNRDLwsodn8Zm9hDKNGAYt3eQDCQ52bSpCHq",
+          "wrapped_address": "0x4647e1fE715c9e23959022C2416C71867F5a6E80",
+          "bridge_address": "0xE7eD69b852fd2a1406080B26A37e8E04e7dA4caE",
+          "locked_raw": "190995575051521",
+          "wrapped_supply_raw": "190499378773762",
+          "unclaimed_raw": "369185457509",
+          "source_ref_ids": [
+            "octra.batch",
+            "relayer.bridge_status",
+            "relayer.recovery",
+            "ethereum.block",
+            "ethereum.woct_total_supply"
+          ]
+        }
+      ]
+    },
+    "source_refs": [
+      {
+        "id": "octra.batch",
+        "kind": "octra_rpc",
+        "method": "batch:node_status,octra_supply,octra_balance,octra_contractStorage",
+        "url": "https://octra.network/rpc",
+        "hash": "sha256:ea6263e37af06b5fc1979e1066314078a1eb1252d527796cb16e21adf3efe77e"
+      },
+      {
+        "id": "relayer.bridge_status",
+        "kind": "relayer_json_rpc",
+        "method": "bridgeStatus",
+        "url": "https://relayer-002838819188.octra.network",
+        "hash": "sha256:4235dec655e25ae1c0ec0da077bc7fcd9c8cd3ebdd815eb5e5bad5abb9389333"
+      },
+      {
+        "id": "relayer.recovery",
+        "kind": "https_json",
+        "method": "GET",
+        "url": "https://relayer-002838819188.octra.network/recovery.json",
+        "hash": "sha256:3d4c02187985cf9ecf75f33eef481e033c95aa32c392df7184fd6efa479b935f"
+      },
+      {
+        "id": "ethereum.block",
+        "kind": "ethereum_rpc",
+        "method": "eth_getBlockByNumber:latest",
+        "url": "https://ethereum-rpc.publicnode.com",
+        "hash": "sha256:ec54295abcf9897392a98b3cf95f52a74e9fd25b9da6090ac4a5d8636061c488"
+      },
+      {
+        "id": "ethereum.woct_total_supply",
+        "kind": "ethereum_rpc",
+        "method": "eth_call",
+        "url": "https://ethereum-rpc.publicnode.com",
+        "hash": "sha256:f8ce9ec4ebcb3b78d05b39e59f98d296a0bbfef0206d50774f3f85af0e948299"
+      }
+    ],
+    "submitted_by": ""
+  },
+  "evidence_manifest": {
+    "schema_version": "octra-vitals-evidence-v0",
+    "observed_at": "2026-06-08T01:35:30Z",
+    "parser_version": "octra-vitals-parser-v0",
+    "entries": [
+      {
+        "id": "octra.batch",
+        "kind": "octra_rpc",
+        "url": "https://octra.network/rpc",
+        "method": "batch:node_status,octra_supply,octra_balance,octra_contractStorage",
+        "request_hash": "sha256:ceedd4a20b4c8e573624258e2083c8d85abc91fa2198a5dd6a8eb137defef1ec",
+        "response_hash": "sha256:ea6263e37af06b5fc1979e1066314078a1eb1252d527796cb16e21adf3efe77e",
+        "observed_at": "2026-06-08T01:35:30Z",
+        "epoch": 1049579,
+        "block_number": null,
+        "parser_version": "octra-vitals-parser-v0"
+      },
+      {
+        "id": "relayer.bridge_status",
+        "kind": "relayer_json_rpc",
+        "url": "https://relayer-002838819188.octra.network",
+        "method": "bridgeStatus",
+        "request_hash": "sha256:8353f4f9320e0a52f591246d0a050547b63d9b0d60f56ca3ea1595a2c73d117c",
+        "response_hash": "sha256:4235dec655e25ae1c0ec0da077bc7fcd9c8cd3ebdd815eb5e5bad5abb9389333",
+        "observed_at": "2026-06-08T01:35:30Z",
+        "epoch": 1049578,
+        "block_number": null,
+        "parser_version": "octra-vitals-parser-v0"
+      },
+      {
+        "id": "relayer.recovery",
+        "kind": "https_json",
+        "url": "https://relayer-002838819188.octra.network/recovery.json",
+        "method": "GET",
+        "request_hash": null,
+        "response_hash": "sha256:3d4c02187985cf9ecf75f33eef481e033c95aa32c392df7184fd6efa479b935f",
+        "observed_at": "2026-06-08T01:35:30Z",
+        "epoch": 1049566,
+        "block_number": null,
+        "parser_version": "octra-vitals-parser-v0"
+      },
+      {
+        "id": "ethereum.block",
+        "kind": "ethereum_rpc",
+        "url": "https://ethereum-rpc.publicnode.com",
+        "method": "eth_getBlockByNumber:latest",
+        "request_hash": "sha256:3f664b56c57144c2da0dc8c3f5da9c4fbbced8bb7198b919830aa1d6fba79847",
+        "response_hash": "sha256:ec54295abcf9897392a98b3cf95f52a74e9fd25b9da6090ac4a5d8636061c488",
+        "observed_at": "2026-06-08T01:35:30Z",
+        "epoch": null,
+        "block_number": "0x18194bf",
+        "parser_version": "octra-vitals-parser-v0"
+      },
+      {
+        "id": "ethereum.woct_total_supply",
+        "kind": "ethereum_rpc",
+        "url": "https://ethereum-rpc.publicnode.com",
+        "method": "eth_call",
+        "request_hash": "sha256:b05ff1a7f042c76651366e5965a367b197daa1ed7ca18fc12b32ef4707032676",
+        "response_hash": "sha256:f8ce9ec4ebcb3b78d05b39e59f98d296a0bbfef0206d50774f3f85af0e948299",
+        "observed_at": "2026-06-08T01:35:30Z",
+        "epoch": null,
+        "block_number": "0x18194bf",
+        "parser_version": "octra-vitals-parser-v0"
+      }
+    ]
+  },
+  "canonical_source_refs": "[{\"hash\":\"sha256:ea6263e37af06b5fc1979e1066314078a1eb1252d527796cb16e21adf3efe77e\",\"id\":\"octra.batch\",\"kind\":\"octra_rpc\",\"method\":\"batch:node_status,octra_supply,octra_balance,octra_contractStorage\",\"url\":\"https://octra.network/rpc\"},{\"hash\":\"sha256:4235dec655e25ae1c0ec0da077bc7fcd9c8cd3ebdd815eb5e5bad5abb9389333\",\"id\":\"relayer.bridge_status\",\"kind\":\"relayer_json_rpc\",\"method\":\"bridgeStatus\",\"url\":\"https://relayer-002838819188.octra.network\"},{\"hash\":\"sha256:3d4c02187985cf9ecf75f33eef481e033c95aa32c392df7184fd6efa479b935f\",\"id\":\"relayer.recovery\",\"kind\":\"https_json\",\"method\":\"GET\",\"url\":\"https://relayer-002838819188.octra.network/recovery.json\"},{\"hash\":\"sha256:ec54295abcf9897392a98b3cf95f52a74e9fd25b9da6090ac4a5d8636061c488\",\"id\":\"ethereum.block\",\"kind\":\"ethereum_rpc\",\"method\":\"eth_getBlockByNumber:latest\",\"url\":\"https://ethereum-rpc.publicnode.com\"},{\"hash\":\"sha256:f8ce9ec4ebcb3b78d05b39e59f98d296a0bbfef0206d50774f3f85af0e948299\",\"id\":\"ethereum.woct_total_supply\",\"kind\":\"ethereum_rpc\",\"method\":\"eth_call\",\"url\":\"https://ethereum-rpc.publicnode.com\"}]",
+  "canonical_payload": "{\"bridge\":{\"lock_nonce\":\"7791\",\"total_locked_oct_raw\":\"190995575051521\",\"total_unlocked_oct_raw\":\"6842428742775\",\"unclaimed_oct_raw\":\"369185457509\",\"unlock_count\":\"763\",\"vault_address\":\"oct5MrNfjiXFNRDLwsodn8Zm9hDKNGAYt3eQDCQ52bSpCHq\",\"vault_balance_oct_raw\":\"190995688272522\",\"woct_supply_raw\":\"190499378773762\"},\"ethereum\":{\"block_hash\":\"0x3d2ad5d03f178e17be2b2ed5dcff912373d7500831199424f9f8122011f8f3d5\",\"block_number\":\"0x18194bf\",\"bridge_address\":\"0xE7eD69b852fd2a1406080B26A37e8E04e7dA4caE\",\"chain_id\":1,\"woct_address\":\"0x4647e1fE715c9e23959022C2416C71867F5a6E80\"},\"octra\":{\"epoch\":1049579,\"network_version\":\"v3.0.0-irmin\",\"state_root\":\"6d7636925ab52692866d39298f796522b9a50a3828f4fc2791b50d999864a4377632c935fb59cff2f34185d41045d2119b16c1d4bbeea4874fcac2339a0d3ea1\",\"timestamp\":\"1780882530.641961\",\"txid_hi\":\"172089776\",\"validator\":\"oct7xCozDD9JEsbeVpo5C7HXp2BJbKqfmNUHmDDCCTtWcGb\"},\"relayer\":{\"dst_bridge_id\":\"0xab33480ea300316d03f76278f05f08f011d41d60f5d49c6ff6d8489fbd60c794\",\"dst_chain_id\":1,\"latest_finalized_epoch\":1049578,\"latest_scanned_epoch\":1049566,\"mode\":\"validator-signed-light-path\",\"recovery_updated_at\":1780882416,\"src_bridge_id\":\"0x381ab73c25fb8d4ec4c03e15dd630fab75b410afd90a9276ab81df81c38d2a8b\",\"src_chain_id\":7777,\"token_id\":\"0x412ec1126381d672a9f42b8612e4bc9ee64f5b6467b991e61110203549cdd6de\",\"validator_set_hash\":\"0x344ec0e209cb0299455fc483283a836990a6e369b5e3c1c59a1f6f34c828273b\"},\"routes\":[{\"asset\":\"wOCT\",\"bridge_address\":\"0xE7eD69b852fd2a1406080B26A37e8E04e7dA4caE\",\"dst_chain\":\"ethereum\",\"dst_chain_id\":1,\"locked_raw\":\"190995575051521\",\"route_id\":\"octra-7777:ethereum-1:woct\",\"source_ref_ids\":[\"octra.batch\",\"relayer.bridge_status\",\"relayer.recovery\",\"ethereum.block\",\"ethereum.woct_total_supply\"],\"src_chain\":\"octra\",\"src_chain_id\":7777,\"unclaimed_raw\":\"369185457509\",\"vault_address\":\"oct5MrNfjiXFNRDLwsodn8Zm9hDKNGAYt3eQDCQ52bSpCHq\",\"wrapped_address\":\"0x4647e1fE715c9e23959022C2416C71867F5a6E80\",\"wrapped_supply_raw\":\"190499378773762\"}],\"schema_version\":\"octra-vitals-snapshot-v0\",\"supply\":{\"burned_oct_raw\":\"377749860643184\",\"confirmed_burned_oct_raw\":\"377749860643184\",\"encrypted_oct_raw\":\"12413100000000\",\"issued_oct_raw\":\"622250139356816\",\"max_oct_raw\":\"1000000000000000\"},\"units\":{\"oct_decimals\":6,\"woct_decimals\":6}}",
+  "canonical_evidence_manifest": "{\"entries\":[{\"block_number\":null,\"epoch\":1049579,\"id\":\"octra.batch\",\"kind\":\"octra_rpc\",\"method\":\"batch:node_status,octra_supply,octra_balance,octra_contractStorage\",\"observed_at\":\"2026-06-08T01:35:30Z\",\"parser_version\":\"octra-vitals-parser-v0\",\"request_hash\":\"sha256:ceedd4a20b4c8e573624258e2083c8d85abc91fa2198a5dd6a8eb137defef1ec\",\"response_hash\":\"sha256:ea6263e37af06b5fc1979e1066314078a1eb1252d527796cb16e21adf3efe77e\",\"url\":\"https://octra.network/rpc\"},{\"block_number\":null,\"epoch\":1049578,\"id\":\"relayer.bridge_status\",\"kind\":\"relayer_json_rpc\",\"method\":\"bridgeStatus\",\"observed_at\":\"2026-06-08T01:35:30Z\",\"parser_version\":\"octra-vitals-parser-v0\",\"request_hash\":\"sha256:8353f4f9320e0a52f591246d0a050547b63d9b0d60f56ca3ea1595a2c73d117c\",\"response_hash\":\"sha256:4235dec655e25ae1c0ec0da077bc7fcd9c8cd3ebdd815eb5e5bad5abb9389333\",\"url\":\"https://relayer-002838819188.octra.network\"},{\"block_number\":null,\"epoch\":1049566,\"id\":\"relayer.recovery\",\"kind\":\"https_json\",\"method\":\"GET\",\"observed_at\":\"2026-06-08T01:35:30Z\",\"parser_version\":\"octra-vitals-parser-v0\",\"request_hash\":null,\"response_hash\":\"sha256:3d4c02187985cf9ecf75f33eef481e033c95aa32c392df7184fd6efa479b935f\",\"url\":\"https://relayer-002838819188.octra.network/recovery.json\"},{\"block_number\":\"0x18194bf\",\"epoch\":null,\"id\":\"ethereum.block\",\"kind\":\"ethereum_rpc\",\"method\":\"eth_getBlockByNumber:latest\",\"observed_at\":\"2026-06-08T01:35:30Z\",\"parser_version\":\"octra-vitals-parser-v0\",\"request_hash\":\"sha256:3f664b56c57144c2da0dc8c3f5da9c4fbbced8bb7198b919830aa1d6fba79847\",\"response_hash\":\"sha256:ec54295abcf9897392a98b3cf95f52a74e9fd25b9da6090ac4a5d8636061c488\",\"url\":\"https://ethereum-rpc.publicnode.com\"},{\"block_number\":\"0x18194bf\",\"epoch\":null,\"id\":\"ethereum.woct_total_supply\",\"kind\":\"ethereum_rpc\",\"method\":\"eth_call\",\"observed_at\":\"2026-06-08T01:35:30Z\",\"parser_version\":\"octra-vitals-parser-v0\",\"request_hash\":\"sha256:b05ff1a7f042c76651366e5965a367b197daa1ed7ca18fc12b32ef4707032676\",\"response_hash\":\"sha256:f8ce9ec4ebcb3b78d05b39e59f98d296a0bbfef0206d50774f3f85af0e948299\",\"url\":\"https://ethereum-rpc.publicnode.com\"}],\"observed_at\":\"2026-06-08T01:35:30Z\",\"parser_version\":\"octra-vitals-parser-v0\",\"schema_version\":\"octra-vitals-evidence-v0\"}",
+  "generated_at": "2026-06-08T01:35:31Z"
+}

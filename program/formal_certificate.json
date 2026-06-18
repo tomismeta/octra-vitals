@@ -1,0 +1,10 @@
+{
+  "schema": "aml_bytecode_certificate_v1",
+  "compiler": "octra_aml",
+  "compiler_version": "1.0 Rehovot",
+  "verification_schema": "aml_safety_report_v1",
+  "source_mode": "single",
+  "source_hash": "e7dbe8e24db017ace100565fc86c050fa9d9db3bc409cf6e8a5418d480f1e316",
+  "bytecode_hash": "713e38f893cb7df3db976b2d972c3d3efa4efe31ec02f214dd00bb8d536e35c9",
+  "verification_hash": "eb772f5654bbf8ac6651037e5b374e6914acb201e9a93b6c374b5bbe33e53f92"
+}

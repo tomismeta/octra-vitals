@@ -1,0 +1,1090 @@
+MLOAD r1, 999
+LDI r2, "constructor"
+NEQ r3, r1, r2
+JIF r3, 100
+LDI r1, false
+JIF r1, 10000
+LDI r2, "false"
+JMP 10001
+JDEST 10000
+LDI r2, "true"
+JDEST 10001
+SSTORE "initialized", r2
+LDI r1, 0
+SSTORE "snapshot_count", r1
+LDI r1, 0
+SSTORE "latest_snapshot_index", r1
+LDI r1, ""
+SSTORE "latest_snapshot_id", r1
+LDI r1, ""
+SSTORE "latest_observed_at", r1
+LDI r1, 0
+SSTORE "latest_epoch", r1
+LDI r1, ""
+SSTORE "latest_payload_hash", r1
+LDI r1, ""
+SSTORE "latest_evidence_manifest_hash", r1
+LDI r1, ""
+SSTORE "latest_source_refs_hash", r1
+LDI r1, ""
+SSTORE "latest_summary_hash", r1
+LDI r1, ""
+SSTORE "latest_payload", r1
+LDI r1, ""
+SSTORE "latest_evidence_manifest", r1
+LDI r1, ""
+SSTORE "latest_source_refs", r1
+LDI r1, ""
+SSTORE "latest_summary", r1
+LDI r1, ""
+SSTORE "summary_window", r1
+LDI r1, "sha256:"
+LDI r2, "octra-vitals:summary-window:v0"
+LDI r3, "
+"
+CONCAT r4, r2, r3
+SHA256 r5, r4
+CONCAT r6, r1, r5
+SSTORE "summary_window_hash", r6
+LDI r1, 0
+SSTORE "summary_window_first_index", r1
+LDI r1, 0
+SSTORE "summary_window_row_count", r1
+STOP
+JDEST 100
+MLOAD r1, 1000
+LDI r2, "manifest"
+EQ r3, r1, r2
+JIF r3, 900
+LDI r2, "is_initialized"
+EQ r3, r1, r2
+JIF r3, 1000
+LDI r2, "get_owner"
+EQ r3, r1, r2
+JIF r3, 1100
+LDI r2, "get_operator"
+EQ r3, r1, r2
+JIF r3, 1200
+LDI r2, "is_paused"
+EQ r3, r1, r2
+JIF r3, 1300
+LDI r2, "get_successor_program"
+EQ r3, r1, r2
+JIF r3, 1400
+LDI r2, "is_successor_set"
+EQ r3, r1, r2
+JIF r3, 1500
+LDI r2, "get_snapshot_count"
+EQ r3, r1, r2
+JIF r3, 1600
+LDI r2, "get_latest_snapshot_index"
+EQ r3, r1, r2
+JIF r3, 1700
+LDI r2, "get_latest_snapshot_id"
+EQ r3, r1, r2
+JIF r3, 1800
+LDI r2, "get_latest_observed_at"
+EQ r3, r1, r2
+JIF r3, 1900
+LDI r2, "get_latest_epoch"
+EQ r3, r1, r2
+JIF r3, 2000
+LDI r2, "get_latest_payload_hash"
+EQ r3, r1, r2
+JIF r3, 2100
+LDI r2, "get_latest_evidence_manifest_hash"
+EQ r3, r1, r2
+JIF r3, 2200
+LDI r2, "get_latest_source_refs_hash"
+EQ r3, r1, r2
+JIF r3, 2300
+LDI r2, "get_latest_summary_hash"
+EQ r3, r1, r2
+JIF r3, 2400
+LDI r2, "get_latest_snapshot"
+EQ r3, r1, r2
+JIF r3, 2500
+LDI r2, "get_latest_evidence_manifest"
+EQ r3, r1, r2
+JIF r3, 2600
+LDI r2, "get_latest_source_refs"
+EQ r3, r1, r2
+JIF r3, 2700
+LDI r2, "get_latest_summary"
+EQ r3, r1, r2
+JIF r3, 2800
+LDI r2, "get_latest_submitter"
+EQ r3, r1, r2
+JIF r3, 2900
+LDI r2, "get_recent_summary_window"
+EQ r3, r1, r2
+JIF r3, 3000
+LDI r2, "get_recent_summary_window_hash"
+EQ r3, r1, r2
+JIF r3, 3100
+LDI r2, "get_recent_summary_window_first_index"
+EQ r3, r1, r2
+JIF r3, 3200
+LDI r2, "get_recent_summary_window_row_count"
+EQ r3, r1, r2
+JIF r3, 3300
+LDI r2, "get_summary_row_len"
+EQ r3, r1, r2
+JIF r3, 3400
+LDI r2, "get_summary_window_rows"
+EQ r3, r1, r2
+JIF r3, 3500
+LDI r2, "get_latest_bundle"
+EQ r3, r1, r2
+JIF r3, 3600
+LDI r2, "initialize_v0"
+EQ r3, r1, r2
+JIF r3, 3700
+LDI r2, "set_operator"
+EQ r3, r1, r2
+JIF r3, 3800
+LDI r2, "set_paused"
+EQ r3, r1, r2
+JIF r3, 3900
+LDI r2, "set_successor_program"
+EQ r3, r1, r2
+JIF r3, 4000
+LDI r2, "record_snapshot_v0"
+EQ r3, r1, r2
+JIF r3, 4100
+REVERT
+JDEST 200
+SLOAD r1, "initialized"
+LDI r2, "true"
+EQ r1, r1, r2
+JIF r1, 10002
+LDI r3, "not initialized"
+EMIT "Require", r3
+REVERT
+JDEST 10002
+STOP
+JDEST 300
+CALL_INT r1, 200
+CALLER r1
+SLOAD r2, "owner"
+EQ r3, r1, r2
+JIF r3, 10003
+LDI r4, "not owner"
+EMIT "Require", r4
+REVERT
+JDEST 10003
+STOP
+JDEST 400
+CALL_INT r1, 200
+CALLER r1
+SLOAD r2, "owner"
+EQ r3, r1, r2
+JIF r3, 10004
+CALLER r5
+SLOAD r6, "operator"
+EQ r7, r5, r6
+MOV r4, r7
+JMP 10005
+JDEST 10004
+LDI r4, true
+JDEST 10005
+JIF r4, 10006
+LDI r8, "not operator"
+EMIT "Require", r8
+REVERT
+JDEST 10006
+STOP
+JDEST 500
+MLOAD r1, 1001
+LDI r2, 0
+LDI r3, 7
+SUBSTR r4, r1, r2, r3
+LDI r5, "sha256:"
+EQ r6, r4, r5
+JIF r6, 10007
+LDI r7, "hash prefix"
+EMIT "Require", r7
+REVERT
+JDEST 10007
+STRLEN r2, r1
+LDI r3, 71
+EQ r4, r2, r3
+JIF r4, 10008
+LDI r5, "hash length"
+EMIT "Require", r5
+REVERT
+JDEST 10008
+STOP
+JDEST 600
+MLOAD r1, 1001
+LDI r2, "0"
+LT r3, r1, r2
+LDI r4, true
+NEQ r3, r3, r4
+JIF r3, 10009
+LDI r5, "observed_at digit low"
+EMIT "Require", r5
+REVERT
+JDEST 10009
+LDI r2, "9"
+GT r3, r1, r2
+LDI r4, true
+NEQ r3, r3, r4
+JIF r3, 10010
+LDI r5, "observed_at digit high"
+EMIT "Require", r5
+REVERT
+JDEST 10010
+STOP
+JDEST 700
+MLOAD r1, 1001
+STRLEN r2, r1
+LDI r3, 16
+LT r4, r2, r3
+LDI r5, true
+NEQ r4, r4, r5
+JIF r4, 10011
+LDI r6, "snapshot id too short"
+EMIT "Require", r6
+REVERT
+JDEST 10011
+STRLEN r2, r1
+LDI r3, 64
+GT r4, r2, r3
+LDI r5, true
+NEQ r4, r4, r5
+JIF r4, 10012
+LDI r6, "snapshot id too long"
+EMIT "Require", r6
+REVERT
+JDEST 10012
+LDI r2, 0
+LDI r3, 7
+SUBSTR r4, r1, r2, r3
+LDI r5, "vitals."
+EQ r6, r4, r5
+JIF r6, 10013
+LDI r7, "snapshot id prefix"
+EMIT "Require", r7
+REVERT
+JDEST 10013
+STOP
+JDEST 800
+MLOAD r1, 1001
+STRLEN r2, r1
+LDI r3, 20
+EQ r4, r2, r3
+JIF r4, 10014
+LDI r5, "observed_at must be UTC seconds"
+EMIT "Require", r5
+REVERT
+JDEST 10014
+LDI r2, 0
+LDI r3, 1
+SUBSTR r4, r1, r2, r3
+MSTORE 1001, r4
+CALL_INT r5, 600
+LDI r2, 1
+LDI r3, 1
+SUBSTR r4, r1, r2, r3
+MSTORE 1001, r4
+CALL_INT r5, 600
+LDI r2, 2
+LDI r3, 1
+SUBSTR r4, r1, r2, r3
+MSTORE 1001, r4
+CALL_INT r5, 600
+LDI r2, 3
+LDI r3, 1
+SUBSTR r4, r1, r2, r3
+MSTORE 1001, r4
+CALL_INT r5, 600
+LDI r2, 4
+LDI r3, 1
+SUBSTR r4, r1, r2, r3
+LDI r5, "-"
+EQ r6, r4, r5
+JIF r6, 10015
+LDI r7, "observed_at year separator"
+EMIT "Require", r7
+REVERT
+JDEST 10015
+LDI r2, 5
+LDI r3, 1
+SUBSTR r4, r1, r2, r3
+MSTORE 1001, r4
+CALL_INT r5, 600
+LDI r2, 6
+LDI r3, 1
+SUBSTR r4, r1, r2, r3
+MSTORE 1001, r4
+CALL_INT r5, 600
+LDI r2, 7
+LDI r3, 1
+SUBSTR r4, r1, r2, r3
+LDI r5, "-"
+EQ r6, r4, r5
+JIF r6, 10016
+LDI r7, "observed_at month separator"
+EMIT "Require", r7
+REVERT
+JDEST 10016
+LDI r2, 8
+LDI r3, 1
+SUBSTR r4, r1, r2, r3
+MSTORE 1001, r4
+CALL_INT r5, 600
+LDI r2, 9
+LDI r3, 1
+SUBSTR r4, r1, r2, r3
+MSTORE 1001, r4
+CALL_INT r5, 600
+LDI r2, 10
+LDI r3, 1
+SUBSTR r4, r1, r2, r3
+LDI r5, "T"
+EQ r6, r4, r5
+JIF r6, 10017
+LDI r7, "observed_at time separator"
+EMIT "Require", r7
+REVERT
+JDEST 10017
+LDI r2, 11
+LDI r3, 1
+SUBSTR r4, r1, r2, r3
+MSTORE 1001, r4
+CALL_INT r5, 600
+LDI r2, 12
+LDI r3, 1
+SUBSTR r4, r1, r2, r3
+MSTORE 1001, r4
+CALL_INT r5, 600
+LDI r2, 13
+LDI r3, 1
+SUBSTR r4, r1, r2, r3
+LDI r5, ":"
+EQ r6, r4, r5
+JIF r6, 10018
+LDI r7, "observed_at hour separator"
+EMIT "Require", r7
+REVERT
+JDEST 10018
+LDI r2, 14
+LDI r3, 1
+SUBSTR r4, r1, r2, r3
+MSTORE 1001, r4
+CALL_INT r5, 600
+LDI r2, 15
+LDI r3, 1
+SUBSTR r4, r1, r2, r3
+MSTORE 1001, r4
+CALL_INT r5, 600
+LDI r2, 16
+LDI r3, 1
+SUBSTR r4, r1, r2, r3
+LDI r5, ":"
+EQ r6, r4, r5
+JIF r6, 10019
+LDI r7, "observed_at minute separator"
+EMIT "Require", r7
+REVERT
+JDEST 10019
+LDI r2, 17
+LDI r3, 1
+SUBSTR r4, r1, r2, r3
+MSTORE 1001, r4
+CALL_INT r5, 600
+LDI r2, 18
+LDI r3, 1
+SUBSTR r4, r1, r2, r3
+MSTORE 1001, r4
+CALL_INT r5, 600
+LDI r2, 19
+LDI r3, 1
+SUBSTR r4, r1, r2, r3
+LDI r5, "Z"
+EQ r6, r4, r5
+JIF r6, 10020
+LDI r7, "observed_at UTC suffix"
+EMIT "Require", r7
+REVERT
+JDEST 10020
+STOP
+JDEST 900
+LDI r1, "vitals-circle-state.v0"
+MOV r0, r1
+STOP
+STOP
+JDEST 1000
+SLOAD r1, "initialized"
+LDI r2, "true"
+EQ r1, r1, r2
+MOV r0, r1
+STOP
+STOP
+JDEST 1100
+SLOAD r1, "owner"
+MOV r0, r1
+STOP
+STOP
+JDEST 1200
+SLOAD r1, "operator"
+MOV r0, r1
+STOP
+STOP
+JDEST 1300
+SLOAD r1, "paused"
+LDI r2, "true"
+EQ r1, r1, r2
+MOV r0, r1
+STOP
+STOP
+JDEST 1400
+SLOAD r1, "successor_program"
+MOV r0, r1
+STOP
+STOP
+JDEST 1500
+SLOAD r1, "successor_set"
+LDI r2, "true"
+EQ r1, r1, r2
+MOV r0, r1
+STOP
+STOP
+JDEST 1600
+SLOAD r1, "snapshot_count"
+LDI r2, 0
+ADD r1, r2, r1
+MOV r0, r1
+STOP
+STOP
+JDEST 1700
+SLOAD r1, "latest_snapshot_index"
+LDI r2, 0
+ADD r1, r2, r1
+MOV r0, r1
+STOP
+STOP
+JDEST 1800
+SLOAD r1, "latest_snapshot_id"
+MOV r0, r1
+STOP
+STOP
+JDEST 1900
+SLOAD r1, "latest_observed_at"
+MOV r0, r1
+STOP
+STOP
+JDEST 2000
+SLOAD r1, "latest_epoch"
+LDI r2, 0
+ADD r1, r2, r1
+MOV r0, r1
+STOP
+STOP
+JDEST 2100
+SLOAD r1, "latest_payload_hash"
+MOV r0, r1
+STOP
+STOP
+JDEST 2200
+SLOAD r1, "latest_evidence_manifest_hash"
+MOV r0, r1
+STOP
+STOP
+JDEST 2300
+SLOAD r1, "latest_source_refs_hash"
+MOV r0, r1
+STOP
+STOP
+JDEST 2400
+SLOAD r1, "latest_summary_hash"
+MOV r0, r1
+STOP
+STOP
+JDEST 2500
+SLOAD r1, "latest_payload"
+MOV r0, r1
+STOP
+STOP
+JDEST 2600
+SLOAD r1, "latest_evidence_manifest"
+MOV r0, r1
+STOP
+STOP
+JDEST 2700
+SLOAD r1, "latest_source_refs"
+MOV r0, r1
+STOP
+STOP
+JDEST 2800
+SLOAD r1, "latest_summary"
+MOV r0, r1
+STOP
+STOP
+JDEST 2900
+SLOAD r1, "latest_submitter"
+MOV r0, r1
+STOP
+STOP
+JDEST 3000
+SLOAD r1, "summary_window"
+MOV r0, r1
+STOP
+STOP
+JDEST 3100
+SLOAD r1, "summary_window_hash"
+MOV r0, r1
+STOP
+STOP
+JDEST 3200
+SLOAD r1, "summary_window_first_index"
+LDI r2, 0
+ADD r1, r2, r1
+MOV r0, r1
+STOP
+STOP
+JDEST 3300
+SLOAD r1, "summary_window_row_count"
+LDI r2, 0
+ADD r1, r2, r1
+MOV r0, r1
+STOP
+STOP
+JDEST 3400
+LDI r1, 208
+MOV r0, r1
+STOP
+STOP
+JDEST 3500
+LDI r1, 48
+MOV r0, r1
+STOP
+STOP
+JDEST 3600
+SLOAD r1, "latest_snapshot_index"
+LDI r2, 0
+ADD r1, r2, r1
+LDI r3, ""
+CONCAT r3, r3, r1
+LDI r4, "|"
+CONCAT r5, r3, r4
+SLOAD r6, "latest_snapshot_id"
+CONCAT r7, r5, r6
+LDI r8, "|"
+CONCAT r9, r7, r8
+SLOAD r10, "latest_observed_at"
+CONCAT r11, r9, r10
+LDI r12, "|"
+CONCAT r13, r11, r12
+SLOAD r14, "latest_epoch"
+LDI r15, 0
+ADD r14, r15, r14
+LDI r16, ""
+CONCAT r16, r16, r14
+CONCAT r17, r13, r16
+LDI r18, "|"
+CONCAT r19, r17, r18
+SLOAD r20, "latest_payload_hash"
+CONCAT r21, r19, r20
+LDI r22, "|"
+CONCAT r23, r21, r22
+SLOAD r24, "latest_evidence_manifest_hash"
+CONCAT r25, r23, r24
+LDI r26, "|"
+CONCAT r27, r25, r26
+SLOAD r28, "latest_source_refs_hash"
+CONCAT r29, r27, r28
+LDI r30, "|"
+CONCAT r31, r29, r30
+SLOAD r32, "latest_summary_hash"
+CONCAT r33, r31, r32
+LDI r34, "|"
+CONCAT r35, r33, r34
+SLOAD r36, "summary_window_hash"
+CONCAT r37, r35, r36
+LDI r38, "|"
+CONCAT r39, r37, r38
+SLOAD r40, "paused"
+LDI r41, "true"
+EQ r40, r40, r41
+LDI r42, ""
+CONCAT r42, r42, r40
+CONCAT r43, r39, r42
+LDI r44, "|"
+CONCAT r45, r43, r44
+SLOAD r46, "successor_set"
+LDI r47, "true"
+EQ r46, r46, r47
+LDI r48, ""
+CONCAT r48, r48, r46
+CONCAT r49, r45, r48
+LDI r50, "|"
+CONCAT r51, r49, r50
+SLOAD r52, "successor_program"
+CONCAT r53, r51, r52
+LDI r54, "|"
+CONCAT r55, r53, r54
+SLOAD r56, "latest_summary"
+CONCAT r57, r55, r56
+MOV r0, r57
+STOP
+STOP
+JDEST 3700
+MLOAD r1, 1001
+SLOAD r2, "initialized"
+LDI r3, "true"
+EQ r2, r2, r3
+LDI r4, true
+NEQ r4, r2, r4
+JIF r4, 10021
+LDI r5, "already initialized"
+EMIT "Require", r5
+REVERT
+JDEST 10021
+ASSERT_ADDR r1
+LDI r2, true
+LDI r2, true
+JIF r2, 10022
+LDI r3, "false"
+JMP 10023
+JDEST 10022
+LDI r3, "true"
+JDEST 10023
+SSTORE "initialized", r3
+CALLER r2
+SSTORE "owner", r2
+SSTORE "operator", r1
+CALLER r2
+SSTORE "successor_program", r2
+LDI r2, false
+JIF r2, 10024
+LDI r3, "false"
+JMP 10025
+JDEST 10024
+LDI r3, "true"
+JDEST 10025
+SSTORE "successor_set", r3
+LDI r2, false
+JIF r2, 10026
+LDI r3, "false"
+JMP 10027
+JDEST 10026
+LDI r3, "true"
+JDEST 10027
+SSTORE "paused", r3
+LDI r2, 0
+SSTORE "snapshot_count", r2
+LDI r2, 0
+SSTORE "latest_snapshot_index", r2
+LDI r2, ""
+SSTORE "latest_snapshot_id", r2
+LDI r2, ""
+SSTORE "latest_observed_at", r2
+LDI r2, 0
+SSTORE "latest_epoch", r2
+LDI r2, ""
+SSTORE "latest_payload_hash", r2
+LDI r2, ""
+SSTORE "latest_evidence_manifest_hash", r2
+LDI r2, ""
+SSTORE "latest_source_refs_hash", r2
+LDI r2, ""
+SSTORE "latest_summary_hash", r2
+LDI r2, ""
+SSTORE "latest_payload", r2
+LDI r2, ""
+SSTORE "latest_evidence_manifest", r2
+LDI r2, ""
+SSTORE "latest_source_refs", r2
+LDI r2, ""
+SSTORE "latest_summary", r2
+CALLER r2
+SSTORE "latest_submitter", r2
+LDI r2, ""
+SSTORE "summary_window", r2
+LDI r2, "sha256:"
+LDI r3, "octra-vitals:summary-window:v0"
+LDI r4, "
+"
+CONCAT r5, r3, r4
+SHA256 r6, r5
+CONCAT r7, r2, r6
+SSTORE "summary_window_hash", r7
+LDI r2, 0
+SSTORE "summary_window_first_index", r2
+LDI r2, 0
+SSTORE "summary_window_row_count", r2
+EMIT "Initialized", r1
+LDI r2, true
+MOV r0, r2
+STOP
+STOP
+JDEST 3800
+MLOAD r1, 1001
+CALL_INT r2, 300
+ASSERT_ADDR r1
+LDI r2, true
+SSTORE "operator", r1
+EMIT "OperatorUpdated", r1
+LDI r2, true
+MOV r0, r2
+STOP
+STOP
+JDEST 3900
+MLOAD r1, 1001
+CALL_INT r2, 300
+JIF r1, 10028
+LDI r2, "false"
+JMP 10029
+JDEST 10028
+LDI r2, "true"
+JDEST 10029
+SSTORE "paused", r2
+EMIT "Paused", r1
+LDI r2, true
+MOV r0, r2
+STOP
+STOP
+JDEST 4000
+MLOAD r1, 1001
+CALL_INT r2, 300
+ASSERT_ADDR r1
+LDI r2, true
+SLOAD r2, "successor_set"
+LDI r3, "true"
+EQ r2, r2, r3
+LDI r4, true
+NEQ r4, r2, r4
+JIF r4, 10030
+LDI r5, "successor already set"
+EMIT "Require", r5
+REVERT
+JDEST 10030
+SSTORE "successor_program", r1
+LDI r2, true
+JIF r2, 10031
+LDI r3, "false"
+JMP 10032
+JDEST 10031
+LDI r3, "true"
+JDEST 10032
+SSTORE "successor_set", r3
+EMIT "SuccessorProgramSet", r1
+LDI r2, true
+MOV r0, r2
+STOP
+STOP
+JDEST 4100
+MLOAD r1, 1001
+MLOAD r2, 1002
+MLOAD r3, 1003
+MLOAD r4, 1004
+MLOAD r5, 1005
+MLOAD r6, 1006
+MLOAD r7, 1007
+MLOAD r8, 1008
+MLOAD r9, 1009
+MLOAD r10, 1010
+MLOAD r11, 1011
+MLOAD r12, 1012
+MLOAD r13, 1013
+MLOAD r14, 1014
+CALL_INT r15, 400
+SLOAD r15, "paused"
+LDI r16, "true"
+EQ r15, r15, r16
+LDI r17, true
+NEQ r17, r15, r17
+JIF r17, 10033
+LDI r18, "paused"
+EMIT "Require", r18
+REVERT
+JDEST 10033
+MSTORE 1001, r1
+CALL_INT r15, 700
+MSTORE 1001, r2
+CALL_INT r15, 800
+LDI r15, "vitals."
+CONCAT r16, r15, r2
+EQ r17, r1, r16
+JIF r17, 10034
+LDI r18, "snapshot id must match observed_at"
+EMIT "Require", r18
+REVERT
+JDEST 10034
+LDI r15, "octra-vitals-snapshot-v0"
+EQ r16, r5, r15
+JIF r16, 10035
+LDI r17, "payload schema"
+EMIT "Require", r17
+REVERT
+JDEST 10035
+LDI r15, "octra-vitals-summary-row-v0"
+EQ r16, r6, r15
+JIF r16, 10036
+LDI r17, "summary schema"
+EMIT "Require", r17
+REVERT
+JDEST 10036
+SLOAD r15, "snapshot_count"
+LDI r16, 0
+ADD r15, r16, r15
+LDI r17, 1
+ADD r18, r15, r17
+EQ r19, r4, r18
+JIF r19, 10037
+LDI r20, "snapshot index"
+EMIT "Require", r20
+REVERT
+JDEST 10037
+SLOAD r15, "latest_epoch"
+LDI r16, 0
+ADD r15, r16, r15
+GT r17, r3, r15
+JIF r17, 10038
+SLOAD r19, "latest_epoch"
+LDI r20, 0
+ADD r19, r20, r19
+EQ r21, r3, r19
+LDI r22, true
+NEQ r22, r21, r22
+JIF r22, 10040
+SLOAD r23, "latest_observed_at"
+GT r24, r2, r23
+MOV r22, r24
+JMP 10041
+JDEST 10040
+LDI r22, false
+JDEST 10041
+MOV r18, r22
+JMP 10039
+JDEST 10038
+LDI r18, true
+JDEST 10039
+JIF r18, 10042
+LDI r25, "snapshot moved backward"
+EMIT "Require", r25
+REVERT
+JDEST 10042
+MSTORE 1001, r7
+CALL_INT r15, 500
+MSTORE 1001, r8
+CALL_INT r15, 500
+MSTORE 1001, r9
+CALL_INT r15, 500
+MSTORE 1001, r10
+CALL_INT r15, 500
+STRLEN r15, r11
+LDI r16, 0
+GT r17, r15, r16
+JIF r17, 10043
+LDI r18, "payload required"
+EMIT "Require", r18
+REVERT
+JDEST 10043
+STRLEN r15, r12
+LDI r16, 0
+GT r17, r15, r16
+JIF r17, 10044
+LDI r18, "evidence required"
+EMIT "Require", r18
+REVERT
+JDEST 10044
+STRLEN r15, r13
+LDI r16, 0
+GT r17, r15, r16
+JIF r17, 10045
+LDI r18, "source refs required"
+EMIT "Require", r18
+REVERT
+JDEST 10045
+STRLEN r15, r14
+LDI r16, 208
+EQ r17, r15, r16
+JIF r17, 10046
+LDI r18, "summary row length"
+EMIT "Require", r18
+REVERT
+JDEST 10046
+STRLEN r15, r11
+LDI r16, 12000
+GT r17, r15, r16
+LDI r18, true
+NEQ r17, r17, r18
+JIF r17, 10047
+LDI r19, "payload too large"
+EMIT "Require", r19
+REVERT
+JDEST 10047
+STRLEN r15, r12
+LDI r16, 8000
+GT r17, r15, r16
+LDI r18, true
+NEQ r17, r17, r18
+JIF r17, 10048
+LDI r19, "evidence too large"
+EMIT "Require", r19
+REVERT
+JDEST 10048
+STRLEN r15, r13
+LDI r16, 4096
+GT r17, r15, r16
+LDI r18, true
+NEQ r17, r17, r18
+JIF r17, 10049
+LDI r19, "source refs too large"
+EMIT "Require", r19
+REVERT
+JDEST 10049
+LDI r15, "sha256:"
+LDI r16, "octra-vitals:snapshot:v0"
+LDI r17, "
+"
+CONCAT r18, r16, r17
+CONCAT r19, r18, r11
+SHA256 r20, r19
+CONCAT r21, r15, r20
+EQ r22, r21, r7
+JIF r22, 10050
+LDI r23, "payload hash mismatch"
+EMIT "Require", r23
+REVERT
+JDEST 10050
+LDI r15, "sha256:"
+LDI r16, "octra-vitals:evidence:v0"
+LDI r17, "
+"
+CONCAT r18, r16, r17
+CONCAT r19, r18, r12
+SHA256 r20, r19
+CONCAT r21, r15, r20
+EQ r22, r21, r8
+JIF r22, 10051
+LDI r23, "evidence hash mismatch"
+EMIT "Require", r23
+REVERT
+JDEST 10051
+LDI r15, "sha256:"
+LDI r16, "octra-vitals:source-refs:v0"
+LDI r17, "
+"
+CONCAT r18, r16, r17
+CONCAT r19, r18, r13
+SHA256 r20, r19
+CONCAT r21, r15, r20
+EQ r22, r21, r9
+JIF r22, 10052
+LDI r23, "source refs hash mismatch"
+EMIT "Require", r23
+REVERT
+JDEST 10052
+LDI r15, "sha256:"
+LDI r16, "octra-vitals:summary:v0"
+LDI r17, "
+"
+CONCAT r18, r16, r17
+CONCAT r19, r18, r14
+SHA256 r20, r19
+CONCAT r21, r15, r20
+EQ r22, r21, r10
+JIF r22, 10053
+LDI r23, "summary hash mismatch"
+EMIT "Require", r23
+REVERT
+JDEST 10053
+SSTORE "snapshot_count", r4
+SSTORE "latest_snapshot_index", r4
+SSTORE "latest_snapshot_id", r1
+SSTORE "latest_observed_at", r2
+SSTORE "latest_epoch", r3
+SSTORE "latest_payload_hash", r7
+SSTORE "latest_evidence_manifest_hash", r8
+SSTORE "latest_source_refs_hash", r9
+SSTORE "latest_summary_hash", r10
+SSTORE "latest_payload", r11
+SSTORE "latest_evidence_manifest", r12
+SSTORE "latest_source_refs", r13
+SSTORE "latest_summary", r14
+CALLER r15
+SSTORE "latest_submitter", r15
+SLOAD r15, "summary_window_row_count"
+LDI r16, 0
+ADD r15, r16, r15
+LDI r17, 48
+LT r18, r15, r17
+JIF r18, 10054
+SLOAD r15, "summary_window"
+LDI r16, 208
+LDI r17, 9984
+LDI r18, 208
+SUB r19, r17, r18
+SUBSTR r20, r15, r16, r19
+CONCAT r21, r20, r14
+MOV r15, r21
+SSTORE "summary_window", r15
+LDI r16, "sha256:"
+LDI r17, "octra-vitals:summary-window:v0"
+LDI r18, "
+"
+CONCAT r19, r17, r18
+CONCAT r20, r19, r15
+SHA256 r21, r20
+CONCAT r22, r16, r21
+SSTORE "summary_window_hash", r22
+LDI r16, 48
+SUB r17, r4, r16
+LDI r18, 1
+ADD r19, r17, r18
+SSTORE "summary_window_first_index", r19
+LDI r16, 48
+SSTORE "summary_window_row_count", r16
+JMP 10055
+JDEST 10054
+SLOAD r16, "summary_window"
+CONCAT r17, r16, r14
+MOV r16, r17
+SSTORE "summary_window", r16
+LDI r17, "sha256:"
+LDI r18, "octra-vitals:summary-window:v0"
+LDI r19, "
+"
+CONCAT r20, r18, r19
+CONCAT r21, r20, r16
+SHA256 r22, r21
+CONCAT r23, r17, r22
+SSTORE "summary_window_hash", r23
+SLOAD r17, "summary_window_row_count"
+LDI r18, 0
+ADD r17, r18, r17
+LDI r19, 0
+EQ r20, r17, r19
+JIF r20, 10056
+JMP 10057
+JDEST 10056
+SSTORE "summary_window_first_index", r4
+JDEST 10057
+SLOAD r17, "summary_window_row_count"
+LDI r18, 0
+ADD r17, r18, r17
+LDI r19, 1
+ADD r20, r17, r19
+SSTORE "summary_window_row_count", r20
+JDEST 10055
+SLOAD r17, "summary_window"
+STRLEN r18, r17
+LDI r19, 9984
+GT r20, r18, r19
+LDI r21, true
+NEQ r20, r20, r21
+JIF r20, 10058
+LDI r22, "summary window too large"
+EMIT "Require", r22
+REVERT
+JDEST 10058
+CALLER r17
+EMIT "SnapshotRecorded", r1, r4, r3, r7, r8, r9, r10, r2, r17
+LDI r17, true
+MOV r0, r17
+STOP
+STOP

@@ -1,0 +1,15 @@
+node_modules/
+dist/
+.DS_Store
+.claude/
+build/
+data/
+reports/
+app/producer.audit.json
+*.log
+.env
+.env.*
+!.env.example
+*.oct
+wallet*.json
+secret*.json

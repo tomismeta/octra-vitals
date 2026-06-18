@@ -1,0 +1,11 @@
+[Unit]
+Description=Run Octra Vitals updater watchdog
+
+[Timer]
+OnBootSec=5min
+OnUnitActiveSec=5min
+RandomizedDelaySec=30s
+Persistent=true
+
+[Install]
+WantedBy=timers.target

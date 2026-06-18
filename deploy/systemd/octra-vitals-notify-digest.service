@@ -1,0 +1,42 @@
+[Unit]
+Description=Send Octra Vitals operator digest
+After=network-online.target octra-vitals-gateway.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=octra-vitals
+Group=octra-vitals
+WorkingDirectory=/opt/octra-vitals/current
+Environment=VITALS_NOTIFY_DATA_DIR=/var/lib/octra-vitals
+Environment=VITALS_NOTIFY_GATEWAY_URL=http://127.0.0.1:4173
+Environment=VITALS_NOTIFY_ALERT_MAX_SNAPSHOT_AGE_MS=2700000
+Environment=VITALS_NOTIFY_ALERT_DISK_PCT=75
+Environment=VITALS_NOTIFY_ALERT_DIAGNOSTIC_REQUESTS_PER_HOUR=300
+EnvironmentFile=-/etc/octra-vitals/notify.env
+ExecStart=/usr/bin/node /opt/octra-vitals/current/dist/scripts/notify-operator.js
+TimeoutStartSec=120
+NoNewPrivileges=yes
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectSystem=strict
+ProtectHome=read-only
+ReadWritePaths=/var/lib/octra-vitals
+RestrictSUIDSGID=yes
+LockPersonality=yes
+RemoveIPC=yes
+ProtectProc=invisible
+ProcSubset=pid
+ProtectKernelLogs=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+ProtectClock=yes
+ProtectHostname=yes
+RestrictNamespaces=yes
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+RestrictRealtime=yes
+CapabilityBoundingSet=
+AmbientCapabilities=
+SystemCallArchitectures=native
+UMask=0007

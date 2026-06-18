@@ -1,0 +1,25 @@
+{
+  "name": "octra-vitals",
+  "runtime": "octb",
+  "build": {
+    "kind": "static-assets",
+    "root": "app"
+  },
+  "deploy": {
+    "privacy_class": "public",
+    "browser_mode": "gateway_allowed",
+    "resource_mode": "public_resources",
+    "ou": "200000",
+    "limits": {
+      "max_stable_bytes": "33554432",
+      "max_assets_bytes": "33554432",
+      "max_inline_value": "65536",
+      "max_wasm_bytes": "33554432"
+    }
+  },
+  "assets": {
+    "mode": "plain",
+    "root": "app",
+    "metadata_mode": "reveal"
+  }
+}

@@ -1,0 +1,44 @@
+[Unit]
+Description=Watch Octra Vitals snapshot updater
+After=network-online.target octra-vitals-gateway.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=root
+Group=octra-vitals
+WorkingDirectory=/opt/octra-vitals/current
+Environment=VITALS_WATCH_DATA_DIR=/var/lib/octra-vitals
+Environment=VITALS_WATCH_GATEWAY_URL=http://127.0.0.1:4173
+Environment=VITALS_WATCH_UPDATER_TIMER=octra-vitals-updater.timer
+Environment=VITALS_WATCH_UPDATER_SERVICE=octra-vitals-updater.service
+Environment=VITALS_WATCH_GATEWAY_SERVICE=octra-vitals-gateway.service
+Environment=VITALS_WATCH_MAX_RECEIPT_AGE_MS=2700000
+Environment=VITALS_WATCH_REQUEST_TIMEOUT_MS=30000
+Environment=VITALS_WATCH_RECOVERY_ENABLED=0
+EnvironmentFile=-/etc/octra-vitals/watchdog.env
+ExecStart=/usr/bin/node /opt/octra-vitals/current/dist/scripts/watch-updater.js
+TimeoutStartSec=180
+NoNewPrivileges=yes
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectSystem=strict
+ProtectHome=read-only
+ReadWritePaths=/var/lib/octra-vitals
+RestrictSUIDSGID=yes
+LockPersonality=yes
+RemoveIPC=yes
+ProtectProc=invisible
+ProcSubset=pid
+ProtectKernelLogs=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectClock=yes
+ProtectHostname=yes
+RestrictNamespaces=yes
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+RestrictRealtime=yes
+CapabilityBoundingSet=
+AmbientCapabilities=
+SystemCallArchitectures=native
+UMask=0007
