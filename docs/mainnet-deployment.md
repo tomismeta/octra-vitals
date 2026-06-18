@@ -224,6 +224,7 @@ If SSH is already configured locally for the host, no SSH key env var is needed.
 - Snapshot writes require a matching native `contract_receipt` by default; leave `VITALS_REQUIRE_CONTRACT_RECEIPT=1`.
 - `/api/native-readiness` verifies the live Circle program with `octra_circleProgramInfo`, `circle_info`, and Circle program views.
 - Deploy reports capture `octra_recommendedFee`, `staging_stats`, and `staging_estimateOu` telemetry for the write path.
-- Batch asset publishing is opt-in with `VITALS_SITE_ASSET_SUBMIT_BATCH=1`; keep single-asset submits unless the target RPC has been rehearsed. Batch publishing lowers RPC submit calls, but every file still has its own asset transaction hash, confirmation, and `circle_asset` readback gate.
+- Asset publishing is changed-only by default. The publisher compares candidate release hashes with live Circle asset bytes and submits only changed, missing, forced, or mismatched assets. Use `VITALS_SITE_ASSET_UPLOAD_MODE=all` for intentional full republishes and `VITALS_SITE_ASSET_FORCE_PATHS=/path` for targeted recovery.
+- Batch asset publishing is opt-in with `VITALS_SITE_ASSET_SUBMIT_BATCH=1`; keep single-asset submits unless the target RPC has been rehearsed. Batch publishing lowers RPC submit calls, but every selected file still has its own asset transaction hash, confirmation, and `circle_asset` readback gate.
 - Treat `producer.audit.json` as a production asset. If producer, gateway, deploy automation, or audited docs change, Circle asset parity may be required even when app UI bytes do not change.
 - If the programmed Site Circle production release gate exposes a hard protocol limit, stop and use the documented split-state fallback instead of weakening gateway trust.

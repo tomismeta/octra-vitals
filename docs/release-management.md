@@ -71,23 +71,34 @@ host release and gateway restart are usually enough.
 
 ## Circle Asset Batch Publishing
 
+Circle asset publishing defaults to changed-only uploads. The publisher compares
+the candidate release asset hashes with live Circle asset bytes and signs
+transactions only for changed, missing, forced, or mismatched assets. A new
+Circle still uploads the full asset set.
+
+Use `VITALS_SITE_ASSET_UPLOAD_MODE=all` only for explicit recovery or full
+republish drills. Use `VITALS_SITE_ASSET_FORCE_PATHS=/app.js,/style.css` to
+republish specific assets even when their live hashes already match.
+
 Circle asset batch publishing is an RPC submission optimization, not a new proof
-object. Each asset is still a separate signed `circle_asset_put` transaction with
-its own nonce, transaction hash, confirmation status, and readback check.
+object. Each selected asset is still a separate signed `circle_asset_put`
+transaction with its own nonce, transaction hash, confirmation status, and
+readback check.
 
 Use `VITALS_SITE_ASSET_SUBMIT_BATCH=1` only after the target environment has
 been rehearsed. A valid batch deploy must prove all of the following:
 
 - the `octra_submitBatch` response accepted every prepared asset transaction;
-- every asset transaction hash confirmed on chain;
+- every selected asset transaction hash confirmed on chain;
 - `circle_asset(circle_id, path)` returns the expected bytes, `blob_hash`, and
   `resource_key`;
 - `/api/site-integrity` reports local and Circle asset parity.
 
 The value is fewer submit round trips against the RPC and a shorter nonce window
 during asset publication. It is not expected to reduce OU materially because the
-chain still records one asset transaction per file. Keep single-asset publishing
-as the fallback path for diagnosis or partial-recovery situations.
+chain still records one asset transaction per selected file. Changed-only
+publishing is where OU savings come from. Keep single-asset publishing as the
+fallback path for diagnosis or partial-recovery situations.
 
 ## Devnet First
 

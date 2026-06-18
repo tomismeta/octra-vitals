@@ -2,6 +2,7 @@
 import { createCipheriv, createHash, pbkdf2Sync, randomBytes } from "node:crypto";
 import { mkdir, readFile, stat, writeFile } from "node:fs/promises";
 import { dirname, extname, join, resolve } from "node:path";
+import { verifyCircleAssetIntegrity } from "../lib/circle-asset-integrity.js";
 import { feeTelemetry, octraRpc } from "../lib/octra-rpc.js";
 import { loadWalletFromEnv, publicTransactionJson, signTransaction, transactionHash, type OctraTransaction } from "../lib/octra-transaction.js";
 import { runtimeVitalsManifest, stableJson } from "../lib/vitals-manifest.js";
@@ -15,6 +16,7 @@ const outPath = args.find((arg) => arg !== "--dry-run") || join(root, "build", "
 const deployEnabled = !dryRunOnly && process.env.VITALS_DEPLOY_SITE_CIRCLE === "1";
 const waitForConfirmations = process.env.VITALS_DEPLOY_WAIT !== "0";
 const batchAssets = process.env.VITALS_SITE_ASSET_SUBMIT_BATCH === "1";
+const assetUploadMode = process.env.VITALS_SITE_ASSET_UPLOAD_MODE === "all" ? "all" : "changed";
 const sealedMagic = Buffer.from("OCRS1");
 
 const contentTypes: Record<string, string> = {
@@ -234,6 +236,29 @@ interface PreparedAssetTx {
   tx_json: Record<string, unknown>;
 }
 
+interface SiteAsset {
+  path: string;
+  file: string;
+  content_type: string;
+  bytes: number;
+  sha256: string;
+  body_b64: string;
+  sealed: ReturnType<typeof encryptSealedAsset> | null;
+  ou: string;
+}
+
+interface AssetLiveStatus {
+  path: string;
+  candidate_sha256: string;
+  live_sha256: string | null;
+  live_resource_key: string | null;
+  live_blob_hash: string | null;
+  live_matches_candidate: boolean;
+  upload_required: boolean;
+  reason: string;
+  error: string | null;
+}
+
 function validateBatchSubmitResult(batchSubmitResult: unknown, assetTxs: PreparedAssetTx[]) {
   const response = recordValue(batchSubmitResult);
   const results = Array.isArray(response?.results) ? response.results : [];
@@ -287,6 +312,136 @@ function validateBatchSubmitResult(batchSubmitResult: unknown, assetTxs: Prepare
   };
 }
 
+function forcedAssetPaths(): Set<string> {
+  const raw = process.env.VITALS_SITE_ASSET_FORCE_PATHS || "";
+  return new Set(raw
+    .split(",")
+    .map((path) => path.trim())
+    .filter(Boolean));
+}
+
+function extractCircleAssetBytes(value: any): Buffer | null {
+  if (!value || typeof value !== "object") return null;
+  if (typeof value.body_b64 === "string") return Buffer.from(value.body_b64, "base64");
+  if (typeof value.body === "string") return Buffer.from(value.body);
+  if (typeof value.content_b64 === "string") return Buffer.from(value.content_b64, "base64");
+  return null;
+}
+
+async function mapWithConcurrency<T, R>(items: T[], limit: number, fn: (item: T) => Promise<R>): Promise<R[]> {
+  const results = new Array<R>(items.length);
+  let next = 0;
+  const workers = Array.from({ length: Math.max(1, Math.min(limit, items.length)) }, async () => {
+    while (next < items.length) {
+      const index = next;
+      next += 1;
+      const item = items[index];
+      if (item !== undefined) results[index] = await fn(item);
+    }
+  });
+  await Promise.all(workers);
+  return results;
+}
+
+async function readLiveAssetStatus(circleId: string, asset: SiteAsset, forcePaths: Set<string>): Promise<AssetLiveStatus> {
+  try {
+    const circleAsset = await octraRpc<any>("circle_asset", [circleId, asset.path]);
+    const bytes = extractCircleAssetBytes(circleAsset);
+    if (!bytes) throw new Error("circle_asset did not return bytes");
+    const integrity = verifyCircleAssetIntegrity(circleId, asset.path, bytes, circleAsset || {});
+    const liveSha256 = `sha256:${sha256Hex(bytes)}`;
+    const liveMatchesCandidate = liveSha256 === asset.sha256 && integrity.checks_passed;
+    const forced = forcePaths.has(asset.path);
+    return {
+      path: asset.path,
+      candidate_sha256: asset.sha256,
+      live_sha256: liveSha256,
+      live_resource_key: integrity.resource_key,
+      live_blob_hash: integrity.blob_hash ? `sha256:${integrity.blob_hash}` : null,
+      live_matches_candidate: liveMatchesCandidate,
+      upload_required: forced || !liveMatchesCandidate,
+      reason: forced ? "forced" : liveMatchesCandidate ? "unchanged" : integrity.checks_passed ? "hash_changed" : `circle_integrity_failed:${integrity.errors.join(",")}`,
+      error: null
+    };
+  } catch (error) {
+    return {
+      path: asset.path,
+      candidate_sha256: asset.sha256,
+      live_sha256: null,
+      live_resource_key: null,
+      live_blob_hash: null,
+      live_matches_candidate: false,
+      upload_required: true,
+      reason: "circle_asset_unavailable",
+      error: error instanceof Error ? error.message : String(error)
+    };
+  }
+}
+
+async function selectAssetsForUpload(assets: SiteAsset[], circleId: string, deployNeeded: boolean, sealedAssets: boolean) {
+  const forcePaths = forcedAssetPaths();
+  const forceUnknown = [...forcePaths].filter((path) => !assets.some((asset) => asset.path === path));
+  if (forceUnknown.length) {
+    throw new Error(`VITALS_SITE_ASSET_FORCE_PATHS contained unknown asset path(s): ${forceUnknown.join(", ")}`);
+  }
+
+  let live: AssetLiveStatus[];
+  if (deployNeeded || circleId === "pending") {
+    live = assets.map((asset) => ({
+      path: asset.path,
+      candidate_sha256: asset.sha256,
+      live_sha256: null,
+      live_resource_key: null,
+      live_blob_hash: null,
+      live_matches_candidate: false,
+      upload_required: true,
+      reason: "new_circle",
+      error: null
+    }));
+  } else if (assetUploadMode === "all") {
+    live = assets.map((asset) => ({
+      path: asset.path,
+      candidate_sha256: asset.sha256,
+      live_sha256: null,
+      live_resource_key: null,
+      live_blob_hash: null,
+      live_matches_candidate: false,
+      upload_required: true,
+      reason: "upload_mode_all",
+      error: null
+    }));
+  } else if (sealedAssets) {
+    live = assets.map((asset) => ({
+      path: asset.path,
+      candidate_sha256: asset.sha256,
+      live_sha256: null,
+      live_resource_key: null,
+      live_blob_hash: null,
+      live_matches_candidate: false,
+      upload_required: true,
+      reason: "sealed_assets_upload_all",
+      error: null
+    }));
+  } else {
+    const concurrency = Math.max(1, Math.min(8, Number(process.env.VITALS_SITE_ASSET_DIFF_CONCURRENCY || 4)));
+    live = await mapWithConcurrency(assets, concurrency, (asset) => readLiveAssetStatus(circleId, asset, forcePaths));
+  }
+  const liveByPath = new Map(live.map((item) => [item.path, item]));
+  const selected = assets.filter((asset) => liveByPath.get(asset.path)?.upload_required === true);
+  const skipped = assets.filter((asset) => liveByPath.get(asset.path)?.upload_required !== true);
+  return {
+    mode: assetUploadMode,
+    force_paths: [...forcePaths].sort(),
+    upload_count: selected.length,
+    skipped_count: skipped.length,
+    selected_paths: selected.map((asset) => asset.path),
+    skipped_paths: skipped.map((asset) => asset.path),
+    live,
+    selected,
+    skipped
+  };
+}
+
 async function pollTx(hash: string, attempts = 45): Promise<any> {
   let latest: any = null;
   for (let attempt = 0; attempt < attempts; attempt += 1) {
@@ -322,6 +477,9 @@ async function writeReport(report: unknown): Promise<void> {
     entry_uri: (report as any).entry_uri,
     deploy_tx_hash: (report as any).deploy_tx_hash,
     asset_tx_hashes: (report as any).asset_tx_hashes,
+    asset_upload_mode: (report as any).asset_upload_mode,
+    asset_upload_count: (report as any).asset_upload_decision?.upload_count,
+    asset_skipped_count: (report as any).asset_upload_decision?.skipped_count,
     assets: (report as any).assets?.length,
     report_path: outPath
   }));
@@ -378,7 +536,7 @@ const deployPayloadJson = JSON.stringify(deployPayload);
 let nonce = deployerAddress ? await nextNonce(deployerAddress) : 0;
 const deployNeeded = !configuredCircleId;
 const circleId = configuredCircleId || (deployerAddress ? circleIdOfDeployPayloadJson(deployerAddress, nonce, deployPayloadJson) : "pending");
-const assets = await Promise.all((siteManifest.assets || []).map(async (assetPath: string) => {
+const assets: SiteAsset[] = await Promise.all((siteManifest.assets || []).map(async (assetPath: string) => {
   const filePath = join(appDir, assetPath.replace(/^\//, ""));
   const bytes = assetPath === "/vitals.manifest.json"
     ? Buffer.from(stableJson(runtimeVitalsManifest(vitalsManifest, {
@@ -404,6 +562,7 @@ const assets = await Promise.all((siteManifest.assets || []).map(async (assetPat
     ou: assetOuOverride ? String(assetOuOverride) : circleAssetOuFromB64Length(wireB64Length)
   };
 }));
+const assetSelection = await selectAssetsForUpload(assets, circleId, deployNeeded, sealedAssets);
 const [deployFee, assetFee, encryptedAssetFee] = await Promise.all([
   feeTelemetry("deploy_circle"),
   feeTelemetry("circle_asset_put"),
@@ -426,6 +585,16 @@ if (!deployEnabled) {
     entry_uri: circleId === "pending" ? "pending" : `oct://${circleId}${siteManifest.entry || "/index.html"}`,
     deploy_action: deployNeeded ? "create" : "update_existing",
     asset_submission_mode: batchAssets ? "batch" : "single",
+    asset_upload_mode: assetSelection.mode,
+    asset_upload_decision: {
+      mode: assetSelection.mode,
+      force_paths: assetSelection.force_paths,
+      upload_count: assetSelection.upload_count,
+      skipped_count: assetSelection.skipped_count,
+      selected_paths: assetSelection.selected_paths,
+      skipped_paths: assetSelection.skipped_paths,
+      live: assetSelection.live
+    },
     circle_id_payload: circleIdPayload,
     deploy_payload: deployPayload,
     deploy_payload_json: deployPayloadJson,
@@ -440,6 +609,8 @@ if (!deployEnabled) {
     missing_requirements: missing,
     assets: assets.map(({ body_b64, sealed, ...asset }) => ({
       ...asset,
+      upload_required: assetSelection.live.find((item) => item.path === asset.path)?.upload_required ?? true,
+      upload_reason: assetSelection.live.find((item) => item.path === asset.path)?.reason || null,
       plaintext_hash: sealed?.plaintext_hash ? `sha256:${sealed.plaintext_hash}` : asset.sha256,
       ciphertext_sha256: sealed?.ciphertext_sha256 || null
     })),
@@ -466,7 +637,7 @@ if (!deployEnabled) {
     nonce += 1;
   }
 
-  const assetTxs = assets.map((asset) => {
+  const assetTxs = assetSelection.selected.map((asset) => {
     const encryptedAsset = sealedAssets && asset.sealed;
     if (sealedAssets && !encryptedAsset) throw new Error(`sealed asset package missing for ${asset.path}`);
     const tx: OctraTransaction = {
@@ -552,7 +723,7 @@ if (!deployEnabled) {
 
   await writeReport({
     schema: "octra-vitals-site-circle-deploy-report-v0",
-    status: "submitted",
+    status: deploySubmission || assetSubmissions.length > 0 ? "submitted" : "no_changes",
     generated_at: new Date().toISOString().replace(/\.\d{3}Z$/, "Z"),
     deploy_enabled: true,
     deployer_address: wallet.address,
@@ -560,6 +731,16 @@ if (!deployEnabled) {
     entry_uri: `oct://${circleId}${siteManifest.entry || "/index.html"}`,
     deploy_action: deployNeeded ? "create" : "update_existing",
     asset_submission_mode: batchAssets ? "batch" : "single",
+    asset_upload_mode: assetSelection.mode,
+    asset_upload_decision: {
+      mode: assetSelection.mode,
+      force_paths: assetSelection.force_paths,
+      upload_count: assetSelection.upload_count,
+      skipped_count: assetSelection.skipped_count,
+      selected_paths: assetSelection.selected_paths,
+      skipped_paths: assetSelection.skipped_paths,
+      live: assetSelection.live
+    },
     circle_id_payload: circleIdPayload,
     deploy_payload: deployPayload,
     deploy_payload_json: deployPayloadJson,
@@ -579,6 +760,8 @@ if (!deployEnabled) {
     asset_submissions: assetSubmissions,
     assets: assets.map(({ body_b64, sealed, ...asset }) => ({
       ...asset,
+      upload_required: assetSelection.live.find((item) => item.path === asset.path)?.upload_required ?? true,
+      upload_reason: assetSelection.live.find((item) => item.path === asset.path)?.reason || null,
       plaintext_hash: sealed?.plaintext_hash ? `sha256:${sealed.plaintext_hash}` : asset.sha256,
       ciphertext_sha256: sealed?.ciphertext_sha256 || null
     })),
