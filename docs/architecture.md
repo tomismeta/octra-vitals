@@ -91,6 +91,8 @@ The observation RPC and program RPC are separate lanes. `OCTRA_OBSERVATION_RPC_U
 
 The gateway verifies hash consistency for the program state it receives, but it is not an Octra consensus light client. A single program RPC is therefore a trust root for what state is reported. Public/mainnet deployments must configure `OCTRA_PROGRAM_RPC_URLS` with two or more independent endpoints; the gateway compares programmed-Circle latest snapshot reads, history-window reads, submit preflight/readback, owner/operator views, and readiness metadata, then fails closed on disagreement.
 
+For Circle-served static assets, the gateway also verifies the pinned release hash, the webcli-compatible Circle `resource_key` derivation, and the returned `blob_hash` against decoded bytes. `/api/site-integrity` and Circle asset response headers expose those fields plus `stable_root`/`assets_root`, but this is still RPC consistency metadata until Octra exposes inclusion witnesses from asset/state keys to finalized roots.
+
 Vitals does not claim to be a full bridge verifier. It is a hash-bound accounting and reconciliation surface. It stores direct observations and derived bridge reconciliation values in the Vitals State Program so reviewers can inspect the payload, formulas, source refs, and raw evidence independently.
 
 Public v0 keeps the latest payload, evidence manifest, and source refs as full AML strings for native inspection. It stores trend history as a bounded fixed-width summary window rather than historical payload maps. The gateway verifies the latest summary row against the latest payload before serving it, and `/api/history` is drawn only from that AML summary window.

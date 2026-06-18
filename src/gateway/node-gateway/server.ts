@@ -4,6 +4,7 @@ import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { extname, join, resolve } from "node:path";
 import { buildLiveSnapshot, publicSnapshotArtifact, writeSnapshotArtifacts } from "../../lib/snapshot.js";
 import { canonicalJson, responseHash, sha256Hex, sha256Tagged } from "../../lib/canonical-json.js";
+import { verifyCircleAssetIntegrity } from "../../lib/circle-asset-integrity.js";
 import { circleProgramViewAtUrl, configuredProgrammedCircleId, stateTargetMode, type StateTargetMode } from "../../lib/circle-program.js";
 import { configuredProgramAddress, readCircleProgramSummaryHistory, readLatestCircleProgramSnapshot, readLatestProgramSnapshot, readProgramSummaryHistory } from "../../lib/program-state.js";
 import { circleInfoAtUrl, circleProgramInfoAtUrl, contractCall, contractReceipt, contractSource, octraProgramRpcUrls, octraRpc, vmContract } from "../../lib/octra-rpc.js";
@@ -36,6 +37,28 @@ const SOURCE_REFS_HASH_DOMAIN = process.env.VITALS_SOURCE_REFS_HASH_DOMAIN || "o
 type StateSourceMode = "program_required" | "program_preferred" | "bootstrap_live";
 type SnapshotSource = "program" | "bootstrap_live" | "sample_fallback";
 type StaticAssetSource = "circle_required" | "circle_preferred" | "local";
+type CircleMetadata = {
+  stable_root: string | null;
+  assets_root: string | null;
+  code_hash: string | null;
+  version: string | null;
+  error: string | null;
+};
+type StaticAssetRead = {
+  bytes: Buffer;
+  contentType: string;
+  source: "circle" | "local";
+  sha256: string;
+  circleId: string | null;
+  circleResourceKey: string | null;
+  circleBlobHash: string | null;
+  circleStableRoot: string | null;
+  circleAssetsRoot: string | null;
+  circleIntegrityChecksPassed: boolean | null;
+};
+type CachedStaticAsset = StaticAssetRead & {
+  cachedAt: number;
+};
 
 function stateSourceMode(): StateSourceMode {
   const configured = process.env.VITALS_STATE_SOURCE_MODE;
@@ -56,19 +79,15 @@ let historyReadInFlight: { program_address: string; promise: Promise<ProgramHist
 let historyError: Error | null = null;
 let liveVerificationCache: { address: string; checked_at: string; value: Record<string, any> } | null = null;
 let circleProgramVerificationCache: { circle_id: string; checked_at: string; value: Record<string, any> } | null = null;
+let circleMetadataCache: { circle_id: string; checked_at: number; value: CircleMetadata } | null = null;
+let circleMetadataReadInFlight: { circle_id: string; promise: Promise<CircleMetadata> } | null = null;
 let siteIntegrityCache: { circle_id: string; checked_at: string; value: Record<string, any> } | null = null;
 let siteIntegrityReadInFlight: { circle_id: string; promise: Promise<Record<string, any> | null> } | null = null;
 let nativeReceiptProofCache = new Map<string, {
   cachedAt: number;
   value: Record<string, any>;
 }>();
-let staticAssetCache = new Map<string, {
-  bytes: Buffer;
-  contentType: string;
-  source: "circle" | "local";
-  sha256: string;
-  cachedAt: number;
-}>();
+let staticAssetCache = new Map<string, CachedStaticAsset>();
 const trafficRecorder = configuredTrafficRecorder(dataDir);
 
 const contentTypes: Record<string, string> = {
@@ -632,6 +651,45 @@ function extractCircleAssetBytes(value: any): Buffer | null {
   return null;
 }
 
+function circleMetadataFromInfo(info: any, error: string | null = null): CircleMetadata {
+  const stableRoot = typeof info?.stable_root === "string" && info.stable_root.length > 0 ? info.stable_root : null;
+  const assetsRoot = typeof info?.assets_root === "string" && info.assets_root.length > 0 ? info.assets_root : null;
+  const codeHash = typeof info?.code_hash === "string" && info.code_hash.length > 0 ? info.code_hash : null;
+  const version = info?.version === undefined || info?.version === null ? null : String(info.version);
+  return {
+    stable_root: stableRoot,
+    assets_root: assetsRoot,
+    code_hash: codeHash,
+    version,
+    error
+  };
+}
+
+async function loadCircleMetadata(circleId: string): Promise<CircleMetadata> {
+  const cacheMs = Number(process.env.VITALS_CIRCLE_METADATA_CACHE_MS || 60_000);
+  if (circleMetadataCache?.circle_id === circleId && Date.now() - circleMetadataCache.checked_at < cacheMs) {
+    return circleMetadataCache.value;
+  }
+  if (circleMetadataReadInFlight?.circle_id === circleId) return circleMetadataReadInFlight.promise;
+
+  const promise = (async () => {
+    try {
+      const info = await octraRpc<any>("circle_info", [circleId]);
+      const value = circleMetadataFromInfo(info);
+      circleMetadataCache = { circle_id: circleId, checked_at: Date.now(), value };
+      return value;
+    } catch (error) {
+      const value = circleMetadataFromInfo(null, error instanceof Error ? error.message : String(error));
+      circleMetadataCache = { circle_id: circleId, checked_at: Date.now(), value };
+      return value;
+    }
+  })().finally(() => {
+    if (circleMetadataReadInFlight?.promise === promise) circleMetadataReadInFlight = null;
+  });
+  circleMetadataReadInFlight = { circle_id: circleId, promise };
+  return promise;
+}
+
 async function mapWithConcurrency<T, R>(items: T[], limit: number, fn: (item: T) => Promise<R>): Promise<R[]> {
   const results = new Array<R>(items.length);
   let next = 0;
@@ -662,7 +720,11 @@ function assetVerificationStatus(assetResults: Array<Record<string, any>>, relea
     .map((asset) => ({
       path: asset.path,
       expected_sha256: asset.expected_sha256,
-      circle_sha256: asset.circle_sha256
+      circle_sha256: asset.circle_sha256,
+      circle_resource_key: asset.circle_resource_key ?? null,
+      expected_resource_key: asset.expected_resource_key ?? null,
+      circle_blob_hash: asset.circle_blob_hash ?? null,
+      circle_consistency_errors: asset.circle_consistency_errors ?? []
     }));
   const localAssetsMatch = releaseCoverageExact && assetResults.length > 0 && localMismatchAssets.length === 0;
   const circleAssetsMatch = releaseCoverageExact && assetResults.length > 0 && assetResults.every((asset) => asset.circle_matches);
@@ -702,6 +764,7 @@ async function loadSiteIntegrity(manifest: Record<string, any>): Promise<Record<
 
 async function computeSiteIntegrity(circleId: string): Promise<Record<string, any> | null> {
   const checkedAt = new Date().toISOString().replace(/\.\d{3}Z$/, "Z");
+  const circleMetadata = await loadCircleMetadata(circleId);
   const release = await readJsonIfExists<Record<string, any>>(join(root, "build", "site-circle-release.json"));
   const releaseAssets = Array.isArray(release?.assets) ? release.assets as Array<Record<string, any>> : [];
   const releaseByPath = new Map<string, Record<string, any>>();
@@ -731,6 +794,13 @@ async function computeSiteIntegrity(circleId: string): Promise<Record<string, an
     let circleHash: string | null = null;
     let circleMatches = false;
     let circleError: string | null = null;
+    let expectedResourceKey: string | null = null;
+    let circleResourceKey: string | null = null;
+    let circleResourceKeyMatches: boolean | null = null;
+    let circleBlobHash: string | null = null;
+    let circleBlobHashMatchesBody: boolean | null = null;
+    let circleConsistencyChecksPassed: boolean | null = null;
+    let circleConsistencyErrors: string[] = [];
     if (!expected) {
       circleError = "release_manifest_missing_pinned_hash";
     } else {
@@ -738,8 +808,16 @@ async function computeSiteIntegrity(circleId: string): Promise<Record<string, an
         const circleAsset = await octraRpc<any>("circle_asset", [circleId, path]);
         const bytes = extractCircleAssetBytes(circleAsset);
         if (!bytes) throw new Error("circle_asset did not return bytes");
+        const integrity = verifyCircleAssetIntegrity(circleId, path, bytes, circleAsset || {});
+        expectedResourceKey = integrity.expected_resource_key;
+        circleResourceKey = integrity.resource_key;
+        circleResourceKeyMatches = integrity.resource_key_matches;
+        circleBlobHash = integrity.blob_hash;
+        circleBlobHashMatchesBody = integrity.blob_hash_matches_body_sha256;
+        circleConsistencyChecksPassed = integrity.checks_passed;
+        circleConsistencyErrors = integrity.errors;
         circleHash = `sha256:${sha256Hex(bytes)}`;
-        circleMatches = hashMatches(circleHash, expected);
+        circleMatches = hashMatches(circleHash, expected) && integrity.checks_passed;
       } catch (error) {
         circleError = error instanceof Error ? error.message : String(error);
       }
@@ -751,6 +829,13 @@ async function computeSiteIntegrity(circleId: string): Promise<Record<string, an
       local_sha256: localHash,
       local_matches: localMatches,
       circle_sha256: circleHash,
+      expected_resource_key: expectedResourceKey,
+      circle_resource_key: circleResourceKey,
+      circle_resource_key_matches: circleResourceKeyMatches,
+      circle_blob_hash: circleBlobHash,
+      circle_blob_hash_matches_body: circleBlobHashMatchesBody,
+      circle_consistency_checks_passed: circleConsistencyChecksPassed,
+      circle_consistency_errors: circleConsistencyErrors,
       circle_matches: circleMatches,
       circle_error: circleError
     };
@@ -760,6 +845,13 @@ async function computeSiteIntegrity(circleId: string): Promise<Record<string, an
   const value = {
     checked_at: checkedAt,
     circle_id: circleId,
+    circle_stable_root: circleMetadata.stable_root,
+    circle_assets_root: circleMetadata.assets_root,
+    circle_code_hash: circleMetadata.code_hash,
+    circle_version: circleMetadata.version,
+    circle_info_error: circleMetadata.error,
+    consensus_proof: null,
+    consensus_proof_status: "not_exposed_by_rpc",
     release_manifest_present: Boolean(release),
     release_manifest_covers_site_manifest: releaseCoverageExact,
     missing_release_assets: missingReleaseAssets,
@@ -955,7 +1047,13 @@ async function readLocalStaticAsset(assetPath: string, releaseAsset: Record<stri
     bytes,
     contentType: releaseContentType(assetPath, releaseAsset),
     source: "local" as const,
-    sha256: actual
+    sha256: actual,
+    circleId: null,
+    circleResourceKey: null,
+    circleBlobHash: null,
+    circleStableRoot: null,
+    circleAssetsRoot: null,
+    circleIntegrityChecksPassed: null
   };
 }
 
@@ -967,9 +1065,14 @@ async function readCircleStaticAsset(assetPath: string, circleId: string, releas
   const cached = staticAssetCache.get(cacheKey);
   if (cached && Date.now() - cached.cachedAt < cacheMs) return cached;
 
+  const circleMetadata = await loadCircleMetadata(circleId);
   const circleAsset = await octraRpc<any>("circle_asset", [circleId, assetPath]);
   const bytes = extractCircleAssetBytes(circleAsset);
   if (!bytes) throw new Error(`circle asset ${assetPath} did not return bytes`);
+  const integrity = verifyCircleAssetIntegrity(circleId, assetPath, bytes, circleAsset || {});
+  if (!integrity.checks_passed) {
+    throw new Error(`circle asset metadata mismatch for ${assetPath}: ${integrity.errors.join(", ")}`);
+  }
   const actual = `sha256:${sha256Hex(bytes)}`;
   if (expected && !hashMatches(actual, expected)) {
     throw new Error(`circle asset hash mismatch for ${assetPath}`);
@@ -979,6 +1082,12 @@ async function readCircleStaticAsset(assetPath: string, circleId: string, releas
     contentType: releaseContentType(assetPath, releaseAsset),
     source: "circle" as const,
     sha256: actual,
+    circleId,
+    circleResourceKey: integrity.resource_key,
+    circleBlobHash: integrity.blob_hash,
+    circleStableRoot: circleMetadata.stable_root,
+    circleAssetsRoot: circleMetadata.assets_root,
+    circleIntegrityChecksPassed: integrity.checks_passed,
     cachedAt: Date.now()
   };
   staticAssetCache.set(cacheKey, value);
@@ -1664,7 +1773,7 @@ async function serveStatic(res: http.ServerResponse, pathname: string, head = fa
     }
   }
 
-  res.writeHead(200, {
+  const headers: Record<string, string | number> = {
     "Content-Type": asset.contentType,
     "Cache-Control": staticCacheControl(assetPath),
     "Content-Length": asset.bytes.length,
@@ -1673,7 +1782,16 @@ async function serveStatic(res: http.ServerResponse, pathname: string, head = fa
     "Referrer-Policy": "no-referrer",
     "X-Octra-Asset-Source": asset.source,
     "X-Octra-Asset-SHA256": asset.sha256
-  });
+  };
+  if (asset.circleId) headers["X-Octra-Circle-ID"] = asset.circleId;
+  if (asset.circleResourceKey) headers["X-Octra-Circle-Resource-Key"] = asset.circleResourceKey;
+  if (asset.circleBlobHash) headers["X-Octra-Circle-Blob-Hash"] = asset.circleBlobHash;
+  if (asset.circleStableRoot) headers["X-Octra-Circle-Stable-Root"] = asset.circleStableRoot;
+  if (asset.circleAssetsRoot) headers["X-Octra-Circle-Assets-Root"] = asset.circleAssetsRoot;
+  if (asset.circleIntegrityChecksPassed !== null) {
+    headers["X-Octra-Circle-Consistency"] = asset.circleIntegrityChecksPassed ? "verified" : "failed";
+  }
+  res.writeHead(200, headers);
   if (head) {
     res.end();
     return;
