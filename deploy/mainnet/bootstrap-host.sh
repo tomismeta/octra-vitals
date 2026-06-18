@@ -8,8 +8,27 @@ DATA_DIR="${VITALS_DATA_DIR:-/var/lib/octra-vitals}"
 ENV_DIR="${ENV_DIR:-/etc/octra-vitals}"
 
 sudo apt-get update
-sudo apt-get install -y ca-certificates curl git rsync nodejs npm
+sudo apt-get install -y ca-certificates curl git rsync gnupg
+
+node_major() {
+  if command -v node >/dev/null 2>&1; then
+    node -p 'Number(process.versions.node.split(".")[0])' 2>/dev/null || true
+  fi
+}
+
+if [ "${FORCE_NODE22_INSTALL:-0}" = "1" ] || [ -z "$(node_major)" ] || [ "$(node_major)" -lt 22 ]; then
+  sudo install -d -m 0755 /etc/apt/keyrings
+  sudo rm -f /etc/apt/keyrings/nodesource.gpg
+  curl -fsSL https://deb.nodesource.com/gpgkey/nodesource-repo.gpg.key \
+    | sudo gpg --dearmor -o /etc/apt/keyrings/nodesource.gpg
+  echo "deb [signed-by=/etc/apt/keyrings/nodesource.gpg] https://deb.nodesource.com/node_22.x nodistro main" \
+    | sudo tee /etc/apt/sources.list.d/nodesource.list >/dev/null
+  sudo apt-get update
+  sudo apt-get install -y nodejs
+fi
+
 node -e 'const major = Number(process.versions.node.split(".")[0]); if (major < 22) { console.error(`Node 22+ is required; found ${process.version}. Install Node 22 before continuing.`); process.exit(1); }'
+npm -v >/dev/null
 
 if ! id "${APP_USER}" >/dev/null 2>&1; then
   sudo useradd --system --no-create-home --shell /usr/sbin/nologin "${APP_USER}"
