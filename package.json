@@ -4,6 +4,7 @@
   "license": "MIT",
   "private": true,
   "type": "module",
+  "packageManager": "npm@11.8.0",
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "check": "tsc -p tsconfig.json --noEmit",
@@ -47,10 +48,10 @@
     "native:verify": "npm run test && npm run canonical:verify && npm run program:compile && npm run program:verify && npm run program-circle:compile && npm run program-circle:verify && npm run circle:release && npm run circle:verify"
   },
   "engines": {
-    "node": ">=18.19"
+    "node": ">=22.0.0"
   },
   "devDependencies": {
-    "@types/node": "^25.9.2",
+    "@types/node": "^22.19.21",
     "typescript": "^6.0.3"
   }
 }

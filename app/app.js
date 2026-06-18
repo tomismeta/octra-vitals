@@ -1232,7 +1232,7 @@ function renderCapGrid(){
     const inCirc = i < nCirc;
     const isEnc  = i >= nPub && i < nCirc;              // encrypted sits at the end of the blue run
     g.appendChild(el("rect",{x:x.toFixed(2), y:y.toFixed(2), width:cell, height:cell, rx:2.5,
-      fill: isEnc ? "url(#px-cross)" : inCirc ? "var(--blue)" : "var(--inert)",
+      fill: isEnc ? "url(#px-cross)" : inCirc ? "var(--blue)" : "var(--structural)",
       "fill-opacity": inCirc ? 1 : 0.55}));
   }
   svg.appendChild(g);
@@ -1262,7 +1262,7 @@ function renderCapGrid(){
   };
   item(0,   "var(--blue)",    1,    "public · in circulation", false);
   item(268, "url(#px-cross)", 1,    "encrypted · FHE",    true);
-  item(520, "var(--inert)",   0.55, "burned",            false);
+  item(520, "var(--structural)", 0.55, "burned",          false);
 
   svg.appendChild(key);
   host.innerHTML=""; host.appendChild(svg);
@@ -1362,7 +1362,7 @@ function renderFlow(){
   ph.appendChild(el("rect",{width:7,height:7,fill:"var(--blue-soft)"})); ph.appendChild(el("rect",{width:3,height:7,fill:"var(--blue)"}));
   defs.appendChild(ph);
   const pd=el("pattern",{id:"px-dots",patternUnits:"userSpaceOnUse",width:7,height:7});
-  pd.appendChild(el("rect",{width:7,height:7,fill:"var(--paper-2)"})); pd.appendChild(el("circle",{cx:3.5,cy:3.5,r:1.35,fill:"var(--inert)"}));
+  pd.appendChild(el("rect",{width:7,height:7,fill:"var(--paper-2)"})); pd.appendChild(el("circle",{cx:3.5,cy:3.5,r:1.35,fill:"var(--structural)"}));
   defs.appendChild(pd); svg.appendChild(defs);
 
   const g=el("g");
@@ -1388,7 +1388,7 @@ function renderFlow(){
   const ucW=resRaw === 0n ? 0 : dW*ratio(A.raw.unclaimed,resRaw);
   g.appendChild(el("text",{x:dLeft.toFixed(2),y:dTop-9,class:"t-unit","font-size":10}, `THE ${fmtPct(pctR(resRaw,A.raw.locked,2))}% STILL ON OCTRA, ENLARGED · ${fmtOCT(resRaw,0)} OCT`));
   g.appendChild(el("rect",{x:dLeft.toFixed(2),y:dTop,width:(ucW-1).toFixed(2),height:dH,fill:"url(#px-hatch)",stroke:"var(--blue)","stroke-width":1}));
-  g.appendChild(el("rect",{x:(dLeft+ucW+1).toFixed(2),y:dTop,width:(dW-ucW-1).toFixed(2),height:dH,fill:"url(#px-dots)",stroke:"var(--inert)","stroke-width":1}));
+  g.appendChild(el("rect",{x:(dLeft+ucW+1).toFixed(2),y:dTop,width:(dW-ucW-1).toFixed(2),height:dH,fill:"url(#px-dots)",stroke:"var(--structural)","stroke-width":1}));
   const lab=(x,sw,strk,name,raw,sub)=>{
     g.appendChild(el("rect",{x:x.toFixed(2),y:dTop+dH+11,width:22,height:9,fill:sw,stroke:strk,"stroke-width":1}));
     g.appendChild(el("text",{x:(x+28).toFixed(2),y:dTop+dH+19,class:"t-name","font-size":12},name));
@@ -1397,7 +1397,7 @@ function renderFlow(){
     g.appendChild(el("text",{x:x.toFixed(2),y:dTop+dH+68,class:"t-pct","font-size":10.5,fill:"var(--muted)"},sub));
   };
   lab(dLeft,        "url(#px-hatch)", "var(--blue)",  "unclaimed",    A.raw.unclaimed,    "claimable recovery");
-  lab(dLeft+ucW+10, "url(#px-dots)",  "var(--inert)", "unclassified", A.raw.unclassified, "remaining collateral");
+  lab(dLeft+ucW+10, "url(#px-dots)",  "var(--structural)", "unclassified", A.raw.unclassified, "remaining collateral");
 
   svg.appendChild(g);
   host.innerHTML=""; host.appendChild(svg);

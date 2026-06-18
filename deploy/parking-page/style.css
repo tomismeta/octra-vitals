@@ -13,6 +13,18 @@
   --maxw:1180px;
   --mono:ui-monospace,"SF Mono",SFMono-Regular,Menlo,"Cascadia Mono",Consolas,"Liberation Mono",monospace;
   --sans:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,"Helvetica Neue",sans-serif;
+  --type-body:16px;
+  --type-display:72px;
+  --type-lede:22px;
+  --type-metric:34px;
+}
+
+@media (max-width:760px){
+  :root{
+    --type-display:42px;
+    --type-lede:18px;
+    --type-metric:28px;
+  }
 }
 
 *{box-sizing:border-box}
@@ -22,7 +34,7 @@ body{
   background:var(--paper);
   color:var(--ink);
   font-family:var(--sans);
-  font-size:16px;
+  font-size:var(--type-body);
   line-height:1.5;
   font-variant-numeric:tabular-nums lining-nums;
   -webkit-font-smoothing:antialiased;
@@ -48,7 +60,7 @@ body{
   align-items:center;
   gap:24px;
 }
-.brand{font-weight:800;font-size:17px;letter-spacing:-.02em;color:var(--ink);white-space:nowrap}
+.brand{font-weight:800;font-size:17px;letter-spacing:0;color:var(--ink);white-space:nowrap}
 .brand b{color:var(--accent)}
 .nav-links{display:flex;gap:18px;margin-left:8px;color:var(--muted);font-size:13px;font-weight:650}
 .nav-links b{color:var(--accent);margin-right:5px}
@@ -83,25 +95,25 @@ body{
   font-family:var(--mono);
   font-size:12px;
   font-weight:700;
-  letter-spacing:.14em;
+  letter-spacing:0;
   color:var(--accent);
 }
 .kicker{
   font-size:12px;
-  letter-spacing:.16em;
+  letter-spacing:0;
   text-transform:uppercase;
   color:var(--muted);
   font-weight:700;
 }
 h1{
-  font-size:clamp(38px,7vw,82px);
+  font-size:var(--type-display);
   line-height:.96;
-  letter-spacing:-.03em;
+  letter-spacing:0;
   margin:0 0 20px;
   max-width:12ch;
 }
 .lede{
-  font-size:clamp(17px,2vw,22px);
+  font-size:var(--type-lede);
   color:var(--ink-2);
   max-width:64ch;
   margin:0 0 48px;
@@ -146,17 +158,17 @@ figcaption b{color:var(--muted);font-weight:650}
   margin:0 0 10px;
   color:var(--muted);
   font-size:12px;
-  letter-spacing:.14em;
+  letter-spacing:0;
   text-transform:uppercase;
   font-weight:700;
 }
 .value{
   margin:0;
   font-family:var(--mono);
-  font-size:clamp(22px,3vw,34px);
+  font-size:var(--type-metric);
   line-height:1.05;
   font-weight:750;
-  letter-spacing:-.02em;
+  letter-spacing:0;
 }
 .note{margin:10px 0 0;color:var(--muted);font-size:14px;max-width:26ch}
 

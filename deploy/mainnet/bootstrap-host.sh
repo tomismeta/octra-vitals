@@ -9,6 +9,7 @@ ENV_DIR="${ENV_DIR:-/etc/octra-vitals}"
 
 sudo apt-get update
 sudo apt-get install -y ca-certificates curl git rsync nodejs npm
+node -e 'const major = Number(process.versions.node.split(".")[0]); if (major < 22) { console.error(`Node 22+ is required; found ${process.version}. Install Node 22 before continuing.`); process.exit(1); }'
 
 if ! id "${APP_USER}" >/dev/null 2>&1; then
   sudo useradd --system --no-create-home --shell /usr/sbin/nologin "${APP_USER}"

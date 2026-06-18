@@ -46,7 +46,7 @@ program-circle/   AML for the programmed Site Circle target
 program/          Standalone State Program compatibility path
 src/              TypeScript producer, gateway, verification, deploy tooling
 deploy/           Host, systemd, stage, and mainnet deployment scripts
-docs/             Architecture, schema, operations, launch, and deployment docs
+docs/             Architecture, schema, operations, costs, and deployment docs
 ```
 
 Generated/runtime output is intentionally ignored:
@@ -87,6 +87,8 @@ Bridge residuals are intentionally visible. A positive value for `locked - wOCT 
 
 ## Local Development
 
+Octra Vitals targets Node 22. Use `.nvmrc` / `.node-version` if your local shell has multiple Node versions installed.
+
 Install and run the app locally:
 
 ```bash
@@ -116,7 +118,9 @@ Useful routes:
 
 Set `VITALS_DATA_DIR` to keep runtime snapshots and evidence outside the checkout.
 
-## Common Commands
+## Command Lanes
+
+The package scripts are grouped by operating lane. The short path for most contributors is `check`, `test`, `native:verify`, and `dev`; the `*:dist` entries are deployment/runtime entrypoints used after the TypeScript build has already completed.
 
 General checks:
 
