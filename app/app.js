@@ -751,7 +751,7 @@ function extractSnapshotArtifact(value){
 
 function sourceRefUrl(refs, id){
   const ref = (refs || []).find((item)=>item?.id === id);
-  return ref?.hash ? apiHref(`/api/evidence/raw/${String(ref.hash).replace(/^sha256:/, "")}`) : ref?.url || null;
+  return ref?.hash ? apiHref(`/api/evidence/raw/${String(ref.hash).replace(/^sha256:/, "")}?pretty=1`) : ref?.url || null;
 }
 
 function historyRows(history, currentData){

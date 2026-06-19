@@ -1689,7 +1689,24 @@ async function serveProgramArtifacts(res: http.ServerResponse, head = false): Pr
   json(res, 200, artifacts, {}, head);
 }
 
-async function serveEvidence(res: http.ServerResponse, pathname: string, head = false): Promise<void> {
+function rawEvidenceView(raw: any): Record<string, unknown> {
+  const { body, schema: _schema, ...rest } = raw;
+  let bodyJson: unknown;
+  try {
+    bodyJson = JSON.parse(body);
+  } catch {
+    bodyJson = null;
+  }
+  return {
+    schema: "octra-vitals-raw-evidence-view-v0",
+    ...rest,
+    body_sha256: raw.response_hash,
+    body_json: bodyJson
+  };
+}
+
+async function serveEvidence(res: http.ServerResponse, url: URL, head = false): Promise<void> {
+  const pathname = url.pathname;
   const rawMatch = pathname.match(/^\/api\/evidence\/raw\/([a-fA-F0-9]{64})$/);
   if (rawMatch) {
     const rawHash = rawMatch[1];
@@ -1709,6 +1726,11 @@ async function serveEvidence(res: http.ServerResponse, pathname: string, head = 
       const parsed = JSON.parse(text);
       if (parsed.response_hash !== expected || typeof parsed.body !== "string" || responseHash(parsed.body) !== expected) {
         throw new Error("raw evidence hash mismatch");
+      }
+      if (url.searchParams.get("pretty") === "1") {
+        return json(res, 200, rawEvidenceView(parsed), {
+          "Cache-Control": "public, max-age=3600, immutable"
+        }, head);
       }
       res.writeHead(200, {
         "Content-Type": "application/json; charset=utf-8",
@@ -1833,7 +1855,7 @@ async function route(req: http.IncomingMessage, res: http.ServerResponse): Promi
   if (url.pathname === "/api/history") return serveHistory(res, head);
   if (url.pathname === "/api/program/artifacts") return serveProgramArtifacts(res, head);
   if (url.pathname === "/health") return json(res, 200, { ok: true, service: "octra-vitals-gateway" }, {}, head);
-  if (url.pathname.startsWith("/api/evidence/")) return serveEvidence(res, url.pathname, head);
+  if (url.pathname.startsWith("/api/evidence/")) return serveEvidence(res, url, head);
   return serveStatic(res, url.pathname, head);
 }
 
