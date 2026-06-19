@@ -221,6 +221,8 @@ Never commit wallet material, private keys, `.env` files, Telegram tokens, raw h
 
 The gateway env should contain public/non-secret config only. Snapshot-writing keys belong in `/etc/octra-vitals/updater.env` on the host, owned by root, with minimal permissions. The v0 launch posture uses a dedicated low-balance production wallet and keeps the path open for later operator rotation.
 
+Raw evidence is intentionally public when linked from the app or API. Evidence source URLs must therefore stay public-safe: no credentials, query tokens, fragments, private hosts, or non-HTTPS sources. The producer and gateway enforce public-host and byte-size guardrails before collecting or serving raw evidence.
+
 ## License
 
 MIT.

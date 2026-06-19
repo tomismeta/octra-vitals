@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import http from "node:http";
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { mkdir, readFile, stat, writeFile } from "node:fs/promises";
 import { extname, join, resolve } from "node:path";
 import { buildLiveSnapshot, publicSnapshotArtifact, writeSnapshotArtifacts } from "../../lib/snapshot.js";
 import { canonicalJson, responseHash, sha256Hex, sha256Tagged } from "../../lib/canonical-json.js";
@@ -1697,6 +1697,14 @@ async function serveEvidence(res: http.ServerResponse, pathname: string, head = 
     const expected = `sha256:${rawHash.toLowerCase()}`;
     const file = join(evidenceDir, "raw", `${rawHash.toLowerCase()}.json`);
     try {
+      const maxFileBytes = positiveIntegerEnv("VITALS_RAW_EVIDENCE_MAX_FILE_BYTES", 6_000_000);
+      const info = await stat(file);
+      if (info.size > maxFileBytes) {
+        return json(res, 413, {
+          error: "raw_evidence_too_large",
+          max_bytes: maxFileBytes
+        }, {}, head);
+      }
       const text = await readFile(file, "utf8");
       const parsed = JSON.parse(text);
       if (parsed.response_hash !== expected || typeof parsed.body !== "string" || responseHash(parsed.body) !== expected) {

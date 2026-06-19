@@ -1,10 +1,16 @@
-import { mkdir, rename, unlink, writeFile } from "node:fs/promises";
+import { chmod, mkdir, rename, unlink, writeFile } from "node:fs/promises";
 import { basename, dirname, join } from "node:path";
 import { canonicalJson, requestHash, responseHash, sha256Tagged } from "./canonical-json.js";
 import { octraObservationRpcUrl } from "./octra-rpc.js";
 import { decimalToRawString, hexToRawString, sumRaw } from "./units.js";
 import type { EvidenceEntry, EvidenceManifest, JsonRpcRequest, JsonRpcRow, RawEvidenceEntry, SnapshotArtifact, SnapshotEnvelope, SnapshotPayload, SourceRef } from "./types.js";
 
+const DEFAULT_PUBLIC_EVIDENCE_HOSTS = [
+  "octra.network",
+  "devnet.octrascan.io",
+  "relayer-002838819188.octra.network",
+  "ethereum-rpc.publicnode.com"
+];
 const OCTRA_RPC_URLS = sourceUrls(
   process.env.OCTRA_OBSERVATION_RPC_URLS,
   process.env.OCTRA_OBSERVATION_RPC_URL || octraObservationRpcUrl()
@@ -152,8 +158,65 @@ function sourceUrls(configured: string | undefined, fallback: string): string[] 
   const urls = (configured || fallback)
     .split(",")
     .map((url) => url.trim())
-    .filter(Boolean);
+    .filter(Boolean)
+    .map((url) => validateEvidenceSourceUrl(url));
   return Array.from(new Set(urls));
+}
+
+function positiveIntegerEnv(name: string, fallback: number): number {
+  const configured = process.env[name];
+  const parsed = configured ? Number(configured) : fallback;
+  if (!Number.isInteger(parsed) || parsed <= 0) {
+    throw new Error(`${name} must be a positive integer`);
+  }
+  return parsed;
+}
+
+function publicEvidenceHosts(): Set<string> {
+  const configured = (process.env.VITALS_PUBLIC_EVIDENCE_HOSTS || "")
+    .split(",")
+    .map((host) => host.trim().toLowerCase())
+    .filter(Boolean);
+  return new Set([...DEFAULT_PUBLIC_EVIDENCE_HOSTS, ...configured]);
+}
+
+function localEvidenceSourcesAllowed(): boolean {
+  return process.env.VITALS_ALLOW_LOCAL_EVIDENCE_SOURCES === "1";
+}
+
+function localHost(hostname: string): boolean {
+  const normalized = hostname.toLowerCase();
+  return normalized === "localhost" ||
+    normalized === "127.0.0.1" ||
+    normalized === "::1" ||
+    normalized === "[::1]";
+}
+
+export function validateEvidenceSourceUrl(rawUrl: string): string {
+  let parsed: URL;
+  try {
+    parsed = new URL(rawUrl);
+  } catch {
+    throw new Error("evidence source URL is invalid");
+  }
+  const host = parsed.hostname.toLowerCase();
+  const local = localHost(host);
+  if (local && !localEvidenceSourcesAllowed()) {
+    throw new Error("local evidence source URLs are disabled");
+  }
+  if (parsed.protocol !== "https:" && !(local && localEvidenceSourcesAllowed())) {
+    throw new Error(`evidence source URL must use https: ${host}`);
+  }
+  if (parsed.username || parsed.password) {
+    throw new Error("evidence source URL must not contain credentials");
+  }
+  if (parsed.search || parsed.hash) {
+    throw new Error("evidence source URL must not contain query strings or fragments");
+  }
+  if (!local && !publicEvidenceHosts().has(host)) {
+    throw new Error(`evidence source host is not allowlisted for public raw evidence: ${host}`);
+  }
+  return parsed.toString();
 }
 
 function assertJsonRpcResult<T = any>(result: JsonRpcRow | undefined, label: string): T {
@@ -182,13 +245,14 @@ async function sleep(ms: number): Promise<void> {
 
 async function fetchText(url: string, options: RequestInit = {}, attempts = 2): Promise<string> {
   const timeoutMs = Number(process.env.VITALS_FETCH_TIMEOUT_MS || 15_000);
+  const maxBytes = positiveIntegerEnv("VITALS_RAW_EVIDENCE_MAX_BODY_BYTES", 5_000_000);
   let lastError: unknown = null;
   for (let attempt = 0; attempt < attempts; attempt += 1) {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), timeoutMs);
     try {
       const response = await fetch(url, { ...options, signal: controller.signal });
-      const text = await response.text();
+      const text = await responseTextWithLimit(response, maxBytes, url);
       if (!response.ok) {
         throw new Error(`${url} returned ${response.status}: ${text.slice(0, 240)}`);
       }
@@ -202,6 +266,36 @@ async function fetchText(url: string, options: RequestInit = {}, attempts = 2): 
     }
   }
   throw lastError instanceof Error ? lastError : new Error(String(lastError));
+}
+
+async function responseTextWithLimit(response: Response, maxBytes: number, url: string): Promise<string> {
+  const contentLength = response.headers.get("content-length");
+  if (contentLength && Number(contentLength) > maxBytes) {
+    throw new Error(`${url} returned ${contentLength} bytes, above VITALS_RAW_EVIDENCE_MAX_BODY_BYTES=${maxBytes}`);
+  }
+  if (!response.body) {
+    const text = await response.text();
+    const bytes = Buffer.byteLength(text);
+    if (bytes > maxBytes) {
+      throw new Error(`${url} returned ${bytes} bytes, above VITALS_RAW_EVIDENCE_MAX_BODY_BYTES=${maxBytes}`);
+    }
+    return text;
+  }
+  const reader = response.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let total = 0;
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    if (!value) continue;
+    total += value.byteLength;
+    if (total > maxBytes) {
+      await reader.cancel().catch(() => undefined);
+      throw new Error(`${url} returned more than VITALS_RAW_EVIDENCE_MAX_BODY_BYTES=${maxBytes}`);
+    }
+    chunks.push(value);
+  }
+  return Buffer.concat(chunks, total).toString("utf8");
 }
 
 async function fetchTextFromAny(
@@ -694,11 +788,13 @@ export async function writeSnapshotArtifacts(snapshot: SnapshotArtifact, outPath
   await writeFileAtomic(outPath, `${JSON.stringify(outputSnapshot, null, 2)}\n`);
   if (evidenceDir) {
     await mkdir(evidenceDir, { recursive: true });
+    await chmod(evidenceDir, 0o770).catch(() => undefined);
     const hash = snapshot.envelope.evidence_manifest_hash.replace(/^sha256:/, "");
     await writeFileAtomic(join(evidenceDir, `${hash}.json`), `${JSON.stringify(snapshot.evidence_manifest, null, 2)}\n`);
     if (snapshot.raw_evidence?.length) {
       const rawDir = join(evidenceDir, "raw");
       await mkdir(rawDir, { recursive: true });
+      await chmod(rawDir, 0o770).catch(() => undefined);
       for (const raw of snapshot.raw_evidence) {
         const rawHash = raw.response_hash.replace(/^sha256:/, "").toLowerCase();
         await writeFileAtomic(join(rawDir, `${rawHash}.json`), `${JSON.stringify({

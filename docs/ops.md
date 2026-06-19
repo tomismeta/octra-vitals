@@ -309,6 +309,9 @@ VITALS_FETCH_TIMEOUT_MS=15000
 VITALS_SOURCE_FETCH_ATTEMPTS=2
 VITALS_COLLECT_ATTEMPTS=2
 VITALS_COLLECT_RETRY_DELAY_MS=15000
+VITALS_PUBLIC_EVIDENCE_HOSTS=
+VITALS_RAW_EVIDENCE_MAX_BODY_BYTES=5000000
+VITALS_RAW_EVIDENCE_MAX_FILE_BYTES=6000000
 OCTRA_RPC_TIMEOUT_MS=15000
 OCTRA_RPC_ATTEMPTS=3
 OCTRA_RPC_RETRY_DELAY_MS=1500
@@ -320,7 +323,7 @@ VITALS_EVIDENCE_HASH_DOMAIN=octra-vitals:evidence:v0
 VITALS_SOURCE_REFS_HASH_DOMAIN=octra-vitals:source-refs:v0
 ```
 
-The snapshot collector first retries each source URL, then falls through to the next provider. Ethereum block discovery and `wOCT.totalSupply()` are read from the same provider at the same pinned block number. Octra program reads also use bounded retry/backoff before failing the run; mutating submit calls are not retried by the generic RPC helper. If the entire collection or write-prep path still fails, the updater writes a failed run report with `collect_attempts`; the watchdog treats a failed latest run as a recovery trigger instead of waiting for the receipt to age out.
+The snapshot collector first validates each source URL, then retries each source URL and falls through to the next provider. Public raw evidence sources must be HTTPS, must not contain credentials, query strings, or fragments, and must use a known public host. The default host allowlist covers `octra.network`, `devnet.octrascan.io`, `relayer-002838819188.octra.network`, and `ethereum-rpc.publicnode.com`; add other public RPC hosts with `VITALS_PUBLIC_EVIDENCE_HOSTS`. Ethereum block discovery and `wOCT.totalSupply()` are read from the same provider at the same pinned block number. Octra program reads also use bounded retry/backoff before failing the run; mutating submit calls are not retried by the generic RPC helper. If the entire collection or write-prep path still fails, the updater writes a failed run report with `collect_attempts`; the watchdog treats a failed latest run as a recovery trigger instead of waiting for the receipt to age out.
 
 For an existing AML program, keep these schema and hash-domain env values aligned with the deployed program. Mainnet and current devnet should use the clean public v0 defaults unless the deployed AML explicitly gates a different string or domain.
 
@@ -405,7 +408,7 @@ VITALS_UPDATE_EVIDENCE_RETENTION_MAX_AGE_MS=31536000000
 VITALS_UPDATE_RETENTION_DISABLED=0
 ```
 
-Raw evidence files live in `VITALS_DATA_DIR/evidence/raw/<response_hash>.json`. They include the exact response body and, where available, the exact request payload that produced the response. These files are intentionally local debugging/audit artifacts; they are content-hash linked from source refs but are not AML state.
+Raw evidence files live in `VITALS_DATA_DIR/evidence/raw/<response_hash>.json`. They include the exact response body and, where available, the exact request payload that produced the response. They are intentionally public forensic evidence when linked from the app or API, so source URLs must stay public-safe and response sizes are capped before collection and serving. They are content-hash linked from source refs but are not AML state.
 
 This does not prune AML state. The canonical latest payload/evidence/source refs and bounded summary window remain in the programmed Circle; local retention only caps host debugging artifacts.
 
