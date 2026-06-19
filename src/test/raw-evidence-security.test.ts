@@ -16,6 +16,10 @@ test("raw evidence source URLs allow known public hosts", () => {
     validateEvidenceSourceUrl("https://ethereum-rpc.publicnode.com"),
     "https://ethereum-rpc.publicnode.com/"
   );
+  assert.equal(
+    validateEvidenceSourceUrl("https://ethereum.publicnode.com"),
+    "https://ethereum.publicnode.com/"
+  );
 });
 
 test("raw evidence source URLs reject accidental secret-bearing URLs", () => {

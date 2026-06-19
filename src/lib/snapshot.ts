@@ -9,6 +9,7 @@ const DEFAULT_PUBLIC_EVIDENCE_HOSTS = [
   "octra.network",
   "devnet.octrascan.io",
   "relayer-002838819188.octra.network",
+  "ethereum.publicnode.com",
   "ethereum-rpc.publicnode.com"
 ];
 const OCTRA_RPC_URLS = sourceUrls(
