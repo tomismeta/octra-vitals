@@ -1727,7 +1727,8 @@ async function serveEvidence(res: http.ServerResponse, url: URL, head = false): 
       if (parsed.response_hash !== expected || typeof parsed.body !== "string" || responseHash(parsed.body) !== expected) {
         throw new Error("raw evidence hash mismatch");
       }
-      if (url.searchParams.get("pretty") === "1") {
+      const rawWrapperRequested = url.searchParams.get("raw") === "1";
+      if (!rawWrapperRequested) {
         return json(res, 200, rawEvidenceView(parsed), {
           "Cache-Control": "public, max-age=3600, immutable"
         }, head);
