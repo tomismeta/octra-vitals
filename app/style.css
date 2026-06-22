@@ -387,6 +387,10 @@ svg text{ font-family:var(--sans); }
 .sm-opt[aria-pressed="true"]{ background:var(--blue-soft); color:var(--blue); font-weight:600; }
 .sm-opt:focus-visible{ outline:2px solid var(--blue); outline-offset:-2px; }
 .sm-glyph{ font-weight:600; }
+.sm-status{ color:var(--faint); white-space:nowrap; }
+@media (max-width:520px){
+  .sm-status{ flex-basis:100%; }
+}
 
 .flagtag{
   display:inline-flex; align-items:center; gap:5px;

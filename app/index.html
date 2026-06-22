@@ -145,10 +145,16 @@
       <div class="rule"></div>
     </div>
     <div class="spark-mode" id="spark-mode" role="group" aria-label="Sparkline view">
-      <div class="sm-seg">
+      <div class="sm-seg" aria-label="Sparkline lens">
         <button type="button" class="sm-opt" data-spark-mode="flow" aria-pressed="true"><span class="sm-glyph" aria-hidden="true">&#916;</span>&nbsp;flow</button>
         <button type="button" class="sm-opt" data-spark-mode="trend" aria-pressed="false">trend</button>
       </div>
+      <div class="sm-seg" aria-label="History window">
+        <button type="button" class="sm-opt" data-history-window="1d" aria-pressed="true">1d</button>
+        <button type="button" class="sm-opt" data-history-window="7d" aria-pressed="false">7d</button>
+        <button type="button" class="sm-opt" data-history-window="30d" aria-pressed="false">30d</button>
+      </div>
+      <span class="sm-status" data-history-status>program window</span>
     </div>
     <section class="grid-sm" id="grid-state" aria-label="Live-state small multiples"></section>
 
@@ -156,8 +162,8 @@
       Each panel shows a metric, its current value, recent path, and provenance
       clock. The flow view draws the change in each 15-minute interval from a zero
       baseline; the trend view draws the level trajectory, scaled to the recent
-      window. The dot marks the latest point; the delta shows
-      magnitude.
+      window. The dot marks the latest point; the delta uses the selected
+      program-backed window.
     </p>
   </div>
 </section>
@@ -188,10 +194,16 @@
       <div class="verify-body">
 
         <div class="spark-mode" role="group" aria-label="Ledger sparkline view">
-          <div class="sm-seg">
+          <div class="sm-seg" aria-label="Sparkline lens">
             <button type="button" class="sm-opt" data-spark-mode="flow" aria-pressed="true"><span class="sm-glyph" aria-hidden="true">&#916;</span>&nbsp;flow</button>
             <button type="button" class="sm-opt" data-spark-mode="trend" aria-pressed="false">trend</button>
           </div>
+          <div class="sm-seg" aria-label="History window">
+            <button type="button" class="sm-opt" data-history-window="1d" aria-pressed="true">1d</button>
+            <button type="button" class="sm-opt" data-history-window="7d" aria-pressed="false">7d</button>
+            <button type="button" class="sm-opt" data-history-window="30d" aria-pressed="false">30d</button>
+          </div>
+          <span class="sm-status" data-history-status>program window</span>
         </div>
 
         <!-- THE TWO BOOKS -->

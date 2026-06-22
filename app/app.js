@@ -64,6 +64,13 @@ const EMPTY_DATA = Object.freeze({
   history_points: 0
 });
 const COL = { T:0, EPOCH:1, INCIRC:2, ENC:3, LOCKED:4, WOCT:5, UNCLAIMED:6, UNCLASS:7, BURN:8 };
+const HISTORY_WINDOWS = Object.freeze({
+  "1d": { label: "1d", ms: 24 * 60 * 60 * 1000 },
+  "7d": { label: "7d", ms: 7 * 24 * 60 * 60 * 1000 },
+  "30d": { label: "30d", ms: 30 * 24 * 60 * 60 * 1000 }
+});
+const DEFAULT_HISTORY_WINDOW = "1d";
+const MAX_HISTORY_POINTS = 30 * 24 * 4 + 8; // 30 days at the current ~15-minute cadence, plus a little drift.
 
 /* ============================================================================
    THE ONE SHARED ACCOUNTING CORE.
@@ -799,7 +806,7 @@ function historyRows(history, currentData){
   const deduped = [...new Map(rows
     .sort((a,b)=>String(a[0]).localeCompare(String(b[0])))
     .map((row)=>[`${row[0]}:${row[2]}:${row[4]}:${row[5]}:${row[6]}`, row])).values()];
-  const tail = deduped.slice(-96);
+  const tail = deduped.slice(-MAX_HISTORY_POINTS);
   return { rows: tail, distinctCount: tail.length };
 }
 
@@ -1139,19 +1146,65 @@ function compactParts(raw, dp=2){
   if(a>=1e3) return {num:(n/1e3).toFixed(dp), sfx:"K"};
   return {num:fmtOCT(raw,2), sfx:""};
 }
-function hasHistoryWindow(){ return Number(DATA.history_points || 0) > 1; }
-function hasCanonicalHistoryWindow(){ return hasHistoryWindow() && DATA.source?.history_canonical === true; }
+function parseRowTime(row){
+  const t = Date.parse(row?.[COL.T]);
+  return Number.isFinite(t) ? t : null;
+}
+function availableSeries(){
+  return Array.isArray(DATA.series) ? DATA.series : [];
+}
+function selectedHistoryWindow(){
+  return HISTORY_WINDOWS[sparkWindow] || HISTORY_WINDOWS[DEFAULT_HISTORY_WINDOW];
+}
+function activeSeries(){
+  const rows = availableSeries();
+  if(rows.length <= 1) return rows;
+  const last = parseRowTime(rows[rows.length - 1]);
+  const windowCfg = selectedHistoryWindow();
+  if(last == null || !windowCfg) return rows;
+  const since = last - windowCfg.ms;
+  let filtered = rows.filter((row)=>{
+    const t = parseRowTime(row);
+    return t == null || t >= since;
+  });
+  if(filtered.length < 2 && rows.length > 1) filtered = rows.slice(-2);
+  return filtered;
+}
+function hasHistoryWindow(rows=activeSeries()){ return rows.length > 1; }
+function hasCanonicalHistoryWindow(rows=activeSeries()){ return hasHistoryWindow(rows) && DATA.source?.history_canonical === true; }
 function trendPhrase(stableText="stable"){ return hasCanonicalHistoryWindow() ? stableText : "latest snapshot only"; }
-function historySpan(){
-  if(!hasHistoryWindow()) return "latest only";
-  const first = Date.parse(DATA.series[0]?.[COL.T]);
-  const last = Date.parse(DATA.series[DATA.series.length - 1]?.[COL.T]);
+function historySpan(rows=activeSeries()){
+  if(!hasHistoryWindow(rows)) return "latest only";
+  const first = parseRowTime(rows[0]);
+  const last = parseRowTime(rows[rows.length - 1]);
   if(!Number.isFinite(first) || !Number.isFinite(last) || last <= first) return "observed window";
   const mins = Math.max(1, Math.round((last - first) / 60000));
-  const h = Math.floor(mins / 60), m = mins % 60;
+  const d = Math.floor(mins / 1440), rem = mins % 1440;
+  const h = Math.floor(rem / 60), m = rem % 60;
+  if(d && h) return `${d}d ${h}h`;
+  if(d) return `${d}d`;
   if(h && m) return `${h}h ${m}m`;
   if(h) return `${h}h`;
   return `${m}m`;
+}
+function historyWindowStatus(){
+  const rows = activeSeries();
+  if(!hasCanonicalHistoryWindow(rows)) return "latest snapshot only";
+  const first = parseRowTime(rows[0]);
+  const last = parseRowTime(rows[rows.length - 1]);
+  const cfg = selectedHistoryWindow();
+  const span = historySpan(rows);
+  if(first == null || last == null || !cfg) return span;
+  const actual = Math.max(0, last - first);
+  return actual >= cfg.ms * 0.95 ? `${cfg.label} window` : `${span} available`;
+}
+function syncHistoryWindowControls(){
+  document.querySelectorAll("[data-history-window]").forEach((btn)=>{
+    btn.setAttribute("aria-pressed", String(btn.dataset.historyWindow === sparkWindow));
+  });
+  document.querySelectorAll("[data-history-status]").forEach((node)=>{
+    node.textContent = historyWindowStatus();
+  });
 }
 function compactDelta(raw){
   raw = typeof raw === "bigint" ? raw : BigInt(raw);
@@ -1161,16 +1214,18 @@ function compactDelta(raw){
   return sign + compact(abs).replace("K", "k");
 }
 function deltaRaw(col){
-  if(!hasCanonicalHistoryWindow()) return "";
-  const span = historySpan();
-  const first = BigInt(DATA.series[0][col]);
-  const last = BigInt(DATA.series[DATA.series.length - 1][col]);
+  const rows = activeSeries();
+  if(!hasCanonicalHistoryWindow(rows)) return "";
+  const span = historySpan(rows);
+  const first = BigInt(rows[0][col]);
+  const last = BigInt(rows[rows.length - 1][col]);
   const d = last - first;
   return d === 0n ? `no change · ${span}` : `${compactDelta(d)} OCT · ${span}`;
 }
 function deltaPct(values, dp=4){
-  if(!hasCanonicalHistoryWindow()) return "";
-  const span = historySpan();
+  const rows = activeSeries();
+  if(!hasCanonicalHistoryWindow(rows) || values.length < 2) return "";
+  const span = historySpan(rows);
   const d = values[values.length - 1] - values[0];
   const rounded = Number(d.toFixed(dp));
   return rounded === 0 ? `no visible change · ${span}` : `${rounded > 0 ? "+" : "−"}${Math.abs(rounded).toFixed(dp)} pp · ${span}`;
@@ -1409,16 +1464,17 @@ function renderFlow(){
    plots per-interval change, trend self-scales the level; a genuinely-constant
    series renders an honest flat hairline, and the row's own figure carries magnitude.
    ============================================================================ */
-function seriesOCT(col){ return DATA.series.map(r=>octNum(BigInt(r[col]))); }
-function seriesPctOfCap(col){ return DATA.series.map(r=>pctR(BigInt(r[col]), A.raw.max, 4)); }
-function seriesPctOfCirc(col){ return DATA.series.map(r=>pctR(BigInt(r[col]), BigInt(r[COL.INCIRC]), 4)); }
-function seriesPegPct(){ return DATA.series.map(r=>pctR(BigInt(r[COL.WOCT]), BigInt(r[COL.LOCKED]), 4)); }
-function seriesPublicPctOfCirc(){ return DATA.series.map(r=> pctR(BigInt(r[COL.INCIRC])-BigInt(r[COL.ENC]), BigInt(r[COL.INCIRC]), 4)); }
+function seriesOCT(col){ return activeSeries().map(r=>octNum(BigInt(r[col]))); }
+function seriesPctOfCap(col){ return activeSeries().map(r=>pctR(BigInt(r[col]), A.raw.max, 4)); }
+function seriesPctOfCirc(col){ return activeSeries().map(r=>pctR(BigInt(r[col]), BigInt(r[COL.INCIRC]), 4)); }
+function seriesPegPct(){ return activeSeries().map(r=>pctR(BigInt(r[COL.WOCT]), BigInt(r[COL.LOCKED]), 4)); }
+function seriesPublicPctOfCirc(){ return activeSeries().map(r=> pctR(BigInt(r[COL.INCIRC])-BigInt(r[COL.ENC]), BigInt(r[COL.INCIRC]), 4)); }
 
 /* Act II small-multiple sparkline (returns HTML string) */
 /* live-state sparkline lens: "flow" = per-interval change (default) · "trend" = level trajectory.
    "absolute" is a wired-but-unexposed hook (zero/reference-based) for a future third tab. */
 let sparkMode = (()=>{ try{ const m=localStorage.getItem("octv.sparkMode"); return (m==="trend"||m==="flow"||m==="absolute")?m:"flow"; }catch(e){ return "flow"; } })();
+let sparkWindow = (()=>{ try{ const m=localStorage.getItem("octv.sparkWindow"); return HISTORY_WINDOWS[m] ? m : DEFAULT_HISTORY_WINDOW; }catch(e){ return DEFAULT_HISTORY_WINDOW; } })();
 
 function sparkSM(values, opts={}){
   const mode = opts.mode || sparkMode;
@@ -1467,7 +1523,7 @@ function sparkSM(values, opts={}){
 
 function setupSparkMode(){
   // every .spark-mode group (live-state grid + Act III ledger) drives one shared lens, kept in sync
-  const opts = document.querySelectorAll(".spark-mode .sm-opt");
+  const opts = document.querySelectorAll("[data-spark-mode]");
   if(!opts.length) return;
   const apply = ()=> opts.forEach(b=>b.setAttribute("aria-pressed", String(b.dataset.sparkMode===sparkMode)));
   opts.forEach(btn=>{
@@ -1482,6 +1538,28 @@ function setupSparkMode(){
     });
   });
   apply();
+}
+
+function setupSparkWindow(){
+  const opts = document.querySelectorAll("[data-history-window]");
+  if(!opts.length) return;
+  opts.forEach(btn=>{
+    btn.addEventListener("click", ()=>{
+      const m = btn.dataset.historyWindow;
+      if(!HISTORY_WINDOWS[m] || m === sparkWindow) return;
+      sparkWindow = m;
+      try{ localStorage.setItem("octv.sparkWindow", m); }catch(e){}
+      syncHistoryWindowControls();
+      if(renderReady) buildState();
+      if(verifyRendered) buildLedgerSparks();
+    });
+  });
+  syncHistoryWindowControls();
+}
+
+function setupSparkControls(){
+  setupSparkMode();
+  setupSparkWindow();
 }
 
 /* ============================================================================
@@ -1531,6 +1609,7 @@ function panel(cfg){
   </article>`;
 }
 function buildState(){
+  syncHistoryWindowControls();
   const clkO = "Octra epoch "+A.clocks.octra_epoch.toLocaleString();
   const clkRel = "relayer fin "+A.clocks.relayer_finalized.toLocaleString();
   const clkEth = "eth block "+A.snapshot.eth_block.toLocaleString();
@@ -1642,13 +1721,13 @@ function buildLedger(){
 /* ledger sparkline wiring */
 const LSPARKS = {
   "issued":      {data:()=>seriesOCT(COL.INCIRC), aria:"In circulation over the available snapshot history."},
-  "public":      {data:()=>DATA.series.map(r=>octNum(BigInt(r[COL.INCIRC])-BigInt(r[COL.ENC]))), aria:"Public balance, derived as issued minus encrypted, over the available snapshot history."},
+  "public":      {data:()=>activeSeries().map(r=>octNum(BigInt(r[COL.INCIRC])-BigInt(r[COL.ENC]))), aria:"Public balance, derived as issued minus encrypted, over the available snapshot history."},
   "encrypted":   {data:()=>seriesOCT(COL.ENC), aria:"Encrypted balance over the observed window."},
   "locked":      {data:()=>seriesOCT(COL.LOCKED), aria:"Locked on Octra over the observed window."},
   "woct":        {data:()=>seriesOCT(COL.WOCT), aria:"wOCT minted over the observed window."},
   "unclaimed":   {data:()=>seriesOCT(COL.UNCLAIMED), aria:"Relayer-unclaimed OCT over the observed window."},
   "flat-unclass":{data:()=>seriesOCT(COL.UNCLASS), aria:"Unclassified remaining collateral over the available snapshot history."},
-  "flat-cap":    {data:()=>DATA.series.map(()=>1), aria:"Hard cap is flat by definition."},
+  "flat-cap":    {data:()=>activeSeries().map(()=>1), aria:"Hard cap is flat by definition."},
   "flat-burn":   {data:()=>seriesOCT(COL.BURN), aria:"Burned supply over the available snapshot history."}
 };
 function buildLedgerSparks(){
@@ -1911,7 +1990,7 @@ async function boot(){
 
     renderFirstViewport();
     setupVerifyLazyRender();
-    setupSparkMode();
+    setupSparkControls();
     perfMark("first_viewport_rendered");
 
     afterFirstPaint(()=>{
