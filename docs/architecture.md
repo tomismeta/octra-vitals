@@ -95,7 +95,7 @@ For Circle-served static assets, the gateway also verifies the pinned release ha
 
 Vitals does not claim to be a full bridge verifier. It is a hash-bound accounting and reconciliation surface. It stores direct observations and derived bridge reconciliation values in the Vitals State Program so reviewers can inspect the payload, formulas, source refs, and raw evidence independently.
 
-Public v0 keeps the latest payload, evidence manifest, and source refs as full AML strings for native inspection. It stores trend history as a bounded fixed-width summary window rather than historical payload maps. The gateway verifies the latest summary row against the latest payload before serving it, and `/api/history` is drawn only from that AML summary window.
+Public v0 keeps the latest payload, evidence manifest, and source refs as full AML strings for native inspection. It stores trend history as a bounded fixed-width summary window rather than historical payload maps. The gateway verifies the latest summary row against the latest payload before serving it, and `/api/history` is drawn only from that AML summary window. The recommended future forever-history design is captured in [AML History Capsules](aml-history-capsules.md).
 
 ## Programmed Circle Adoption Rules
 

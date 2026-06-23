@@ -1,0 +1,185 @@
+// Disposable devnet-only probe for AML map-backed capsule metadata and calendar nodes.
+// This is not the production Vitals program and must not be deployed to mainnet.
+
+contract VitalsHistoryMapCalendarProbe {
+  const CAPSULE_META_BYTES = 346
+  const CALENDAR_NODE_BYTES = 551
+  const CAPSULE_META_HASH_DOMAIN = "octra-vitals:capsule-meta:v1-probe"
+  const CALENDAR_NODE_HASH_DOMAIN = "octra-vitals:calendar-stat-node:v1-probe"
+  const CALENDAR_TIP_HASH_DOMAIN = "octra-vitals:calendar-tip:v1-probe"
+
+  state {
+    initialized: bool
+    owner: address
+    operator: address
+
+    capsule_meta_count: int
+    calendar_node_count: int
+    latest_capsule_id: string
+    latest_capsule_meta_hash: string
+    latest_calendar_key: string
+    latest_calendar_node_hash: string
+    calendar_tip_hash: string
+
+    capsule_meta_by_id: map[string]string
+    calendar_node_by_key: map[string]string
+  }
+
+  event ProbeInitialized(operator: address)
+  event CapsuleMetaStored(capsule_id: string, meta_hash: string, meta_count: int)
+  event CalendarNodeStored(node_key: string, node_hash: string, node_count: int, tip_hash: string)
+  event CalendarBundleStored(capsule_id: string, day_key: string, month_key: string, year_key: string, meta_count: int, node_count: int, tip_hash: string)
+
+  constructor() {
+    self.initialized = false
+    self.capsule_meta_count = 0
+    self.calendar_node_count = 0
+    self.latest_capsule_id = ""
+    self.latest_capsule_meta_hash = ""
+    self.latest_calendar_key = ""
+    self.latest_calendar_node_hash = ""
+    self.calendar_tip_hash = sha256(concat(CALENDAR_TIP_HASH_DOMAIN, "\n"))
+  }
+
+  private fn require_initialized() {
+    require(self.initialized, "not initialized")
+  }
+
+  private fn only_operator() {
+    require_initialized()
+    require(caller == self.owner || caller == self.operator, "not operator")
+  }
+
+  private fn assert_key(key: string) {
+    require(len(key) >= 4, "key too short")
+    require(len(key) <= 32, "key too long")
+  }
+
+  public view fn manifest(): string {
+    return "octra-vitals-history-map-calendar-probe.v1"
+  }
+
+  public view fn get_capsule_meta_len(): int {
+    return CAPSULE_META_BYTES
+  }
+
+  public view fn get_calendar_node_len(): int {
+    return CALENDAR_NODE_BYTES
+  }
+
+  public view fn get_capsule_meta_count(): int {
+    return self.capsule_meta_count
+  }
+
+  public view fn get_calendar_node_count(): int {
+    return self.calendar_node_count
+  }
+
+  public view fn get_latest_capsule_id(): string {
+    return self.latest_capsule_id
+  }
+
+  public view fn get_latest_capsule_meta_hash(): string {
+    return self.latest_capsule_meta_hash
+  }
+
+  public view fn get_latest_calendar_key(): string {
+    return self.latest_calendar_key
+  }
+
+  public view fn get_latest_calendar_node_hash(): string {
+    return self.latest_calendar_node_hash
+  }
+
+  public view fn get_calendar_tip_hash(): string {
+    return self.calendar_tip_hash
+  }
+
+  public view fn get_capsule_meta(capsule_id: string): string {
+    return self.capsule_meta_by_id[capsule_id]
+  }
+
+  public view fn get_calendar_node(node_key: string): string {
+    return self.calendar_node_by_key[node_key]
+  }
+
+  public fn initialize_probe(operator_addr: address): bool {
+    require(!self.initialized, "already initialized")
+    assert_address(operator_addr)
+    self.initialized = true
+    self.owner = caller
+    self.operator = operator_addr
+    self.capsule_meta_count = 0
+    self.calendar_node_count = 0
+    self.latest_capsule_id = ""
+    self.latest_capsule_meta_hash = ""
+    self.latest_calendar_key = ""
+    self.latest_calendar_node_hash = ""
+    self.calendar_tip_hash = sha256(concat(CALENDAR_TIP_HASH_DOMAIN, "\n"))
+    emit ProbeInitialized(operator_addr)
+    return true
+  }
+
+  public fn put_capsule_meta(capsule_id: string, meta_row: string): bool {
+    only_operator()
+    require(len(capsule_id) == 13, "capsule id length")
+    require(len(meta_row) == CAPSULE_META_BYTES, "meta length")
+    let meta_hash = sha256(concat(concat(CAPSULE_META_HASH_DOMAIN, "\n"), meta_row))
+    self.capsule_meta_by_id[capsule_id] = meta_row
+    self.capsule_meta_count = self.capsule_meta_count + 1
+    self.latest_capsule_id = capsule_id
+    self.latest_capsule_meta_hash = meta_hash
+    emit CapsuleMetaStored(capsule_id, meta_hash, self.capsule_meta_count)
+    return true
+  }
+
+  public fn put_calendar_node(node_key: string, node_row: string): bool {
+    only_operator()
+    assert_key(node_key)
+    require(len(node_row) == CALENDAR_NODE_BYTES, "calendar node length")
+    let node_hash = sha256(concat(concat(CALENDAR_NODE_HASH_DOMAIN, "\n"), node_row))
+    let next_tip = sha256(concat(concat(concat(concat(CALENDAR_TIP_HASH_DOMAIN, "\n"), self.calendar_tip_hash), "\n"), node_hash))
+    self.calendar_node_by_key[node_key] = node_row
+    self.calendar_node_count = self.calendar_node_count + 1
+    self.latest_calendar_key = node_key
+    self.latest_calendar_node_hash = node_hash
+    self.calendar_tip_hash = next_tip
+    emit CalendarNodeStored(node_key, node_hash, self.calendar_node_count, next_tip)
+    return true
+  }
+
+  public fn put_capsule_calendar_bundle(capsule_id: string, meta_row: string, day_key: string, day_node: string, month_key: string, month_node: string, year_key: string, year_node: string): bool {
+    only_operator()
+    require(len(capsule_id) == 13, "capsule id length")
+    require(len(meta_row) == CAPSULE_META_BYTES, "meta length")
+    assert_key(day_key)
+    assert_key(month_key)
+    assert_key(year_key)
+    require(len(day_node) == CALENDAR_NODE_BYTES, "day node length")
+    require(len(month_node) == CALENDAR_NODE_BYTES, "month node length")
+    require(len(year_node) == CALENDAR_NODE_BYTES, "year node length")
+
+    let meta_hash = sha256(concat(concat(CAPSULE_META_HASH_DOMAIN, "\n"), meta_row))
+    let day_hash = sha256(concat(concat(CALENDAR_NODE_HASH_DOMAIN, "\n"), day_node))
+    let month_hash = sha256(concat(concat(CALENDAR_NODE_HASH_DOMAIN, "\n"), month_node))
+    let year_hash = sha256(concat(concat(CALENDAR_NODE_HASH_DOMAIN, "\n"), year_node))
+    let tip_day = sha256(concat(concat(concat(concat(CALENDAR_TIP_HASH_DOMAIN, "\n"), self.calendar_tip_hash), "\n"), day_hash))
+    let tip_month = sha256(concat(concat(concat(concat(CALENDAR_TIP_HASH_DOMAIN, "\n"), tip_day), "\n"), month_hash))
+    let tip_year = sha256(concat(concat(concat(concat(CALENDAR_TIP_HASH_DOMAIN, "\n"), tip_month), "\n"), year_hash))
+
+    self.capsule_meta_by_id[capsule_id] = meta_row
+    self.calendar_node_by_key[day_key] = day_node
+    self.calendar_node_by_key[month_key] = month_node
+    self.calendar_node_by_key[year_key] = year_node
+    self.capsule_meta_count = self.capsule_meta_count + 1
+    self.calendar_node_count = self.calendar_node_count + 3
+    self.latest_capsule_id = capsule_id
+    self.latest_capsule_meta_hash = meta_hash
+    self.latest_calendar_key = year_key
+    self.latest_calendar_node_hash = year_hash
+    self.calendar_tip_hash = tip_year
+
+    emit CalendarBundleStored(capsule_id, day_key, month_key, year_key, self.capsule_meta_count, self.calendar_node_count, tip_year)
+    return true
+  }
+}
