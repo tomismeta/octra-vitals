@@ -40,6 +40,11 @@ Local report:
 reports/multi-program-circle-probe-2026-06-23T222631Z.json
 ```
 
+A more general from-scratch variant is captured in
+[AML Extensible Fact Ledger Proposal](aml-extensible-fact-ledger-proposal.md).
+That proposal reframes the extension scaffold as first-class fact families for
+review before the mainnet AML shape is finalized.
+
 ## Problem Statement
 
 We need a history architecture that can survive schema and index evolution
