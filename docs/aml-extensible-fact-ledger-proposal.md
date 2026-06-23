@@ -28,6 +28,36 @@ fact family = versioned stream of fixed-width rows joined to snapshot_index
 fields, diagnostics, and durable projections are additional families with their
 own schemas, capsules, and roots.
 
+## Design Stance
+
+Optimize for the architecture we would still admire after the product grows.
+
+The conservative path is a dedicated core log plus a separate auxiliary
+substrate. That is acceptable as a fallback if devnet proves the generic shape
+is too costly or too hard to verify, but it is not the design target. The target
+is a single fact-family ledger where the core is family 0 and every durable
+stream follows the same proof model.
+
+This does not mean AML becomes dynamic or clever. "Generic" means the state
+shape, capsule mechanics, roots, and getters are uniform. It does not mean AML
+interprets arbitrary schemas, parses JSON, loops over unbounded arrays, or
+performs analytics.
+
+The admired version is:
+
+```text
+one append-only fact ledger
+many tightly defined families
+fixed-width rows
+per-family roots
+global snapshot completeness root
+semantics in schemas and verifiers
+AML as recorder, not analyst
+```
+
+If this passes devnet cost, readback, and formal verification gates, prefer it
+over a compromised hybrid.
+
 ## Why This Is Cleaner
 
 The current mental model is:
@@ -64,6 +94,16 @@ Monero, burned, unissued, relayers, or fees mean. AML only knows:
 The interpretation lives in schemas, docs, gateway verification, and browser
 verification code. AML only preserves ordering, immutability, commitments, and
 readability.
+
+The core remains special by policy even though it uses the same substrate:
+
+- `core_accounting` has a reserved family id;
+- it is required for every snapshot;
+- it has the strictest monotonicity and row-faithfulness checks;
+- the conservation verdict cannot be served without it;
+- any incompatible change to it starts a new era.
+
+That gives core the safety it deserves without fragmenting the data model.
 
 ## Ontology
 
@@ -131,6 +171,7 @@ family_capsule_body[family_id|capsule_id]
 family_capsule_meta[family_id|capsule_id]
 family_capsule_root_after[family_id|capsule_id]
 
+snapshot_family_set_hash[snapshot_index]
 global_snapshot_root
 ```
 
@@ -153,8 +194,6 @@ row_len
 join_key_type
 first_snapshot_index
 latest_snapshot_index
-required_for_latest_verdict
-required_for_historical_verdict
 source_family_ids_hash
 schema_hash
 row_hash_domain
@@ -176,6 +215,11 @@ status
 The catalog is append-only. A family definition cannot be reinterpreted. If the
 schema changes incompatibly, create a new family id or a new schema id with
 explicit coverage.
+
+Keep the catalog structural. It should define how to store and verify rows, not
+what the product should believe about them. Verdict requirements, display
+labels, and derivation semantics should live in schema documents, source refs,
+and verifier code committed by `schema_hash` or `source_family_ids_hash`.
 
 ## Row Strategy
 
@@ -215,6 +259,22 @@ row = row_version
 Additional fields should not be forced into this row unless they are truly part
 of the durable core conservation invariant.
 
+## Core Safety Inside The Generic Model
+
+The generic model should not make the critical path mushy. Family 0 receives
+extra invariants:
+
+- exactly one `core_accounting` row per snapshot index;
+- no snapshot is valid without the family 0 row;
+- family 0 row hash must match the latest payload-derived row before serving
+  latest data;
+- family 0 capsule sealing must be tested across the zero-margin boundary;
+- family 0 schema changes are era-level changes unless byte-compatible;
+- old family 0 rows must verify byte-identically under every compatible update.
+
+This is how the design protects the most important path while keeping the
+storage model unified.
+
 ## Write Path
 
 The cleanest conceptual write is:
@@ -228,9 +288,9 @@ record_snapshot(
 ```
 
 Because AML may not support easy loops, the implementation can still stay
-boring by using one of two patterns:
+boring by using bounded, unrolled writes.
 
-### Pattern A: Fixed Small Slots
+### Preferred Pattern: Bounded Atomic Family Batch
 
 `record_snapshot` accepts a fixed maximum number of auxiliary family rows.
 
@@ -246,7 +306,23 @@ Unused slots are empty. This keeps one snapshot atomic without requiring AML to
 loop over arbitrary arrays. It is simple, but it caps the number of active
 families per snapshot unless the cap is raised in a compatible update.
 
-### Pattern B: Core First, Auxiliary Attachments
+This is the preferred first implementation of the fact-family ledger. It pushes
+the architecture forward without asking AML to support unbounded iteration. The
+slot count should be chosen by devnet measurement, not guessed.
+
+For a mainnet candidate, probe at least:
+
+```text
+0 auxiliary slots
+2 auxiliary slots
+4 auxiliary slots
+8 auxiliary slots
+```
+
+The active launch shape can still write only core rows. Empty slots do not mean
+inactive families are deployed; they mean the method has future capacity.
+
+### Fallback Pattern: Core First, Auxiliary Attachments
 
 `record_snapshot` records the core row and latest bundle. Then
 `attach_family_row(snapshot_index, family_id, row)` records auxiliary rows for
@@ -260,9 +336,34 @@ exists before all optional families arrive. That is acceptable only if:
 - the UI can show family completeness honestly;
 - AML forbids attaching rows outside allowed monotonic/coverage windows.
 
-For Octra Vitals mainnet, Pattern A is preferable if the active family count is
-small enough. Pattern B is preferable if we expect many route/detail families
-quickly and can tolerate optional-family eventual completeness.
+This pattern is less elegant for Vitals because it introduces a partial-state
+window. Keep it as a future high-fanout escape hatch, not the first mainnet
+target.
+
+## Snapshot Completeness Root
+
+The proposal includes `snapshot_family_set_hash[snapshot_index]` and
+`global_snapshot_root` as the cross-family completeness proof.
+
+For each snapshot, AML commits to the set of family rows accepted with that
+snapshot:
+
+```text
+snapshot_family_set_hash =
+  sha256(domain | snapshot_index | family_id_0 | row_hash_0 | ... | family_id_n | row_hash_n)
+```
+
+Then `global_snapshot_root` folds the snapshot family-set hash over time. This
+does not replace per-family roots. It answers a different question:
+
+```text
+per-family root: did this family row exist in this family history?
+global snapshot root: which family rows were part of this snapshot?
+```
+
+If devnet shows this is too expensive, it can be deferred. But if it fits, it is
+the elegant way to prove cross-family completeness without trusting gateway
+bookkeeping.
 
 ## Read Path
 
@@ -277,6 +378,7 @@ get_family_capsule_meta(family_id, capsule_id)
 get_family_capsule_body(family_id, capsule_id)
 get_recent_capsule_ids(family_id, limit)
 get_global_roots()
+get_snapshot_family_set_hash(snapshot_index)
 ```
 
 The gateway and UI should be able to ask:
@@ -284,7 +386,7 @@ The gateway and UI should be able to ask:
 - What families exist?
 - What schemas define them?
 - What snapshot range does each family cover?
-- Is this family required for the verdict?
+- Does the committed schema/verifier treat this family as verdict-relevant?
 - Which capsules cover this requested time/index range?
 - Can I verify the family body against its root?
 
@@ -392,13 +494,16 @@ rows were attached for a snapshot, making completeness easier to prove. If AML
 cost is high, it can be deferred as long as each required family has explicit
 coverage and roots.
 
+For the push-the-limits design, include it in the devnet probe rather than
+removing it from the architecture.
+
 ## Upgrade Model
 
 This design reduces era churn but does not eliminate eras.
 
 Same-era compatible changes:
 
-- add a new inactive family catalog entry;
+- add a new family catalog entry;
 - activate a new auxiliary family;
 - add getters that do not change old semantics;
 - add a new schema id while preserving old decoders and old capsule immutability.
@@ -433,24 +538,28 @@ Cons:
 - family catalog and per-family roots add state surface;
 - generic write paths may be awkward in AML if loops are limited;
 - optional-family completeness must be represented carefully;
-- reviewers must reason about schema governance, not just one row layout.
+- reviewers must reason about schema governance, not just one row layout;
+- the full design must earn its way through devnet probes rather than being
+  accepted on taste alone.
 
 ## Recommendation
 
-If we were redesigning from scratch, use the **fact-family ledger** as the first
-mainnet AML shape.
+If we are willing to push for the elegant version, use the **fact-family
+ledger** as the first mainnet AML shape, subject to devnet proof.
 
 The launch set can still be small:
 
 ```text
 family 0: core_accounting      active
-family 1: route_totals         optional or inactive
-family 2: supply_components    optional or inactive
-family 3: diagnostics          optional or inactive
+family 1: route_totals         added when needed
+family 2: supply_components    added when needed
+family 3: diagnostics          added when needed
 ```
 
 Start with only `core_accounting` required for the conservation verdict. Include
-the family scaffold if devnet proves its cost and readback are acceptable.
+the generic family substrate, bounded atomic family slots, per-family roots, and
+the global snapshot completeness root if devnet proves their cost and readback
+are acceptable.
 
 This is the best balance between:
 
@@ -478,3 +587,7 @@ Ask reviewers to focus on these questions:
    remain purely off-chain until needed?
 7. What exact compatibility fixture suite is required before any same-era AML
    update?
+8. Does the bounded atomic batch preserve enough future capacity without making
+   first-mainnet writes too expensive?
+9. Does `global_snapshot_root` fit comfortably enough to justify making
+   cross-family completeness first-class from day one?
