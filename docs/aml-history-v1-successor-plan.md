@@ -19,6 +19,8 @@ host archive = raw evidence bodies by hash, non-canonical
 
 No fake backfill. v0 history remains what v0 actually retained. v1 starts a new program-scoped history sequence or explicitly seeds from the predecessor final index.
 
+The upgrade model is captured in [ADR 0002: AML History Era Model](adr-0002-aml-history-era-model.md). AML history programs are canonical for the rows they actually record. A future schema change should create an explicit era, or use a separately audited import path, rather than silently pretending a new program owns old state.
+
 ## Data Constructs
 
 Use these terms consistently.
@@ -80,7 +82,7 @@ extension_capsule_body_by_family_id[family_id|capsule_id]
 extension_capsule_meta_by_family_id[family_id|capsule_id]
 ```
 
-The MVP can omit extension capsules, transaction lookup indexes, and hour/month/year nodes if the devnet cost gate says to start smaller. It should not omit core observation rows, capsule metadata, start/end roots, or full latest provenance strings.
+The MVP can omit extension capsules, transaction lookup indexes, and hour/month/year nodes if the devnet cost gate says to start smaller. It should not omit core observation rows, capsule metadata, start/end roots, or full latest provenance strings. Calendar/tree nodes are derived indexes, not the source log; adding them later is an era/index decision unless Octra exposes a compatible multi-program Circle model.
 
 ## Core Row
 

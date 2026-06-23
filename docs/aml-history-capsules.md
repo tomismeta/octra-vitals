@@ -23,6 +23,8 @@ The four-lens audit decision is captured in [AML History v1 Final Audit](aml-his
 
 Use append-only history capsules. A capsule is not a special Octra primitive; it is a Vitals data structure made of a fixed-width body string plus one packed metadata row.
 
+The persistence and upgrade model is the [AML History Era Model](adr-0002-aml-history-era-model.md). The core capsule log should remain as small and stable as possible. Derived calendar/tree nodes may be added in a later era or index layer, but they should not replace the retained 15-minute observation rows.
+
 ```text
 Programmed Site Circle AML
   latest full snapshot
