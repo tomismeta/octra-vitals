@@ -21,7 +21,7 @@ The key ontology change is to stop treating "extensions" as a later add-on. The
 first-class primitive should be a **fact family**:
 
 ```text
-fact family = versioned stream of fixed-width rows joined to snapshot_index
+fact family = immutable fixed-width record stream with declared key cardinality and root domain
 ```
 
 `core_accounting` is simply the required fact family. Route totals, future RPC
@@ -50,7 +50,7 @@ one append-only fact ledger
 many tightly defined families
 fixed-width rows
 per-family roots
-global snapshot completeness root
+measured completeness commitment
 semantics in schemas and verifiers
 AML as recorder, not analyst
 ```
@@ -85,7 +85,7 @@ Monero, burned, unissued, relayers, or fees mean. AML only knows:
 - family id;
 - schema id;
 - row length;
-- snapshot index;
+- key cardinality;
 - capsule id;
 - row bytes;
 - family root;
@@ -110,32 +110,36 @@ That gives core the safety it deserves without fragmenting the data model.
 Use these terms consistently.
 
 - **Snapshot:** one collection event at a specific observed time.
-- **Snapshot index:** the monotonic join key across all fact families.
+- **Snapshot index:** the monotonic observation key for one-per-snapshot
+  families, and the common join point for source facts captured at a snapshot.
 - **Latest bundle:** full current payload, evidence manifest, source refs,
   hashes, and current verdict. Rich, current, and hash-gated.
-- **Fact family:** an append-only historical stream with one schema lineage and
-  one root lineage.
+- **Fact family:** an append-only historical stream with one schema lineage, one
+  key-cardinality rule, and one root lineage.
 - **Core accounting family:** the required fact family that records the durable
   fields needed to recompute Octra Vitals' main conservation verdict.
 - **Auxiliary fact family:** an optional family for durable non-core facts, such
   as route-level totals, detailed RPC fields, bridge counters, or relayer
   diagnostics.
-- **Projection family:** a derived fact family whose rows summarize other
-  families over a period. Projection families are optional and must declare
-  source families and derivation rules.
+- **Derived index family:** a derived family whose rows summarize other
+  families over a period. Derived index families are optional, must use separate
+  root domains, and must never substitute for retained source rows.
 - **Fact row:** one fixed-width encoded observation in a family, keyed by
-  `snapshot_index` or by a declared period key for projection families.
+  the family's declared cardinality rule.
+- **Family cardinality:** the ordering/key rule for a family:
+  `one_per_snapshot`, `entity_per_snapshot`, or `period_projection`.
 - **Capsule:** bounded group of fact rows for one family and deterministic time
   span.
-- **Family catalog entry:** append-only metadata defining a family id, schema,
-  row length, domain strings, coverage start, and whether it is required for a
-  verdict.
+- **Family definition:** immutable metadata defining a family id, schema, row
+  length, key cardinality, codec hashes, and root domains.
+- **Family state:** mutable coverage and tip metadata for a family.
 - **Family root:** running commitment over a family.
 - **Capsule metadata:** one packed metadata row for a family capsule.
 - **Era:** a program/state-layout boundary. Compatible changes stay in an era;
   incompatible changes start a new era.
-- **Not captured:** explicit absence before a family or field existed. Never
-  backfill as zero.
+- **Absence state:** explicit non-value semantics such as
+  `not_captured_before_activation`, `not_applicable`, `source_unavailable`,
+  `pending`, or `zero`. Never backfill as zero.
 
 ## Proposed AML Shape
 
@@ -158,7 +162,12 @@ latest_evidence_hash
 latest_source_refs_hash
 latest_verdict_hash
 
-family_catalog[family_id]
+family_count
+family_id_by_ordinal[ordinal]
+catalog_root
+family_definition[family_id]
+family_definition_hash[family_id]
+family_state[family_id]
 family_root[family_id]
 family_latest_index[family_id]
 family_open_capsule_id[family_id]
@@ -170,36 +179,59 @@ family_capsule_count[family_id]
 family_capsule_body[family_id|capsule_id]
 family_capsule_meta[family_id|capsule_id]
 family_capsule_root_after[family_id|capsule_id]
-
-snapshot_family_set_hash[snapshot_index]
-global_snapshot_root
 ```
 
 The state is larger than a single hardcoded core row model, but the mechanics
 are uniform. That is the trade: a small generic substrate up front to avoid a
 series of future incompatible AML redesigns.
 
-## Family Catalog
+Completeness commitments are intentionally not part of the base state above.
+They should be probed as a measured addition. Pattern A's atomic batch already
+gives the first completeness boundary; a per-snapshot completeness map may be
+too expensive to justify before Pattern B exists.
 
-Each family catalog entry should be fixed-width or otherwise tightly bounded.
+## Family Definition And State
 
-Minimum fields:
+Split immutable family definition from mutable family state. This is a
+contract-grade rule, not just naming. "Append-only" should be enforced as
+write-once fields and stable hashes.
+
+Minimum immutable family definition fields:
 
 ```text
 family_id
 family_kind
+family_cardinality
 schema_id
 schema_version
 row_len
-join_key_type
+primary_key_type
+entity_id_type
+period_type
+max_rows_per_snapshot
 first_snapshot_index
-latest_snapshot_index
 source_family_ids_hash
 schema_hash
+row_codec_hash
+field_manifest_hash
+unit_scale_hash
+null_semantics_hash
 row_hash_domain
 capsule_hash_domain
 root_hash_domain
 status
+```
+
+Minimum mutable family state fields:
+
+```text
+family_id
+latest_covered_snapshot_index
+latest_capsule_id
+latest_capsule_root
+coverage_status
+successor_family_id
+retired_at_snapshot_index
 ```
 
 `family_kind` should be a small enum:
@@ -216,10 +248,22 @@ The catalog is append-only. A family definition cannot be reinterpreted. If the
 schema changes incompatibly, create a new family id or a new schema id with
 explicit coverage.
 
-Keep the catalog structural. It should define how to store and verify rows, not
-what the product should believe about them. Verdict requirements, display
-labels, and derivation semantics should live in schema documents, source refs,
-and verifier code committed by `schema_hash` or `source_family_ids_hash`.
+Keep family definitions structural. They should define how to store and verify
+rows, not what the product should believe about them. Verdict requirements,
+display labels, and derivation semantics should live in schema documents,
+capture/verdict profiles, source refs, and verifier code committed by
+`schema_hash`, `field_manifest_hash`, or `source_family_ids_hash`.
+
+Use deterministic enumeration:
+
+```text
+family_count
+family_id_by_ordinal[ordinal]
+family_definition_hash[family_id]
+catalog_root
+```
+
+Do not rely on gateway-local family discovery.
 
 ## Row Strategy
 
@@ -231,6 +275,20 @@ Rows should stay fixed-width. This is the boring part that makes AML feasible:
 - no semantic interpretation in AML beyond declared row length and monotonic
   index rules;
 - no invented backfill.
+
+Every row should include or be bound by a canonical header:
+
+```text
+family_id
+schema_id
+row_version
+join_key
+row_ordinal_or_entity_key
+row_body
+```
+
+AML does not need to understand the body semantics, but it should enforce the
+family id, schema id, row version, key shape, fixed length, and hash domains.
 
 The core family should remain compact and stable:
 
@@ -268,12 +326,47 @@ extra invariants:
 - no snapshot is valid without the family 0 row;
 - family 0 row hash must match the latest payload-derived row before serving
   latest data;
+- shared capsule sealing must include the zero-margin overflow fix, such as a
+  unique overflow capsule id, explicit headroom, or a recovery path;
 - family 0 capsule sealing must be tested across the zero-margin boundary;
 - family 0 schema changes are era-level changes unless byte-compatible;
 - old family 0 rows must verify byte-identically under every compatible update.
 
 This is how the design protects the most important path while keeping the
 storage model unified.
+
+## Gate 0: Formal Substrate Probe
+
+Before building the full program, probe the smallest generic substrate that can
+prove the abstraction:
+
+```text
+2-entry family definition catalog
+append_to_family()
+seal_family_capsule()
+one_per_snapshot cardinality only
+fixed-width rows
+body/meta/root-after maps
+write-once sealed capsules
+```
+
+This is the load-bearing gate. If AML cannot verify universal invariants over
+`family_id` and composite-key maps, the elegant substrate fails early and the
+fallback is a dedicated core log or a narrower hybrid.
+
+Gate 0 must prove:
+
+- family definitions are write-once;
+- row length, family id, schema id, row version, and key shape are enforced;
+- append order holds for every catalogued family;
+- sealed capsules cannot be overwritten;
+- body hash, metadata, start root, end root, and root-after agree;
+- root domains include era/program id, family id, schema id, key, row ordinal,
+  and row bytes;
+- empty slots use the known safe sentinel and cannot be confused with real rows.
+
+Only after Gate 0 passes should we spend effort on slot-count probes,
+completeness commitments, route/entity fanout, or browser range reads.
 
 ## Write Path
 
@@ -292,7 +385,24 @@ boring by using bounded, unrolled writes.
 
 ### Preferred Pattern: Bounded Atomic Family Batch
 
-`record_snapshot` accepts a fixed maximum number of auxiliary family rows.
+`record_snapshot` accepts a fixed maximum number of auxiliary family rows. The
+first implementation should support only `one_per_snapshot` families. That
+keeps the proof to one ordering regime:
+
+```text
+next snapshot index == previous family latest index + 1
+```
+
+`entity_per_snapshot` families, such as per-route rows, need a different rule:
+
+```text
+snapshot index is non-decreasing
+entity key is sorted and unique within the snapshot
+rowset hash commits to all entities for that snapshot
+```
+
+That is valuable, but it multiplies the proof surface. Add it only after the
+one-per-snapshot substrate proves out.
 
 ```text
 core_row
@@ -306,9 +416,10 @@ Unused slots are empty. This keeps one snapshot atomic without requiring AML to
 loop over arbitrary arrays. It is simple, but it caps the number of active
 families per snapshot unless the cap is raised in a compatible update.
 
-This is the preferred first implementation of the fact-family ledger. It pushes
-the architecture forward without asking AML to support unbounded iteration. The
-slot count should be chosen by devnet measurement, not guessed.
+This is the preferred first implementation of the fact-family ledger for
+`one_per_snapshot` families. It pushes the architecture forward without asking
+AML to support unbounded iteration. The slot count should be chosen by devnet
+measurement, not guessed.
 
 For a mainnet candidate, probe at least:
 
@@ -321,6 +432,11 @@ For a mainnet candidate, probe at least:
 
 The active launch shape can still write only core rows. Empty slots do not mean
 inactive families are deployed; they mean the method has future capacity.
+
+For `entity_per_snapshot` families, the slot count means peak concurrent rows,
+not peak concurrent families. Route totals may therefore dominate `K` once they
+arrive. Do not size launch `K` around hypothetical route fanout until a route
+family is actually ready to be captured.
 
 ### Fallback Pattern: Core First, Auxiliary Attachments
 
@@ -340,30 +456,68 @@ This pattern is less elegant for Vitals because it introduces a partial-state
 window. Keep it as a future high-fanout escape hatch, not the first mainnet
 target.
 
-## Snapshot Completeness Root
+## Completeness Commitment
 
-The proposal includes `snapshot_family_set_hash[snapshot_index]` and
-`global_snapshot_root` as the cross-family completeness proof.
+Completeness is the question:
 
-For each snapshot, AML commits to the set of family rows accepted with that
-snapshot:
+```text
+which family rows were part of this snapshot or capsule?
+```
+
+Do not make a high-cardinality per-snapshot map the default. At a 15-minute
+cadence, `snapshot_family_set_hash[snapshot_index]` creates roughly 35,000 new
+state entries per year, far more than capsule metadata. It also needs running
+root checkpoints if historical completeness verification is expected to stay
+bounded.
+
+Probe completeness in three tiers:
+
+### Tier A: Atomic Batch Completeness
+
+With bounded Pattern A, all rows for a snapshot are written in one transition.
+Completeness can be derived from:
+
+- the accepted slot set;
+- per-family coverage;
+- per-family roots;
+- the receipt/event for the atomic write.
+
+This is the minimal launch posture if only family 0 is active.
+
+### Tier B: Capsule-Level Completeness
+
+Commit the set of families represented in a sealed capsule:
+
+```text
+capsule_family_set_hash =
+  sha256(domain | capsule_id | family_id_0 | family_capsule_root_0 | ... | family_id_n | family_capsule_root_n)
+```
+
+This is much lower cardinality than a per-snapshot map and fits the capsule
+model. It is the preferred completeness probe if multiple one-per-snapshot
+families become active.
+
+### Tier C: Per-Snapshot Completeness
+
+Use `snapshot_family_set_hash[snapshot_index]` only if Pattern B attachments or
+high-fanout entity families require it:
 
 ```text
 snapshot_family_set_hash =
-  sha256(domain | snapshot_index | family_id_0 | row_hash_0 | ... | family_id_n | row_hash_n)
+  sha256(domain | snapshot_index | family_id_0 | rowset_hash_0 | ... | family_id_n | rowset_hash_n)
 ```
 
-Then `global_snapshot_root` folds the snapshot family-set hash over time. This
-does not replace per-family roots. It answers a different question:
+If this tier is used, include canonical sorted family ids, schema ids, row
+counts, absence states, and entity rowset hashes. Also store enough running-root
+checkpoints to avoid all-history replay.
+
+Completeness commitments do not replace per-family roots. They answer a
+different question:
 
 ```text
-per-family root: did this family row exist in this family history?
-global snapshot root: which family rows were part of this snapshot?
+per-family root: did this row exist in this family history?
+completeness commitment: which families/rowsets were part of this snapshot or capsule?
 ```
-
-If devnet shows this is too expensive, it can be deferred. But if it fits, it is
-the elegant way to prove cross-family completeness without trusting gateway
-bookkeeping.
 
 ## Read Path
 
@@ -371,14 +525,15 @@ Minimum AML getters:
 
 ```text
 get_latest_bundle()
-get_family_catalog(family_id)
-get_family_ids()
-get_family_roots()
+get_family_count()
+get_family_id_at(ordinal)
+get_family_definition(family_id)
+get_family_state(family_id)
+get_family_root(family_id)
 get_family_capsule_meta(family_id, capsule_id)
 get_family_capsule_body(family_id, capsule_id)
-get_recent_capsule_ids(family_id, limit)
-get_global_roots()
-get_snapshot_family_set_hash(snapshot_index)
+get_recent_capsule_id_at(family_id, ordinal)
+get_roots()
 ```
 
 The gateway and UI should be able to ask:
@@ -386,6 +541,7 @@ The gateway and UI should be able to ask:
 - What families exist?
 - What schemas define them?
 - What snapshot range does each family cover?
+- What absence state applies when a row or family is missing?
 - Does the committed schema/verifier treat this family as verdict-relevant?
 - Which capsules cover this requested time/index range?
 - Can I verify the family body against its root?
@@ -399,7 +555,8 @@ Add or use a route family:
 ```text
 family_id: route_totals.v1
 family_kind: source_auxiliary
-join_key: snapshot_index
+family_cardinality: entity_per_snapshot
+join_key: snapshot_index + route_id
 row fields:
   row_version
   snapshot_index
@@ -420,6 +577,11 @@ one.
 The latest bundle can show rich per-chain details immediately. Permanent
 historical route rows start when the route family starts capturing them. Earlier
 snapshots say "not captured."
+
+Do not activate route history until the `entity_per_snapshot` ordering rule has
+its own devnet proof. A simpler alternative is to pack a bounded route set into
+one `one_per_snapshot` route-summary row, but that trades fanout complexity for
+a fixed route cap. Either choice must be explicit.
 
 ## Handling New RPC Fields
 
@@ -448,6 +610,32 @@ Examples:
 
 This avoids reflexively widening the core row.
 
+## Absence Semantics
+
+Never collapse missing history into a single `null`.
+
+Use distinct states:
+
+```text
+zero
+not_captured_before_activation
+not_applicable
+source_unavailable
+pending
+invalid
+```
+
+These states matter for audits. `zero` is a measured value.
+`not_captured_before_activation` is honest historical absence.
+`not_applicable` means the family does not apply to that snapshot or entity.
+`source_unavailable` means the producer tried but could not verify the source.
+`pending` means an allowed attachment or source is not finalized yet. `invalid`
+means the family row or source failed verification.
+
+The first mainnet target should avoid `pending` by using bounded atomic writes.
+If a future attachment pattern introduces pending states, the UI and verifier
+must expose them directly.
+
 ## Handling Derived Values
 
 Derived values should not be mixed with source observations unless they are part
@@ -458,10 +646,10 @@ Use three levels:
 1. **Render-time derived:** computed by gateway/UI from verified rows. Not
    persisted.
 2. **Cached projection:** stored off-chain for speed, but recomputable from AML.
-3. **Projection family:** persisted in AML as a declared derived family if the
-   value becomes product-critical.
+3. **Derived index family:** persisted in AML as a declared derived family if
+   the value becomes product-critical.
 
-A projection family must declare:
+A derived index family must declare:
 
 ```text
 source_family_ids
@@ -469,16 +657,16 @@ source_schema_ids
 period_type
 derivation_rule_hash
 coverage
-projection_row_schema
+derived_row_schema
 ```
 
-Projection rows are never a substitute for source rows.
+Derived index rows are never a substitute for source rows.
 
 ## Verification Model
 
 Each family is independently verifiable:
 
-1. Fetch family catalog entry.
+1. Fetch family definition and state.
 2. Fetch capsule body and metadata.
 3. Check row length and body hash.
 4. Fold rows from capsule start root to end root.
@@ -489,13 +677,10 @@ Each family is independently verifiable:
 This avoids one mega-root becoming a bottleneck. It also lets a verifier inspect
 the exact proof boundary for each displayed value.
 
-`global_snapshot_root` is optional but useful. It can commit to which family
-rows were attached for a snapshot, making completeness easier to prove. If AML
-cost is high, it can be deferred as long as each required family has explicit
-coverage and roots.
-
-For the push-the-limits design, include it in the devnet probe rather than
-removing it from the architecture.
+Completeness commitments are optional and separate from family verification.
+For the push-the-limits design, probe capsule-level and per-snapshot
+completeness rather than removing them from the architecture or accepting them
+without cost data.
 
 ## Upgrade Model
 
@@ -503,8 +688,8 @@ This design reduces era churn but does not eliminate eras.
 
 Same-era compatible changes:
 
-- add a new family catalog entry;
-- activate a new auxiliary family;
+- add a new family definition with an already-supported cardinality;
+- activate a new auxiliary family under an already-supported cardinality;
 - add getters that do not change old semantics;
 - add a new schema id while preserving old decoders and old capsule immutability.
 
@@ -513,6 +698,8 @@ New era required:
 - change core family row meaning incompatibly;
 - reinterpret old rows;
 - change map key formats;
+- add a new cardinality regime if the existing program cannot verify it under
+  the same invariants;
 - remove or rename existing getters;
 - change root domains;
 - change how sealed capsules verify.
@@ -535,9 +722,10 @@ Pros:
 Cons:
 
 - first AML is more general than the absolute-minimum capsule log;
-- family catalog and per-family roots add state surface;
+- family definitions, family state, and per-family roots add state surface;
 - generic write paths may be awkward in AML if loops are limited;
 - optional-family completeness must be represented carefully;
+- entity-per-snapshot families require a separate ordering proof;
 - reviewers must reason about schema governance, not just one row layout;
 - the full design must earn its way through devnet probes rather than being
   accepted on taste alone.
@@ -557,9 +745,9 @@ family 3: diagnostics          added when needed
 ```
 
 Start with only `core_accounting` required for the conservation verdict. Include
-the generic family substrate, bounded atomic family slots, per-family roots, and
-the global snapshot completeness root if devnet proves their cost and readback
-are acceptable.
+the generic family substrate, bounded atomic family slots for
+`one_per_snapshot` families, and per-family roots if Gate 0 proves the
+universal family invariants. Probe completeness commitments separately.
 
 This is the best balance between:
 
@@ -569,6 +757,16 @@ This is the best balance between:
 - extensibility for future RPC fields;
 - honest handling of derived values;
 - minimal future era churn.
+
+Recommended sequence:
+
+1. Gate 0 formal substrate probe with two `one_per_snapshot` families.
+2. Slot-count probe for 0, 2, 4, and 8 `one_per_snapshot` auxiliary slots.
+3. Capsule boundary/overflow probe using the shared seal fix.
+4. Completeness commitment A/B: none, capsule-level, per-snapshot.
+5. Range-read/browser verification for real Circle reads.
+6. Separate `entity_per_snapshot` route-family probe only when route history is
+   ready to become durable AML history.
 
 ## Reviewer Questions
 
@@ -580,14 +778,14 @@ Ask reviewers to focus on these questions:
    attached after the core row?
 3. What is the maximum family count we should support in the first AML without
    overengineering?
-4. Should route totals be active at launch or only scaffolded?
-5. Should `global_snapshot_root` be included immediately to prove which family
-   rows were present per snapshot?
+4. Should route totals wait for the `entity_per_snapshot` proof, or be packed
+   into a bounded `one_per_snapshot` summary row?
+5. Should completeness be atomic-only, capsule-level, or per-snapshot?
 6. Are projection families worth including in the substrate now, or should they
    remain purely off-chain until needed?
 7. What exact compatibility fixture suite is required before any same-era AML
    update?
 8. Does the bounded atomic batch preserve enough future capacity without making
    first-mainnet writes too expensive?
-9. Does `global_snapshot_root` fit comfortably enough to justify making
-   cross-family completeness first-class from day one?
+9. Should first mainnet support only `one_per_snapshot` families, with
+    `entity_per_snapshot` deferred until route history is imminent?
