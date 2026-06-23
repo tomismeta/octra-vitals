@@ -32,8 +32,8 @@ Programmed Site Circle AML
   latest summary row
   AML-resident history capsule bodies
   history capsule metadata
-  calendar stat nodes
   history tip root
+  optional extension-family state
   schema/catalog metadata
 ```
 
@@ -46,55 +46,55 @@ Use this vocabulary consistently:
 - **Capsule body:** a bounded AML string containing fixed-width rows for one capsule family and deterministic time span.
 - **Capsule family:** the row family stored in a capsule, such as core observations or a named extension family. This is separate from calendar tiers.
 - **Capsule metadata:** one packed row describing a capsule body: ids, family, schema, row count, body hash, start root, end root, and sealing status.
-- **Calendar stat node:** a derived AML summary over rows or lower calendar nodes for an hour, day, month, or year.
-- **Calendar tip/root:** the current commitment over the calendar tree.
+- **Calendar projection node:** a derived summary over rows or lower projection nodes for an hour, day, month, or year. In the mainnet v1 core profile this is computed off-chain and verified from AML-retained rows; AML-resident nodes are a separate future decision.
+- **Projection tip/root:** the current commitment over a derived calendar/tree projection.
 - **Extension family catalog:** append-only metadata describing optional future field families.
 - **Extension capsule:** fixed-width historical rows for a future field family, keyed to snapshot index and capsule id.
 - **Transaction lookup index:** optional sealed lookup metadata that maps capsule rows to their `record_snapshot` transaction hashes for audit convenience.
 - **Raw evidence archive:** host/archive storage for full raw RPC bodies by content hash. It is not canonical AML history.
 
-Avoid the term "page" for this design. Rows are grouped into capsules. Calendar nodes summarize and index rows/capsules.
+Avoid the term "page" for this design. Rows are grouped into capsules. Projection nodes summarize and index rows/capsules without replacing them.
 
 Each canonical snapshot writes one compact row at the native collection cadence, currently every 15 minutes. The open capsule appends rows until it reaches the configured capsule row limit or time boundary, then it is sealed and a new capsule begins.
 
-Sealing a capsule must never delete, overwrite, or replace the original granular rows. Later calendar nodes are indexes over the retained rows, not compaction events. The core product promise for this design is that a verifier can come back later and inspect the original 15-minute observations from the cutover point onward.
+Sealing a capsule must never delete, overwrite, or replace the original granular rows. Later projections or indexes are summaries over the retained rows, not compaction events. The core product promise for this design is that a verifier can come back later and inspect the original 15-minute observations from the cutover point onward.
 
 Prefer deterministic time-keyed capsules over anonymous row-count chunks. A 12-hour capsule is the starting recommendation because it is close to the already-proven v0 48-row window size at a 15-minute cadence. A one-day capsule is attractive for humans and calendar reads, but it doubles the open-body rewrite footprint and should only be used if the devnet probe shows the cost is comfortably safe.
 
 Capsule identity should be deterministic and time-based, such as `YYYY-MM-DDT00` and `YYYY-MM-DDT12` for 12-hour halves or another fixed UTC period id. Outages should not require gapless capsule ids; enforce snapshot-index continuity across present capsules instead.
 
-## Calendar Tree Layer
+## Calendar Projection Layer
 
-Use a calendar tree as the preferred multi-resolution layer over the retained raw rows.
+Use a calendar tree as the preferred multi-resolution projection over the retained raw rows. For the mainnet v1 core profile, this projection should be computed off-chain from AML capsule bodies and verified against AML roots, not stored as AML state.
 
 ```text
 15-minute rows       permanent source observations
-hour stat nodes      interior nodes over rows
-day stat nodes       interior nodes over hour nodes
-month stat nodes     interior nodes over day nodes
-year stat nodes      interior nodes over month nodes
-calendar tip/root    current root over year nodes
+hour projection      derived projection nodes over rows
+day projection       derived projection nodes over hour nodes
+month projection     derived projection nodes over day nodes
+year projection      derived projection nodes over month nodes
+projection root      derived commitment over the projection tree
 ```
 
-The important rule: interior calendar nodes accelerate reads; they do not replace the underlying rows. A year later, a verifier should still be able to retrieve the raw 15-minute rows from the relevant capsule and verify them against the calendar roots.
+The important rule: projection nodes accelerate reads; they do not replace the underlying rows. A year later, a verifier should still be able to retrieve the raw 15-minute rows from the relevant capsule and verify them against AML capsule roots. A projection is valid only to the extent it can be recomputed from AML-retained rows.
 
 This is more elegant than maintaining unrelated summary streams because multi-resolution history becomes intrinsic to the data model. A 1-day view can read rows or hour/day nodes. A 30-day view can read day nodes under a month. A 1-year view can read month nodes. The UI gets longer horizons without asking the gateway to invent history.
 
-The calendar tree should stay AML-feasible by using fixed, small depth. AML does not need an unbounded loop over arbitrary tree levels. The program can perform a fixed set of unrolled updates for the active hour, day, month, and year nodes, with rollover checks derived from `observed_at`. This keeps the design inside the primitive set already used by v0: `sha256`, `concat`, `substr`, fixed string length checks, and direct state assignments.
+If AML-resident calendar nodes are ever reconsidered, they should stay AML-feasible by using fixed, small depth. AML does not need an unbounded loop over arbitrary tree levels. The program can perform a fixed set of unrolled updates for the active hour, day, month, and year nodes, with rollover checks derived from `observed_at`. This remains a research or separately approved upgrade path, not the mainnet v1 core profile.
 
-The calendar tree should be treated as a verification index:
+The calendar tree should be treated as a verification projection:
 
 - row capsules prove the original observations;
-- hour/day/month/year nodes prove summaries over those observations;
-- the calendar tip proves the current indexed state;
-- a slice verifier should be able to validate the relevant capsule body plus a short path through the calendar nodes without replaying all prior history.
+- hour/day/month/year nodes summarize those observations;
+- the projection root proves the derived projection bytes, not new canonical facts;
+- a slice verifier should be able to validate the relevant capsule body, then recompute or check the projection over those rows without replaying all prior history where cached projection bytes are available.
 
 Reads should be bounded and explicit:
 
 - latest/recent view reads the latest snapshot plus the open capsule or recent raw rows;
-- 1-day view reads one or two raw capsules, or a day node plus rows for the current partial day;
-- 7-day and 30-day views can read day nodes and only drill into raw rows where the UI needs full resolution;
-- longer views can use month/year nodes first, then fetch raw capsules on demand.
+- 1-day view reads one or two raw capsules, or a verified projection plus rows for the current partial day;
+- 7-day and 30-day views can read verified projections and only drill into raw rows where the UI needs full resolution;
+- longer views can use verified month/year projections first, then fetch raw capsules on demand.
 
 Rollover policy:
 
@@ -103,9 +103,9 @@ Rollover policy:
 - calendar periods are UTC buckets with explicit gaps, never synthetic rows;
 - missed snapshots are represented by absent indices/period counts, not filled values;
 - late arrivals are rejected if they violate the monotonic snapshot-index/time rule;
-- the first snapshot in a new period seals the previous period's stat node and folds it into the parent.
+- off-chain projection builders must keep period gaps explicit and must never synthesize missing rows.
 
-Minimum viable v1 should include AML-resident 15-minute capsules plus at least day stat nodes. Hour, month, and year nodes can be enabled after the devnet probe confirms write cost and read complexity are comfortably safe. The enabled calendar tiers and their parent-child derivation are fixed by `calendar_schema_id`; adding an hour tier later is a calendar-schema bump, not a silent toggle. The calendar tree is the strongest candidate for the admired long-horizon design, but it is still gated by measured AML cost and programmed-Circle verification behavior.
+Minimum viable mainnet v1 should include AML-resident 15-minute capsules. Calendar/tree projections are derived read accelerators and should stay off-chain unless a separate pre-mainnet decision accepts AML-resident calendar state, its write cost, and its upgrade implications.
 
 ## Capsule Metadata
 
@@ -132,9 +132,9 @@ capsules_root_before
 
 `body_hash` content-addresses the capsule body. `start_root` and `end_root` make row verification inside a capsule cheap: a browser or verifier folds only the rows in that capsule and checks the result against the end root. `capsules_root_before` plus the separate AML-stored `capsule_root_after_by_id[capsule_id]` makes deep historical capsule verification bounded without putting a circular `root_after` value inside the meta hash. `row_len` is intentionally stored even when derivable from `history_schema_id`, because the meta row should remain self-describing for future verifiers. `tx_index_hash` is optional and commits to the capsule's transaction lookup index when that index is retained in AML.
 
-Each capsule family and calendar tier should have its own domain-separated root family. Do not fold raw rows, extension rows, day summaries, month summaries, and year summaries into one undifferentiated hash domain. Separate domains keep the verification story clean and avoid confusing derived views with source observations.
+Each capsule family and projection tier should have its own domain-separated root family. Do not fold raw rows, extension rows, day summaries, month summaries, and year summaries into one undifferentiated hash domain. Separate domains keep the verification story clean and avoid confusing derived views with source observations.
 
-Calendar stat nodes should have a fixed schema before implementation. At minimum each node should include:
+Calendar projection nodes should have a fixed schema before implementation. If projection bytes are persisted, served, or later moved into AML, each node should include:
 
 - schema id
 - tier
@@ -181,7 +181,7 @@ Base row fields should cover the values needed for historical accounting:
 
 Rows must include `row_version` or equivalent schema identity. When new fields are added later, old rows remain valid under their original schema. Missing old values should be represented as "not captured yet", never backfilled as if they were observed.
 
-Rows, capsule metadata, and calendar stat nodes should each carry explicit schema ids. A future verifier must be able to decode a historical row without assuming the latest code knows the old layout implicitly.
+Rows, capsule metadata, extension families, and projection nodes should each carry explicit schema ids. A future verifier must be able to decode a historical row without assuming the latest code knows the old layout implicitly.
 
 The historical payload hash must be a full hash, not a short display prefix, if it is used as a forensic pointer. Historical full payloads are not AML-resident in this design; only the latest full payload remains in AML. A historical row's full payload hash is therefore a commitment and recovery key for archive/transaction-log inspection, not a guaranteed AML fetch path.
 
@@ -202,15 +202,15 @@ This keeps the first history layer stable while allowing future additions such a
 
 Catalogs should earn their keep. They are not needed for the hot core row if that row has no repeated strings. They become valuable if detail history moves into AML, because dictionary ids can turn otherwise-variable route/source/detail records into bounded fixed-width rows. Catalog entries must be append-only and immutable once assigned.
 
-Extension capsules need a deterministic discovery rule. Do not rely on gateway-local indexes. If a field family is introduced later, AML should expose an append-only extension-family catalog and a deterministic key pattern such as `(family_id, capsule_id)` or `(family_id, first_index, last_index)` so a browser can discover and verify the extension history for a range.
+Extension capsules need a deterministic discovery rule. Do not rely on gateway-local indexes. If a field family is introduced later, AML should expose an append-only extension-family catalog, per-family roots/checkpoints, and a deterministic key pattern such as `(family_id, capsule_id)` or `(family_id, first_index, last_index)` so a browser can discover and verify the extension history for a range.
 
 ## Granularity
 
 The canonical high-resolution cadence should remain the snapshot cadence. Today that means one row every 15 minutes.
 
-Longer horizons should be served by calendar stat nodes, not by deleting or destructively compacting the canonical rows.
+Longer horizons should be served by verified calendar projections, not by deleting or destructively compacting the canonical rows.
 
-Recommended calendar tiers:
+Recommended projection tiers:
 
 - hourly
 - daily
@@ -218,23 +218,23 @@ Recommended calendar tiers:
 - yearly
 - weekly only as a presentation convenience, because weeks cross month/year boundaries and should not complicate the canonical tree unless a real read-cost need appears
 
-Stat nodes should contain first, last, min, max, count, and status fields sufficient for charts and conservation summaries. They are derived views over retained canonical rows, not replacements for them.
+Projection nodes should contain first, last, min, max, count, and status fields sufficient for charts and conservation summaries. They are derived views over retained canonical rows, not replacements for them.
 
-If a future fallback ever prunes raw rows from AML, calendar stat nodes become producer-asserted summaries rather than fully recomputation-verifiable views. That distinction must be exposed honestly.
+If a future fallback ever prunes raw rows from AML, projection nodes become producer-asserted summaries rather than fully recomputation-verifiable views. That distinction must be exposed honestly.
 
 Query examples:
 
-- `1d`: read raw rows directly, or use hourly/day nodes and expand raw rows on demand.
-- `7d`: read day/hour nodes, then fetch raw capsules for exact inspection.
-- `30d`: read day nodes under the relevant month span.
-- `1y`: read month nodes.
+- `1d`: read raw rows directly, or use a verified hourly/day projection and expand raw rows on demand.
+- `7d`: read a verified projection, then fetch raw capsules for exact inspection.
+- `30d`: read a verified projection over the relevant month span.
+- `1y`: read verified month/year projections.
 - exact historical date: fetch the relevant capsule body, verify `body_hash`, fold rows from `start_root` to `end_root`, and render the original 15-minute points.
 
 AML forever history should retain thin accounting rows, not full raw RPC bodies. Full raw evidence can remain in host/archive storage by content hash. The AML history row should include enough committed pointers for audit, but it should not become a permanent raw-response database.
 
 ## Capsule Size Selection
 
-Capsule size is a cost knee, not simply the largest value AML accepts. Larger capsules reduce read count for long horizons, but they make every append more expensive because the open capsule body is rewritten. With calendar nodes enabled, the per-snapshot write footprint also includes latest fields, the open capsule metadata row, open calendar stat nodes, and tier tips.
+Capsule size is a cost knee, not simply the largest value AML accepts. Larger capsules reduce read count for long horizons, but they make every append more expensive because the open capsule body is rewritten. If AML-resident calendar nodes are ever enabled, the per-snapshot write footprint would also include latest fields, the open capsule metadata row, open projection nodes, and tier tips.
 
 Devnet probes should measure at least:
 
@@ -255,15 +255,22 @@ Candidate A: plain AML-resident capsules.
 
 - Lowest conceptual complexity.
 - Strongest immediate path from v0.
-- Supports forever 15-minute rows, but longer horizons need separate stat reads.
+- Supports forever 15-minute rows, but longer horizons need separate projection reads.
 
-Candidate B: AML-resident calendar capsules.
+Candidate B: AML capsules with off-chain verified calendar projections.
 
-- Preferred design if measured cost and code complexity stay reasonable.
-- Keeps raw 15-minute rows in AML and makes hour/day/month/year views native to the model.
-- Avoids maintaining unrelated summary streams that can drift from the source rows.
+- Preferred long-horizon read shape for the mainnet v1 core profile.
+- Keeps raw 15-minute rows in AML and computes hour/day/month/year projections from them.
+- Avoids coupling the first AML state layout to derived index logic.
+- Projection bytes may be cached by the gateway or archive, but their validity comes from recomputation against AML capsule roots.
 
-Candidate C: AML metadata with Circle-asset capsule bodies.
+Candidate C: AML-resident calendar nodes.
+
+- Separate research/upgrade candidate, not the default v1 core.
+- Makes hour/day/month/year reads more native if measured cost and code complexity stay reasonable.
+- Adds AML state layout, rollover, and upgrade risk for derived data that is not the canonical source log.
+
+Candidate D: AML metadata with Circle-asset capsule bodies.
 
 - Fallback only if AML-resident bodies hit hard write, size, return, or verification limits.
 - Still tamper-evident through AML roots and hashes, but not equivalent to AML-resident history unless Circle asset durability is proven to match the product's trust claim.
@@ -278,7 +285,7 @@ The devnet gate should compare these candidates on:
 - formal verification behavior with maps and packed metadata;
 - operator clarity when a period has gaps or rollover occurs.
 
-The winning design should preserve the product claim in plain language: AML owns the durable history; the gateway adapts; calendar nodes accelerate reads; original rows remain inspectable forever from cutover onward.
+The winning design should preserve the product claim in plain language: AML owns the durable history; the gateway adapts; verified projections accelerate reads; original rows remain inspectable forever from cutover onward.
 
 ## State Body Versus Circle Asset Body
 
@@ -346,11 +353,12 @@ The AML successor should make the proof obligations explicit before implementati
 - sealed capsules are immutable;
 - a capsule meta row matches its body hash, row count, row length, first/last index, first/last observed time, start root, and end root;
 - append updates fold the previous root and new row under the correct domain-separated hash;
-- each calendar tier has at most one open node per active UTC period;
-- calendar rollover folds a sealed child node into exactly one parent node;
+- if AML-resident calendar nodes are enabled, each calendar tier has at most one open node per active UTC period;
+- if AML-resident calendar nodes are enabled, calendar rollover folds a sealed child node into exactly one parent node;
 - capsule roots are domain-separated by capsule family and schema id;
-- calendar roots are domain-separated by calendar tier and schema id;
+- projection roots are domain-separated by tier and schema id;
 - extension-family catalogs are append-only and immutable once assigned;
+- extension-family roots/checkpoints are domain-separated by family id and schema id;
 - transaction lookup indexes, when present, have the same row count and ordering as the sealed capsule body;
 - no getter or gateway path may synthesize missing canonical AML history.
 
@@ -374,12 +382,12 @@ If AML maps and return sizes are viable in a programmed Site Circle, use map-bac
 If maps are not viable, do not pretend segmented fixed slots are forever. Fall back explicitly to:
 
 - the largest safe AML high-resolution window;
-- append-only AML calendar/checkpoint capsules;
+- append-only AML checkpoint capsules;
 - root-proven external or Circle asset capsules for full high-resolution archive.
 
 The gateway must not synthesize local history and present it as canonical AML history.
 
-Operator-signed checkpoints alone are not an acceptable replacement for AML-resident history. They are cheap, but they move the trust boundary back to an operator assertion. Merkle Mountain Ranges and other advanced accumulators are also deferred: they are elegant, but they likely exceed AML's current practical primitive set. Fixed-depth calendar nodes are the preferred elegance ceiling because they can be expressed with fixed update paths.
+Operator-signed checkpoints alone are not an acceptable replacement for AML-resident history. They are cheap, but they move the trust boundary back to an operator assertion. Merkle Mountain Ranges and other advanced accumulators are also deferred: they are elegant, but they likely exceed AML's current practical primitive set. Fixed-depth calendar projections are the preferred read-acceleration shape because they can be derived from retained rows without changing AML state.
 
 ## Open Questions For Devnet Probe
 
@@ -394,7 +402,7 @@ Operator-signed checkpoints alone are not an acceptable replacement for AML-resi
 - Whether extension capsules are needed immediately or should wait for the first additional field family.
 - Durability and availability properties of Circle assets versus AML state.
 - Cost and verification comparison between AML-resident capsule bodies and Circle-asset capsule bodies.
-- Cost and complexity comparison between plain AML capsules and AML capsules plus fixed-depth calendar stat nodes.
+- Cost and complexity comparison between plain AML capsules, off-chain verified calendar projections, and AML-resident calendar projection nodes.
 - Cost and storage impact of AML-resident transaction lookup indexes versus hash-only transaction index commitments.
-- Whether calendar nodes can be updated and verified with fixed, unrolled AML code without introducing fragile date parsing.
+- Whether calendar projections can satisfy long-horizon query SLOs before considering AML-resident calendar nodes.
 - Whether known `record_snapshot` transactions remain readable far enough back to serve as forensic backup, and whether any RPC/explorer surface can enumerate those transactions without relying on gateway-local state.

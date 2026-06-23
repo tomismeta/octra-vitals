@@ -33,13 +33,13 @@ Use these terms consistently.
 | Capsule metadata | AML map value | Packed row with capsule id, row count, row length, body hash, start root, end root, capsules-root-before checkpoint, optional tx-index hash, and schema ids. |
 | Capsule root checkpoint | AML map value | Running capsule root after each sealed capsule. Stored outside the meta row to avoid circular hashing. |
 | Transaction lookup index | Deferred | Useful for forensic lookup, but not in the v1 MVP because the sealing transaction cannot know its own hash. |
-| Calendar stat node | AML map value | Derived hour/day/month/year first/last/min/max/count/status node for long-horizon reads. |
+| Calendar projection node | Off-chain verified projection by default | Derived hour/day/month/year first/last/min/max/count/status node for long-horizon reads. AML-resident nodes require a separate decision. |
 | History root | AML scalar/meta | Running row root after each capsule or open capsule. |
 | Capsules root | AML scalar/meta | Running commitment over sealed capsules in canonical order. |
-| Calendar root | AML scalar/meta | Commitment over calendar nodes. |
+| Projection root | Off-chain verified projection by default | Commitment over derived calendar/tree projection bytes. |
 | Raw evidence archive | VPS/archive storage | Full RPC/eth_call bodies by content hash. Useful and public, but not canonical AML history. |
 
-Avoid "pages" for this design. The durable units are observation rows, capsules, and calendar nodes.
+Avoid "pages" for this design. The durable units are observation rows and capsules. Projection nodes index those rows, but they are not the canonical source log.
 
 ## State Shape
 
@@ -52,7 +52,6 @@ paused
 successor_program
 predecessor_program
 history_schema_id
-calendar_schema_id
 snapshot_count
 latest_snapshot_index
 latest_snapshot_id
@@ -71,18 +70,20 @@ open_capsule_start_root
 open_capsule_end_root
 history_root
 capsules_root
-calendar_root
 capsule_count
 history_capsule_body_by_id[capsule_id]
 history_capsule_meta_by_id[capsule_id]
 history_capsule_root_after_by_id[capsule_id]
-calendar_node_by_tier_period[tier_period_id]
 extension_family_catalog[family_id]
+extension_family_root_by_id[family_id]
 extension_capsule_body_by_family_id[family_id|capsule_id]
 extension_capsule_meta_by_family_id[family_id|capsule_id]
+extension_capsule_root_after_by_family_id[family_id|capsule_id]
 ```
 
-The MVP can omit extension capsules, transaction lookup indexes, and hour/month/year nodes if the devnet cost gate says to start smaller. It should not omit core observation rows, capsule metadata, start/end roots, or full latest provenance strings. Calendar/tree nodes are derived indexes, not the source log; adding them later is an era/index decision unless Octra exposes a compatible multi-program Circle model.
+The mainnet v1 core profile can omit transaction lookup indexes and hour/day/month/year AML nodes. It should not omit core observation rows, capsule metadata, start/end roots, or full latest provenance strings. Calendar/tree nodes are derived indexes, not the source log; prefer computing them off-chain from AML capsule bodies and verifying them against AML roots.
+
+Extension-family storage is the main extensibility decision before mainnet. If the first mainnet AML includes a generic extension-family catalog, extension capsule maps, and per-family root checkpoints, new chains and new RPC field families can become durable history without rewriting old capsules or creating an era for every source addition. If it omits those maps, the first permanent new historical field family requires a compatible in-place upgrade gate or a new era. The recommended path is to keep the extension scaffold small, inert until used, and include it only after devnet cost/readback proves it does not meaningfully weaken the core capsule design.
 
 ## Core Row
 
@@ -108,7 +109,7 @@ route_count
 payload_hash_hex
 ```
 
-This preserves the data elements we already persist today, plus the hash pointer needed for forensic recovery. Future fields should use a new row version or extension family. Older rows remain truthful under their original schema.
+This preserves the data elements we already persist today, plus the hash pointer needed for forensic recovery. Future fields should use latest payload fields, a new row version, or an extension family depending on whether they are latest-only, core invariant fields, or durable auxiliary history. Older rows remain truthful under their original schema.
 
 ## Write Path
 
@@ -120,7 +121,7 @@ This preserves the data elements we already persist today, plus the hash pointer
 4. Recompute or validate the compact observation row.
 5. Append the observation row to the open capsule body.
 6. Update open capsule metadata and history root.
-7. Update calendar stat nodes for the active UTC period.
+7. Optionally append active extension-family rows when a configured family is present.
 8. If the capsule reaches the row limit or a deterministic time boundary, seal it:
    - store body by capsule id;
    - store metadata by capsule id;
@@ -139,7 +140,8 @@ The probe proves the storage mechanics, not the complete production safety surfa
 - **Capsule id time binding:** the program must bind `capsule_id` to `observed_at_unix` using deterministic UTC period rules, so an operator cannot accidentally or maliciously store a row under the wrong capsule.
 - **Single atomic write:** append and boundary seal must happen inside one `record_snapshot_v1` transition. The updater should not need a separate seal transaction.
 - **Latest-row faithfulness:** because AML cannot parse the full JSON payload deeply, the gateway must re-derive the compact observation row from the latest full payload and reject any mismatch before serving `/api/latest`.
-- **Versioned schemas:** core rows, capsule metadata, calendar nodes, and extension families must carry schema ids. Old rows remain valid under their original schema.
+- **Versioned schemas:** core rows, capsule metadata, off-chain projection schemas, and extension families must carry schema ids. Old rows remain valid under their original schema.
+- **Compatible-upgrade gate:** any same-Circle AML update after history exists must preserve old state fields, old getters, old row/capsule decoders, and sealed capsule immutability. Otherwise it is a new era or migration/import.
 - **No implicit backfill:** v1 starts retaining rows at cutover. Missing v0 history is predecessor context, not recreated v1 data.
 
 ## Read Path
@@ -151,21 +153,20 @@ get_latest_bundle()
 get_history_capsule_meta(capsule_id)
 get_history_capsule_body(capsule_id)
 get_recent_capsule_ids(limit)
-get_calendar_node(tier, period_id)
 get_history_roots()
 ```
 
-The UI should use raw capsules for short horizons and calendar nodes for long horizons:
+The UI should use raw capsules for short horizons and verified off-chain projections for long horizons:
 
 | Horizon | Primary read path |
 | --- | --- |
 | Latest | `get_latest_bundle()` |
 | 1 day | two 48-row capsules, or one 96-row capsule if selected later |
-| 7 days | day nodes first, raw capsules on drill-down |
-| 30 days | day nodes under month span |
-| 1 year/all | month/year nodes first, raw capsules on demand |
+| 7 days | off-chain verified projection first, raw capsules on drill-down |
+| 30 days | off-chain verified projection first, raw capsules on demand |
+| 1 year/all | off-chain verified projection first, raw capsules on demand |
 
-Calendar nodes accelerate reads but do not replace raw rows.
+Projection trees accelerate reads but do not replace raw rows. They are valid only when they can be recomputed from AML capsule bodies and verified against AML roots.
 
 ## Verification
 
@@ -177,7 +178,7 @@ A verifier for any capsule should:
 4. Fold row hashes from `start_root`.
 5. Check the result equals `end_root`.
 6. Fold capsule id, body hash, meta hash, and end root into the capsules root path.
-7. Use calendar nodes only as summaries over the retained rows.
+7. Use projection trees only as summaries over the retained rows.
 
 Per-capsule `start_root`, `end_root`, `capsules_root_before`, and a separately stored root-after checkpoint are mandatory. Without row-root bounds, a verifier must replay all rows from genesis to prove a row slice. Without capsule-root checkpoints, a verifier must replay all earlier capsules to prove deep capsule membership against the latest tip.
 
