@@ -45,6 +45,9 @@ A more general from-scratch variant is captured in
 That proposal reframes the extension scaffold as first-class fact families for
 review before the mainnet AML shape is finalized.
 
+The current implementation handoff for that path is
+[AML Fact Ledger Implementation Brief](aml-fact-ledger-implementation-brief.md).
+
 ## Problem Statement
 
 We need a history architecture that can survive schema and index evolution

@@ -1,6 +1,14 @@
 # AML History v1 Successor Plan
 
-Status: draft handoff for the next devnet implementation. Mainnet is not in scope until this passes devnet gates.
+Status: interim simple-capsule design. Superseded as the mainnet target by
+[AML Extensible Fact Ledger Proposal](aml-extensible-fact-ledger-proposal.md)
+and [AML Fact Ledger Implementation Brief](aml-fact-ledger-implementation-brief.md).
+
+`program-v1` remains the devnet proof-of-mechanics and soak vehicle for
+fixed-width rows, capsules, metadata, roots, and boundary behavior. Do not use
+this document as the mainnet implementation target unless the fact-ledger Gate 0
+formal probe fails and the project explicitly chooses the simple capsule
+fallback.
 
 Devnet operational cutover steps are captured in [AML History v1 Devnet Cutover Runbook](aml-history-v1-devnet-cutover.md).
 

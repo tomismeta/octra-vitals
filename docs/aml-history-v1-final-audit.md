@@ -2,6 +2,14 @@
 
 Date: 2026-06-23
 
+Status: final audit of the interim simple-capsule v1 path. Superseded as the
+mainnet target by [AML Extensible Fact Ledger Proposal](aml-extensible-fact-ledger-proposal.md)
+and [AML Fact Ledger Implementation Brief](aml-fact-ledger-implementation-brief.md).
+
+The audit remains valuable evidence for `program-v1` mechanics. Its approval to
+start devnet successor implementation does not approve `program-v1` as the
+mainnet architecture after the fact-ledger decision.
+
 Scope: read-only architecture audit of the devnet AML forever-history probe and v1 successor plan. Mainnet was not touched.
 
 Review lenses:

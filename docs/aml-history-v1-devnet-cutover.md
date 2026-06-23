@@ -2,6 +2,14 @@
 
 Date: 2026-06-23
 
+Status: interim simple-capsule devnet runbook. Superseded as the mainnet target
+by [AML Extensible Fact Ledger Proposal](aml-extensible-fact-ledger-proposal.md)
+and [AML Fact Ledger Implementation Brief](aml-fact-ledger-implementation-brief.md).
+
+`program-v1` remains useful for devnet soak and mechanics proof. Mainnet
+implementation should target the fact-ledger path unless Gate 0 fails and the
+simple capsule fallback is explicitly selected.
+
 Scope: preparation for flipping `devnet.octra.live` from the current split devnet deployment to a fresh fixed-build v1 programmed Site Circle. Mainnet is out of scope.
 
 ## Decision Rule

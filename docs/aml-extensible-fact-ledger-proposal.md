@@ -8,6 +8,8 @@ This is a reimagining of the Octra Vitals AML history layer from scratch, with
 the specific goal of keeping AML boring while making it naturally extensible to
 new destination chains, new RPC fields, and derived values.
 
+Implementation handoff: [AML Fact Ledger Implementation Brief](aml-fact-ledger-implementation-brief.md).
+
 ## Thesis
 
 The AML should be generic about storage mechanics and strict about history
@@ -149,7 +151,12 @@ The AML state should have one generic family substrate plus latest-bundle state.
 owner
 operator
 paused
+era_id
+era_first_snapshot_index
 predecessor_program
+predecessor_final_index
+predecessor_final_root
+predecessor_anchor_hash
 successor_program
 
 latest_snapshot_index
@@ -685,6 +692,13 @@ without cost data.
 ## Upgrade Model
 
 This design reduces era churn but does not eliminate eras.
+
+Every era must carry a cryptographic predecessor anchor, not just a pointer.
+Initialization should store `era_first_snapshot_index`,
+`predecessor_final_index`, `predecessor_final_root`, and a
+domain-separated `predecessor_anchor_hash`. Cross-era charts may be visually
+continuous, but verification must expose the era boundary and the predecessor
+root being trusted.
 
 Same-era compatible changes:
 

@@ -2,6 +2,13 @@
 
 Date: 2026-06-23
 
+Status: interim simple-capsule devnet rehearsal. Superseded as the mainnet
+target by [AML Extensible Fact Ledger Proposal](aml-extensible-fact-ledger-proposal.md)
+and [AML Fact Ledger Implementation Brief](aml-fact-ledger-implementation-brief.md).
+
+The rehearsal remains evidence that fixed-width AML capsules, roots, and
+boundary behavior can work. It is not the final mainnet architecture.
+
 Scope: devnet-only rehearsal of the AML history v1 successor path. Mainnet was not touched.
 
 ## Current Result
