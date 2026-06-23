@@ -239,7 +239,7 @@ async function readContractViews(url: string, programAddress: string, lastBundle
 }
 
 const rpcUrl = octraProgramRpcUrl();
-if (!/devnet/i.test(rpcUrl) && process.env.VITALS_HISTORY_MAP_PROBE_ALLOW_NON_DEVNET !== "1") {
+if (!/devnet/i.test(rpcUrl)) {
   throw new Error(`refusing to run history map probe against non-devnet RPC: ${rpcUrl}`);
 }
 
@@ -276,11 +276,11 @@ if (!submitEnabled) {
 
 if (!submitAck) throw new Error("set VITALS_HISTORY_MAP_PROBE_ACK=1 to acknowledge devnet map probe submission");
 const wallet = loadWalletFromEnv({
-  privateKeyEnv: ["VITALS_DEPLOYER_PRIVATE_KEY_B64", "VITALS_OPERATOR_PRIVATE_KEY_B64", "OCTRA_PRIVATE_KEY_B64"],
-  addressEnv: ["VITALS_DEPLOYER_ADDRESS", "VITALS_OPERATOR_ADDRESS"],
+  privateKeyEnv: ["VITALS_HISTORY_PROBE_PRIVATE_KEY_B64"],
+  addressEnv: ["VITALS_HISTORY_PROBE_ADDRESS"],
   label: "history map probe wallet"
 });
-if (!wallet) throw new Error("history map probe requires VITALS_DEPLOYER_PRIVATE_KEY_B64 or VITALS_OPERATOR_PRIVATE_KEY_B64");
+if (!wallet) throw new Error("history map probe requires VITALS_HISTORY_PROBE_PRIVATE_KEY_B64");
 
 let nonce = await nextNonce(wallet.address);
 const programAddress = await computeProgramAddress(artifact.bytecode, wallet.address, nonce);

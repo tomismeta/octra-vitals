@@ -163,6 +163,70 @@ The probe can advance to a devnet successor implementation only if:
 - transaction lookup index strategy is chosen from measured cost;
 - failure modes are explicit and do not silently fall back to gateway-local history.
 
+## Cadence Soak
+
+After the programmed-Circle parity gate passes, run a 15-minute cadence soak with a disposable devnet probe wallet. The resumable body-map runner supports one-row invocations so the soak behaves like the real updater instead of a back-to-back stress test.
+
+All history probe scripts are hard-devnet-only and intentionally use probe-specific wallet variables. The sourced wallet file must export:
+
+```sh
+VITALS_HISTORY_PROBE_PRIVATE_KEY_B64=<limited-devnet-probe-key>
+VITALS_HISTORY_PROBE_ADDRESS=<limited-devnet-probe-address>
+```
+
+They do not read production deployer/operator wallet variables.
+
+For programmed Site Circle cadence, use:
+
+```sh
+cd /tmp/octra-vitals-history-probe
+set -a
+. /tmp/octra-vitals-history-probe-wallet.env
+set +a
+export OCTRA_PROGRAM_RPC_URL=https://devnet.octrascan.io/rpc
+export OCTRA_PROGRAM_RPC_URLS=https://devnet.octrascan.io/rpc
+export VITALS_GATEWAY_ROLE=devnet
+export VITALS_HISTORY_BODY_MAP_CIRCLE_CADENCE_SUBMIT=1
+export VITALS_HISTORY_BODY_MAP_CIRCLE_CADENCE_ACK=1
+export VITALS_HISTORY_BODY_MAP_CIRCLE_CADENCE_CIRCLE_ID=<programmed-circle-id>
+export VITALS_HISTORY_BODY_MAP_CIRCLE_CADENCE_TARGET_CAPSULES=<target-total-capsules>
+export VITALS_HISTORY_BODY_MAP_CIRCLE_CADENCE_ROWS_PER_RUN=1
+export VITALS_HISTORY_BODY_MAP_CIRCLE_CADENCE_REPORT=/tmp/octra-vitals-history-probe/reports/aml-history-devnet-body-map-circle-cadence.json
+node dist/scripts/run-history-body-map-circle-cadence-devnet.js
+```
+
+The runner writes a progress file next to the report and can be rerun safely after transient failure. A one-row invocation has been tested on a programmed Circle, followed by an accelerated completion of the same second capsule.
+
+Example timer invocation:
+
+```sh
+cd /tmp/octra-vitals-history-probe
+set -a
+. /tmp/octra-vitals-history-probe-wallet.env
+set +a
+export OCTRA_PROGRAM_RPC_URL=https://devnet.octrascan.io/rpc
+export OCTRA_PROGRAM_RPC_URLS=https://devnet.octrascan.io/rpc
+export VITALS_GATEWAY_ROLE=devnet
+export VITALS_HISTORY_BODY_MAP_PROBE_SUBMIT=1
+export VITALS_HISTORY_BODY_MAP_PROBE_ACK=1
+export VITALS_HISTORY_BODY_MAP_PROBE_RESUME=1
+export VITALS_HISTORY_BODY_MAP_PROBE_ROW_LIMIT=48
+export VITALS_HISTORY_BODY_MAP_PROBE_CAPSULES=730
+export VITALS_HISTORY_BODY_MAP_PROBE_ROWS_PER_RUN=1
+export VITALS_HISTORY_BODY_MAP_PROBE_REPORT=/tmp/octra-vitals-history-probe/reports/aml-history-devnet-body-map-cadence.json
+node dist/scripts/run-history-body-map-resumable-devnet.js
+```
+
+Rules:
+
+- run from a disposable devnet wallet only;
+- do not use the live devnet updater wallet;
+- keep the progress file and reports outside git;
+- one run appends at most one row and seals the capsule only when that row reaches the configured boundary;
+- if a run fails, rerun with the same progress file after diagnosing the public error.
+
+The current disposable probe wallet needs more devnet funds before a programmed-Circle parity retry or long cadence soak.
+
 ## Expected Outcome
 
 Pick one of:
@@ -246,7 +310,7 @@ Interpretation:
 - The resident-body map probe stored two sealed 48-row bodies in AML, stored aligned tx-index strings, read all of them back, and verified a persistent cross-capsule root.
 - The resumable body-map runner extended the same disposable program to four sealed 48-row bodies. It wrote progress after every append/seal and read all four bodies, metas, and tx-index strings back successfully.
 - Body-map seal cost rose to 3,127 effort because each seal writes the retained body, metadata, tx index, and root; that is expected and now measurable.
-- The next design gate is the same shape in a programmed Site Circle, then a production-cadence soak.
+- The same shape passed in a programmed Site Circle, including a 48-row parity run, a second sealed capsule, and a 3-hour wall-clock cadence soak.
 - 96-row capsules still deserve consideration because daily capsule identity is cleaner, but they should be judged after resident-body retention and programmed-Circle behavior are measured.
 
 Operational lessons:
@@ -254,5 +318,5 @@ Operational lessons:
 - Long devnet probes must not use the same wallet as the live updater; otherwise scheduled snapshots can consume the next nonce.
 - Future long probes should use a dedicated probe wallet and write progress reports after deploy, initialize, and every N appends.
 - Long-running probes should be resumable/progress-reporting by default.
-- A production-like cadence test is still preferable before a real successor deployment because one snapshot every 15 minutes is gentler than a tight back-to-back stress loop.
+- A longer production-like cadence test that fills and seals another capsule is still useful hardening before a real successor deployment.
 - Seal and reset should be one atomic transition in v1. The first probe accepted an operator-supplied reset root, which is acceptable for a disposable probe but not for a canonical history contract.

@@ -1,0 +1,1968 @@
+MLOAD r1, 999
+LDI r2, "constructor"
+NEQ r3, r1, r2
+JIF r3, 100
+LDI r1, false
+JIF r1, 10000
+LDI r2, "false"
+JMP 10001
+JDEST 10000
+LDI r2, "true"
+JDEST 10001
+SSTORE "initialized", r2
+LDI r1, 0
+SSTORE "snapshot_count", r1
+LDI r1, 0
+SSTORE "latest_snapshot_index", r1
+LDI r1, ""
+SSTORE "latest_snapshot_id", r1
+LDI r1, ""
+SSTORE "latest_observed_at", r1
+LDI r1, 0
+SSTORE "latest_epoch", r1
+LDI r1, ""
+SSTORE "latest_payload_hash", r1
+LDI r1, ""
+SSTORE "latest_evidence_manifest_hash", r1
+LDI r1, ""
+SSTORE "latest_source_refs_hash", r1
+LDI r1, ""
+SSTORE "latest_summary_hash", r1
+LDI r1, ""
+SSTORE "latest_history_row_hash", r1
+LDI r1, ""
+SSTORE "latest_payload", r1
+LDI r1, ""
+SSTORE "latest_evidence_manifest", r1
+LDI r1, ""
+SSTORE "latest_source_refs", r1
+LDI r1, ""
+SSTORE "latest_summary", r1
+LDI r1, ""
+SSTORE "latest_history_row", r1
+LDI r1, "octra-vitals:history-root:v1"
+LDI r2, "
+"
+CONCAT r3, r1, r2
+SHA256 r4, r3
+SSTORE "history_root", r4
+LDI r1, "octra-vitals:capsules-root:v1"
+LDI r2, "
+"
+CONCAT r3, r1, r2
+SHA256 r4, r3
+SSTORE "capsules_root", r4
+LDI r1, 0
+SSTORE "capsule_count", r1
+LDI r1, ""
+SSTORE "open_capsule_base_id", r1
+LDI r1, 0
+SSTORE "open_capsule_segment", r1
+LDI r1, ""
+SSTORE "open_capsule_id", r1
+LDI r1, ""
+SSTORE "open_capsule_body", r1
+LDI r1, 0
+SSTORE "open_capsule_row_count", r1
+LDI r1, 0
+SSTORE "open_capsule_first_index", r1
+SLOAD r1, "history_root"
+SSTORE "open_capsule_start_root", r1
+SLOAD r1, "history_root"
+SSTORE "open_capsule_end_root", r1
+LDI r1, ""
+SSTORE "latest_capsule_id", r1
+LDI r1, ""
+SSTORE "latest_capsule_body_hash", r1
+LDI r1, ""
+SSTORE "latest_capsule_meta_hash", r1
+LDI r1, ""
+SSTORE "latest_capsule_root_after", r1
+STOP
+JDEST 100
+MLOAD r1, 1000
+LDI r2, "manifest"
+EQ r3, r1, r2
+JIF r3, 1800
+LDI r2, "is_initialized"
+EQ r3, r1, r2
+JIF r3, 1900
+LDI r2, "get_owner"
+EQ r3, r1, r2
+JIF r3, 2000
+LDI r2, "get_operator"
+EQ r3, r1, r2
+JIF r3, 2100
+LDI r2, "is_paused"
+EQ r3, r1, r2
+JIF r3, 2200
+LDI r2, "get_successor_program"
+EQ r3, r1, r2
+JIF r3, 2300
+LDI r2, "is_successor_set"
+EQ r3, r1, r2
+JIF r3, 2400
+LDI r2, "get_predecessor_program"
+EQ r3, r1, r2
+JIF r3, 2500
+LDI r2, "is_predecessor_set"
+EQ r3, r1, r2
+JIF r3, 2600
+LDI r2, "get_snapshot_count"
+EQ r3, r1, r2
+JIF r3, 2700
+LDI r2, "get_latest_snapshot_index"
+EQ r3, r1, r2
+JIF r3, 2800
+LDI r2, "get_latest_snapshot_id"
+EQ r3, r1, r2
+JIF r3, 2900
+LDI r2, "get_latest_observed_at"
+EQ r3, r1, r2
+JIF r3, 3000
+LDI r2, "get_latest_epoch"
+EQ r3, r1, r2
+JIF r3, 3100
+LDI r2, "get_latest_payload_hash"
+EQ r3, r1, r2
+JIF r3, 3200
+LDI r2, "get_latest_evidence_manifest_hash"
+EQ r3, r1, r2
+JIF r3, 3300
+LDI r2, "get_latest_source_refs_hash"
+EQ r3, r1, r2
+JIF r3, 3400
+LDI r2, "get_latest_summary_hash"
+EQ r3, r1, r2
+JIF r3, 3500
+LDI r2, "get_latest_history_row_hash"
+EQ r3, r1, r2
+JIF r3, 3600
+LDI r2, "get_latest_snapshot"
+EQ r3, r1, r2
+JIF r3, 3700
+LDI r2, "get_latest_evidence_manifest"
+EQ r3, r1, r2
+JIF r3, 3800
+LDI r2, "get_latest_source_refs"
+EQ r3, r1, r2
+JIF r3, 3900
+LDI r2, "get_latest_summary"
+EQ r3, r1, r2
+JIF r3, 4000
+LDI r2, "get_latest_history_row"
+EQ r3, r1, r2
+JIF r3, 4100
+LDI r2, "get_latest_submitter"
+EQ r3, r1, r2
+JIF r3, 4200
+LDI r2, "get_summary_row_len"
+EQ r3, r1, r2
+JIF r3, 4300
+LDI r2, "get_history_row_len"
+EQ r3, r1, r2
+JIF r3, 4400
+LDI r2, "get_capsule_meta_len"
+EQ r3, r1, r2
+JIF r3, 4500
+LDI r2, "get_capsule_row_limit"
+EQ r3, r1, r2
+JIF r3, 4600
+LDI r2, "get_history_root"
+EQ r3, r1, r2
+JIF r3, 4700
+LDI r2, "get_capsules_root"
+EQ r3, r1, r2
+JIF r3, 4800
+LDI r2, "get_capsule_count"
+EQ r3, r1, r2
+JIF r3, 4900
+LDI r2, "get_open_capsule_base_id"
+EQ r3, r1, r2
+JIF r3, 5000
+LDI r2, "get_open_capsule_segment"
+EQ r3, r1, r2
+JIF r3, 5100
+LDI r2, "get_open_capsule_id"
+EQ r3, r1, r2
+JIF r3, 5200
+LDI r2, "get_open_capsule_body"
+EQ r3, r1, r2
+JIF r3, 5300
+LDI r2, "get_open_capsule_row_count"
+EQ r3, r1, r2
+JIF r3, 5400
+LDI r2, "get_open_capsule_end_root"
+EQ r3, r1, r2
+JIF r3, 5500
+LDI r2, "get_latest_capsule_id"
+EQ r3, r1, r2
+JIF r3, 5600
+LDI r2, "get_latest_capsule_body_hash"
+EQ r3, r1, r2
+JIF r3, 5700
+LDI r2, "get_latest_capsule_meta_hash"
+EQ r3, r1, r2
+JIF r3, 5800
+LDI r2, "get_latest_capsule_root_after"
+EQ r3, r1, r2
+JIF r3, 5900
+LDI r2, "get_history_capsule_body"
+EQ r3, r1, r2
+JIF r3, 6000
+LDI r2, "get_history_capsule_meta"
+EQ r3, r1, r2
+JIF r3, 6100
+LDI r2, "get_history_capsule_root_after"
+EQ r3, r1, r2
+JIF r3, 6200
+LDI r2, "get_latest_bundle"
+EQ r3, r1, r2
+JIF r3, 6300
+LDI r2, "initialize_v1"
+EQ r3, r1, r2
+JIF r3, 6400
+LDI r2, "set_operator"
+EQ r3, r1, r2
+JIF r3, 6500
+LDI r2, "set_paused"
+EQ r3, r1, r2
+JIF r3, 6600
+LDI r2, "set_successor_program"
+EQ r3, r1, r2
+JIF r3, 6700
+LDI r2, "record_snapshot_v1"
+EQ r3, r1, r2
+JIF r3, 6800
+REVERT
+JDEST 200
+SLOAD r1, "initialized"
+LDI r2, "true"
+EQ r1, r1, r2
+JIF r1, 10002
+LDI r3, "not initialized"
+EMIT "Require", r3
+REVERT
+JDEST 10002
+STOP
+JDEST 300
+CALL_INT r1, 200
+CALLER r1
+SLOAD r2, "owner"
+EQ r3, r1, r2
+JIF r3, 10003
+LDI r4, "not owner"
+EMIT "Require", r4
+REVERT
+JDEST 10003
+STOP
+JDEST 400
+CALL_INT r1, 200
+CALLER r1
+SLOAD r2, "owner"
+EQ r3, r1, r2
+JIF r3, 10004
+CALLER r5
+SLOAD r6, "operator"
+EQ r7, r5, r6
+MOV r4, r7
+JMP 10005
+JDEST 10004
+LDI r4, true
+JDEST 10005
+JIF r4, 10006
+LDI r8, "not operator"
+EMIT "Require", r8
+REVERT
+JDEST 10006
+STOP
+JDEST 500
+MLOAD r1, 1001
+LDI r2, 0
+LDI r3, 7
+SUBSTR r4, r1, r2, r3
+LDI r5, "sha256:"
+EQ r6, r4, r5
+JIF r6, 10007
+LDI r7, "hash prefix"
+EMIT "Require", r7
+REVERT
+JDEST 10007
+STRLEN r2, r1
+LDI r3, 71
+EQ r4, r2, r3
+JIF r4, 10008
+LDI r5, "hash length"
+EMIT "Require", r5
+REVERT
+JDEST 10008
+STOP
+JDEST 600
+MLOAD r1, 1001
+STRLEN r2, r1
+LDI r3, 64
+EQ r4, r2, r3
+JIF r4, 10009
+LDI r5, "hex64 length"
+EMIT "Require", r5
+REVERT
+JDEST 10009
+STOP
+JDEST 700
+MLOAD r1, 1001
+LDI r2, "0"
+LT r3, r1, r2
+LDI r4, true
+NEQ r3, r3, r4
+JIF r3, 10010
+LDI r5, "digit low"
+EMIT "Require", r5
+REVERT
+JDEST 10010
+LDI r2, "9"
+GT r3, r1, r2
+LDI r4, true
+NEQ r3, r3, r4
+JIF r3, 10011
+LDI r5, "digit high"
+EMIT "Require", r5
+REVERT
+JDEST 10011
+STOP
+JDEST 800
+MLOAD r1, 1001
+STRLEN r2, r1
+LDI r3, 16
+LT r4, r2, r3
+LDI r5, true
+NEQ r4, r4, r5
+JIF r4, 10012
+LDI r6, "snapshot id too short"
+EMIT "Require", r6
+REVERT
+JDEST 10012
+STRLEN r2, r1
+LDI r3, 64
+GT r4, r2, r3
+LDI r5, true
+NEQ r4, r4, r5
+JIF r4, 10013
+LDI r6, "snapshot id too long"
+EMIT "Require", r6
+REVERT
+JDEST 10013
+LDI r2, 0
+LDI r3, 7
+SUBSTR r4, r1, r2, r3
+LDI r5, "vitals."
+EQ r6, r4, r5
+JIF r6, 10014
+LDI r7, "snapshot id prefix"
+EMIT "Require", r7
+REVERT
+JDEST 10014
+STOP
+JDEST 900
+MLOAD r1, 1001
+STRLEN r2, r1
+LDI r3, 20
+EQ r4, r2, r3
+JIF r4, 10015
+LDI r5, "observed_at must be UTC seconds"
+EMIT "Require", r5
+REVERT
+JDEST 10015
+LDI r2, 0
+LDI r3, 1
+SUBSTR r4, r1, r2, r3
+MSTORE 1001, r4
+CALL_INT r5, 700
+LDI r2, 1
+LDI r3, 1
+SUBSTR r4, r1, r2, r3
+MSTORE 1001, r4
+CALL_INT r5, 700
+LDI r2, 2
+LDI r3, 1
+SUBSTR r4, r1, r2, r3
+MSTORE 1001, r4
+CALL_INT r5, 700
+LDI r2, 3
+LDI r3, 1
+SUBSTR r4, r1, r2, r3
+MSTORE 1001, r4
+CALL_INT r5, 700
+LDI r2, 4
+LDI r3, 1
+SUBSTR r4, r1, r2, r3
+LDI r5, "-"
+EQ r6, r4, r5
+JIF r6, 10016
+LDI r7, "observed_at year separator"
+EMIT "Require", r7
+REVERT
+JDEST 10016
+LDI r2, 5
+LDI r3, 1
+SUBSTR r4, r1, r2, r3
+MSTORE 1001, r4
+CALL_INT r5, 700
+LDI r2, 6
+LDI r3, 1
+SUBSTR r4, r1, r2, r3
+MSTORE 1001, r4
+CALL_INT r5, 700
+LDI r2, 7
+LDI r3, 1
+SUBSTR r4, r1, r2, r3
+LDI r5, "-"
+EQ r6, r4, r5
+JIF r6, 10017
+LDI r7, "observed_at month separator"
+EMIT "Require", r7
+REVERT
+JDEST 10017
+LDI r2, 8
+LDI r3, 1
+SUBSTR r4, r1, r2, r3
+MSTORE 1001, r4
+CALL_INT r5, 700
+LDI r2, 9
+LDI r3, 1
+SUBSTR r4, r1, r2, r3
+MSTORE 1001, r4
+CALL_INT r5, 700
+LDI r2, 10
+LDI r3, 1
+SUBSTR r4, r1, r2, r3
+LDI r5, "T"
+EQ r6, r4, r5
+JIF r6, 10018
+LDI r7, "observed_at time separator"
+EMIT "Require", r7
+REVERT
+JDEST 10018
+LDI r2, 11
+LDI r3, 1
+SUBSTR r4, r1, r2, r3
+MSTORE 1001, r4
+CALL_INT r5, 700
+LDI r2, 12
+LDI r3, 1
+SUBSTR r4, r1, r2, r3
+MSTORE 1001, r4
+CALL_INT r5, 700
+LDI r2, 13
+LDI r3, 1
+SUBSTR r4, r1, r2, r3
+LDI r5, ":"
+EQ r6, r4, r5
+JIF r6, 10019
+LDI r7, "observed_at hour separator"
+EMIT "Require", r7
+REVERT
+JDEST 10019
+LDI r2, 14
+LDI r3, 1
+SUBSTR r4, r1, r2, r3
+MSTORE 1001, r4
+CALL_INT r5, 700
+LDI r2, 15
+LDI r3, 1
+SUBSTR r4, r1, r2, r3
+MSTORE 1001, r4
+CALL_INT r5, 700
+LDI r2, 16
+LDI r3, 1
+SUBSTR r4, r1, r2, r3
+LDI r5, ":"
+EQ r6, r4, r5
+JIF r6, 10020
+LDI r7, "observed_at minute separator"
+EMIT "Require", r7
+REVERT
+JDEST 10020
+LDI r2, 17
+LDI r3, 1
+SUBSTR r4, r1, r2, r3
+MSTORE 1001, r4
+CALL_INT r5, 700
+LDI r2, 18
+LDI r3, 1
+SUBSTR r4, r1, r2, r3
+MSTORE 1001, r4
+CALL_INT r5, 700
+LDI r2, 19
+LDI r3, 1
+SUBSTR r4, r1, r2, r3
+LDI r5, "Z"
+EQ r6, r4, r5
+JIF r6, 10021
+LDI r7, "observed_at UTC suffix"
+EMIT "Require", r7
+REVERT
+JDEST 10021
+STOP
+JDEST 1000
+MLOAD r1, 1001
+STRLEN r2, r1
+LDI r3, 13
+EQ r4, r2, r3
+JIF r4, 10022
+LDI r5, "capsule base id length"
+EMIT "Require", r5
+REVERT
+JDEST 10022
+LDI r2, 0
+LDI r3, 1
+SUBSTR r4, r1, r2, r3
+MSTORE 1001, r4
+CALL_INT r5, 700
+LDI r2, 1
+LDI r3, 1
+SUBSTR r4, r1, r2, r3
+MSTORE 1001, r4
+CALL_INT r5, 700
+LDI r2, 2
+LDI r3, 1
+SUBSTR r4, r1, r2, r3
+MSTORE 1001, r4
+CALL_INT r5, 700
+LDI r2, 3
+LDI r3, 1
+SUBSTR r4, r1, r2, r3
+MSTORE 1001, r4
+CALL_INT r5, 700
+LDI r2, 4
+LDI r3, 1
+SUBSTR r4, r1, r2, r3
+LDI r5, "-"
+EQ r6, r4, r5
+JIF r6, 10023
+LDI r7, "capsule year separator"
+EMIT "Require", r7
+REVERT
+JDEST 10023
+LDI r2, 5
+LDI r3, 1
+SUBSTR r4, r1, r2, r3
+MSTORE 1001, r4
+CALL_INT r5, 700
+LDI r2, 6
+LDI r3, 1
+SUBSTR r4, r1, r2, r3
+MSTORE 1001, r4
+CALL_INT r5, 700
+LDI r2, 7
+LDI r3, 1
+SUBSTR r4, r1, r2, r3
+LDI r5, "-"
+EQ r6, r4, r5
+JIF r6, 10024
+LDI r7, "capsule month separator"
+EMIT "Require", r7
+REVERT
+JDEST 10024
+LDI r2, 8
+LDI r3, 1
+SUBSTR r4, r1, r2, r3
+MSTORE 1001, r4
+CALL_INT r5, 700
+LDI r2, 9
+LDI r3, 1
+SUBSTR r4, r1, r2, r3
+MSTORE 1001, r4
+CALL_INT r5, 700
+LDI r2, 10
+LDI r3, 1
+SUBSTR r4, r1, r2, r3
+LDI r5, "T"
+EQ r6, r4, r5
+JIF r6, 10025
+LDI r7, "capsule time separator"
+EMIT "Require", r7
+REVERT
+JDEST 10025
+LDI r2, 11
+LDI r3, 2
+SUBSTR r4, r1, r2, r3
+LDI r5, "00"
+EQ r6, r4, r5
+JIF r6, 10026
+LDI r8, 11
+LDI r9, 2
+SUBSTR r10, r1, r8, r9
+LDI r11, "12"
+EQ r12, r10, r11
+MOV r7, r12
+JMP 10027
+JDEST 10026
+LDI r7, true
+JDEST 10027
+JIF r7, 10028
+LDI r13, "capsule hour boundary"
+EMIT "Require", r13
+REVERT
+JDEST 10028
+STOP
+JDEST 1100
+MLOAD r1, 1001
+STRLEN r2, r1
+LDI r3, 18
+EQ r4, r2, r3
+JIF r4, 10029
+LDI r5, "capsule id length"
+EMIT "Require", r5
+REVERT
+JDEST 10029
+LDI r2, 0
+LDI r3, 13
+SUBSTR r4, r1, r2, r3
+MSTORE 1001, r4
+CALL_INT r5, 1000
+LDI r2, 13
+LDI r3, 1
+SUBSTR r4, r1, r2, r3
+LDI r5, "."
+EQ r6, r4, r5
+JIF r6, 10030
+LDI r7, "capsule segment separator"
+EMIT "Require", r7
+REVERT
+JDEST 10030
+LDI r2, 14
+LDI r3, 1
+SUBSTR r4, r1, r2, r3
+MSTORE 1001, r4
+CALL_INT r5, 700
+LDI r2, 15
+LDI r3, 1
+SUBSTR r4, r1, r2, r3
+MSTORE 1001, r4
+CALL_INT r5, 700
+LDI r2, 16
+LDI r3, 1
+SUBSTR r4, r1, r2, r3
+MSTORE 1001, r4
+CALL_INT r5, 700
+LDI r2, 17
+LDI r3, 1
+SUBSTR r4, r1, r2, r3
+MSTORE 1001, r4
+CALL_INT r5, 700
+STOP
+JDEST 1200
+MLOAD r1, 1001
+MLOAD r2, 1002
+MLOAD r3, 1003
+MLOAD r4, 1004
+STRLEN r5, r1
+LDI r6, 295
+EQ r7, r5, r6
+JIF r7, 10031
+LDI r8, "history row length"
+EMIT "Require", r8
+REVERT
+JDEST 10031
+LDI r5, 0
+LDI r6, 2
+SUBSTR r7, r1, r5, r6
+LDI r8, "00"
+EQ r9, r7, r8
+JIF r9, 10032
+LDI r10, "history row version"
+EMIT "Require", r10
+REVERT
+JDEST 10032
+LDI r5, 231
+LDI r6, 64
+SUBSTR r7, r1, r5, r6
+LDI r8, 7
+LDI r9, 64
+SUBSTR r10, r4, r8, r9
+EQ r11, r7, r10
+JIF r11, 10033
+LDI r12, "history row payload hash"
+EMIT "Require", r12
+REVERT
+JDEST 10033
+LDI r5, ""
+CONCAT r5, r5, r2
+LDI r6, 13
+STRLEN r7, r5
+SUB r8, r6, r7
+STRLEN r9, r5
+SUBSTR r10, r1, r8, r9
+EQ r11, r10, r5
+JIF r11, 10034
+LDI r12, "history row index"
+EMIT "Require", r12
+REVERT
+JDEST 10034
+LDI r6, ""
+CONCAT r6, r6, r3
+LDI r7, 26
+STRLEN r8, r6
+SUB r9, r7, r8
+STRLEN r10, r6
+SUBSTR r11, r1, r9, r10
+EQ r12, r11, r6
+JIF r12, 10035
+LDI r13, "history row observed"
+EMIT "Require", r13
+REVERT
+JDEST 10035
+STOP
+JDEST 1300
+MLOAD r1, 1001
+LDI r2, 0
+LT r3, r1, r2
+LDI r4, true
+NEQ r3, r3, r4
+JIF r3, 10036
+LDI r5, "decimal_6 negative"
+EMIT "Require", r5
+REVERT
+JDEST 10036
+LDI r2, 999999
+GT r3, r1, r2
+LDI r4, true
+NEQ r3, r3, r4
+JIF r3, 10037
+LDI r5, "decimal_6 too large"
+EMIT "Require", r5
+REVERT
+JDEST 10037
+LDI r2, ""
+CONCAT r2, r2, r1
+LDI r3, 10
+LT r4, r1, r3
+JIF r4, 10038
+JMP 10039
+JDEST 10038
+LDI r3, "00000"
+CONCAT r4, r3, r2
+MOV r0, r4
+STOP
+JDEST 10039
+LDI r3, 100
+LT r4, r1, r3
+JIF r4, 10040
+JMP 10041
+JDEST 10040
+LDI r3, "0000"
+CONCAT r4, r3, r2
+MOV r0, r4
+STOP
+JDEST 10041
+LDI r3, 1000
+LT r4, r1, r3
+JIF r4, 10042
+JMP 10043
+JDEST 10042
+LDI r3, "000"
+CONCAT r4, r3, r2
+MOV r0, r4
+STOP
+JDEST 10043
+LDI r3, 10000
+LT r4, r1, r3
+JIF r4, 10044
+JMP 10045
+JDEST 10044
+LDI r3, "00"
+CONCAT r4, r3, r2
+MOV r0, r4
+STOP
+JDEST 10045
+LDI r3, 100000
+LT r4, r1, r3
+JIF r4, 10046
+JMP 10047
+JDEST 10046
+LDI r3, "0"
+CONCAT r4, r3, r2
+MOV r0, r4
+STOP
+JDEST 10047
+MOV r0, r2
+STOP
+STOP
+JDEST 1400
+MLOAD r1, 1001
+LDI r2, 0
+LT r3, r1, r2
+LDI r4, true
+NEQ r3, r3, r4
+JIF r3, 10048
+LDI r5, "decimal_4 negative"
+EMIT "Require", r5
+REVERT
+JDEST 10048
+LDI r2, 9999
+GT r3, r1, r2
+LDI r4, true
+NEQ r3, r3, r4
+JIF r3, 10049
+LDI r5, "decimal_4 too large"
+EMIT "Require", r5
+REVERT
+JDEST 10049
+LDI r2, ""
+CONCAT r2, r2, r1
+LDI r3, 10
+LT r4, r1, r3
+JIF r4, 10050
+JMP 10051
+JDEST 10050
+LDI r3, "000"
+CONCAT r4, r3, r2
+MOV r0, r4
+STOP
+JDEST 10051
+LDI r3, 100
+LT r4, r1, r3
+JIF r4, 10052
+JMP 10053
+JDEST 10052
+LDI r3, "00"
+CONCAT r4, r3, r2
+MOV r0, r4
+STOP
+JDEST 10053
+LDI r3, 1000
+LT r4, r1, r3
+JIF r4, 10054
+JMP 10055
+JDEST 10054
+LDI r3, "0"
+CONCAT r4, r3, r2
+MOV r0, r4
+STOP
+JDEST 10055
+MOV r0, r2
+STOP
+STOP
+JDEST 1500
+MLOAD r1, 1001
+MLOAD r2, 1002
+MSTORE 1001, r1
+CALL_INT r3, 1000
+LDI r3, "."
+CONCAT r4, r1, r3
+MSTORE 1001, r2
+CALL_INT r5, 1400
+CONCAT r6, r4, r5
+MOV r0, r6
+STOP
+STOP
+JDEST 1600
+MLOAD r1, 1001
+LDI r2, ""
+EQ r3, r1, r2
+JIF r3, 10056
+LDI r5, "0"
+EQ r6, r1, r5
+MOV r4, r6
+JMP 10057
+JDEST 10056
+LDI r4, true
+JDEST 10057
+MOV r0, r4
+STOP
+STOP
+JDEST 1700
+SLOAD r1, "open_capsule_row_count"
+LDI r2, 0
+ADD r1, r2, r1
+LDI r3, 0
+GT r4, r1, r3
+JIF r4, 10058
+LDI r5, "capsule empty"
+EMIT "Require", r5
+REVERT
+JDEST 10058
+SLOAD r1, "open_capsule_row_count"
+LDI r2, 0
+ADD r1, r2, r1
+LDI r3, 48
+GT r4, r1, r3
+LDI r5, true
+NEQ r4, r4, r5
+JIF r4, 10059
+LDI r6, "capsule overfull"
+EMIT "Require", r6
+REVERT
+JDEST 10059
+SLOAD r1, "open_capsule_id"
+LDI r2, "history_capsule_body_by_id:"
+CONCAT r2, r2, r1
+SLOADK r3, r2
+MSTORE 1001, r3
+CALL_INT r4, 1600
+JIF r4, 10060
+LDI r5, "capsule body already sealed"
+EMIT "Require", r5
+REVERT
+JDEST 10060
+SLOAD r1, "open_capsule_id"
+LDI r2, "history_capsule_meta_by_id:"
+CONCAT r2, r2, r1
+SLOADK r3, r2
+MSTORE 1001, r3
+CALL_INT r4, 1600
+JIF r4, 10061
+LDI r5, "capsule meta already sealed"
+EMIT "Require", r5
+REVERT
+JDEST 10061
+SLOAD r1, "open_capsule_id"
+LDI r2, "history_capsule_root_after_by_id:"
+CONCAT r2, r2, r1
+SLOADK r3, r2
+MSTORE 1001, r3
+CALL_INT r4, 1600
+JIF r4, 10062
+LDI r5, "capsule root already sealed"
+EMIT "Require", r5
+REVERT
+JDEST 10062
+LDI r1, "octra-vitals:capsule-body:v1"
+LDI r2, "
+"
+CONCAT r3, r1, r2
+SLOAD r4, "open_capsule_body"
+CONCAT r5, r3, r4
+SHA256 r6, r5
+MOV r1, r6
+SLOAD r2, "capsules_root"
+SLOAD r3, "open_capsule_row_count"
+LDI r4, 0
+ADD r3, r4, r3
+LDI r5, 1
+SUB r6, r3, r5
+LDI r7, 295
+MUL r8, r6, r7
+MOV r3, r8
+SLOAD r4, "open_capsule_row_count"
+LDI r5, 0
+ADD r4, r5, r4
+MSTORE 1001, r4
+CALL_INT r6, 1300
+MOV r4, r6
+SLOAD r5, "open_capsule_body"
+LDI r6, 3
+LDI r7, 10
+SUBSTR r8, r5, r6, r7
+MOV r5, r8
+SLOAD r6, "open_capsule_body"
+LDI r7, 3
+ADD r8, r3, r7
+LDI r9, 10
+SUBSTR r10, r6, r8, r9
+MOV r6, r10
+SLOAD r7, "open_capsule_body"
+LDI r8, 14
+LDI r9, 12
+SUBSTR r10, r7, r8, r9
+MOV r7, r10
+SLOAD r8, "open_capsule_body"
+LDI r9, 14
+ADD r10, r3, r9
+LDI r11, 12
+SUBSTR r12, r8, r10, r11
+MOV r8, r12
+LDI r9, "00|0000|00|1|"
+SLOAD r10, "open_capsule_id"
+CONCAT r11, r9, r10
+MOV r9, r11
+LDI r10, "|"
+CONCAT r11, r9, r10
+CONCAT r12, r11, r5
+MOV r10, r12
+LDI r11, "|"
+CONCAT r12, r10, r11
+CONCAT r13, r12, r6
+MOV r11, r13
+LDI r12, "|"
+CONCAT r13, r11, r12
+CONCAT r14, r13, r4
+MOV r12, r14
+LDI r13, "|0295|"
+CONCAT r14, r12, r13
+CONCAT r15, r14, r7
+MOV r13, r15
+LDI r14, "|"
+CONCAT r15, r13, r14
+CONCAT r16, r15, r8
+MOV r14, r16
+LDI r15, "|"
+CONCAT r16, r14, r15
+CONCAT r17, r16, r1
+MOV r15, r17
+LDI r16, "|"
+CONCAT r17, r15, r16
+SLOAD r18, "open_capsule_start_root"
+CONCAT r19, r17, r18
+MOV r16, r19
+LDI r17, "|"
+CONCAT r18, r16, r17
+SLOAD r19, "open_capsule_end_root"
+CONCAT r20, r18, r19
+MOV r17, r20
+LDI r18, "|"
+CONCAT r19, r17, r18
+LDI r20, "0000000000000000000000000000000000000000000000000000000000000000"
+CONCAT r21, r19, r20
+MOV r18, r21
+LDI r19, "|"
+CONCAT r20, r18, r19
+CONCAT r21, r20, r2
+MOV r19, r21
+STRLEN r20, r19
+LDI r21, 416
+EQ r22, r20, r21
+JIF r22, 10063
+LDI r23, "capsule meta length"
+EMIT "Require", r23
+REVERT
+JDEST 10063
+LDI r20, "octra-vitals:capsule-meta:v1"
+LDI r21, "
+"
+CONCAT r22, r20, r21
+CONCAT r23, r22, r19
+SHA256 r24, r23
+MOV r20, r24
+LDI r21, "octra-vitals:capsules-root:v1"
+LDI r22, "
+"
+CONCAT r23, r21, r22
+CONCAT r24, r23, r2
+MOV r21, r24
+LDI r22, "
+"
+CONCAT r23, r21, r22
+SLOAD r24, "open_capsule_id"
+CONCAT r25, r23, r24
+MOV r22, r25
+LDI r23, "
+"
+CONCAT r24, r22, r23
+CONCAT r25, r24, r1
+MOV r23, r25
+LDI r24, "
+"
+CONCAT r25, r23, r24
+CONCAT r26, r25, r20
+MOV r24, r26
+LDI r25, "
+"
+CONCAT r26, r24, r25
+SLOAD r27, "open_capsule_end_root"
+CONCAT r28, r26, r27
+MOV r25, r28
+SHA256 r26, r25
+SLOAD r27, "open_capsule_id"
+LDI r28, "history_capsule_body_by_id:"
+CONCAT r28, r28, r27
+SLOAD r29, "open_capsule_body"
+SSTOREK r28, r29
+SLOAD r27, "open_capsule_id"
+LDI r28, "history_capsule_meta_by_id:"
+CONCAT r28, r28, r27
+SSTOREK r28, r19
+SLOAD r27, "open_capsule_id"
+LDI r28, "history_capsule_root_after_by_id:"
+CONCAT r28, r28, r27
+SSTOREK r28, r26
+SLOAD r27, "capsule_count"
+LDI r28, 0
+ADD r27, r28, r27
+LDI r29, 1
+ADD r30, r27, r29
+SSTORE "capsule_count", r30
+SSTORE "capsules_root", r26
+SLOAD r27, "open_capsule_id"
+SSTORE "latest_capsule_id", r27
+SSTORE "latest_capsule_body_hash", r1
+SSTORE "latest_capsule_meta_hash", r20
+SSTORE "latest_capsule_root_after", r26
+SLOAD r27, "open_capsule_id"
+SLOAD r28, "open_capsule_row_count"
+LDI r29, 0
+ADD r28, r29, r28
+EMIT "CapsuleSealed", r27, r28, r1, r20, r26
+SLOAD r27, "open_capsule_segment"
+LDI r28, 0
+ADD r27, r28, r27
+LDI r29, 9999
+LT r30, r27, r29
+JIF r30, 10064
+LDI r31, "capsule segment overfull"
+EMIT "Require", r31
+REVERT
+JDEST 10064
+SLOAD r27, "open_capsule_segment"
+LDI r28, 0
+ADD r27, r28, r27
+LDI r29, 1
+ADD r30, r27, r29
+SSTORE "open_capsule_segment", r30
+LDI r27, ""
+SSTORE "open_capsule_id", r27
+LDI r27, ""
+SSTORE "open_capsule_body", r27
+LDI r27, 0
+SSTORE "open_capsule_row_count", r27
+LDI r27, 0
+SSTORE "open_capsule_first_index", r27
+SLOAD r27, "open_capsule_end_root"
+SSTORE "open_capsule_start_root", r27
+STOP
+JDEST 1800
+LDI r1, "vitals-circle-state.v1"
+MOV r0, r1
+STOP
+STOP
+JDEST 1900
+SLOAD r1, "initialized"
+LDI r2, "true"
+EQ r1, r1, r2
+MOV r0, r1
+STOP
+STOP
+JDEST 2000
+SLOAD r1, "owner"
+MOV r0, r1
+STOP
+STOP
+JDEST 2100
+SLOAD r1, "operator"
+MOV r0, r1
+STOP
+STOP
+JDEST 2200
+SLOAD r1, "paused"
+LDI r2, "true"
+EQ r1, r1, r2
+MOV r0, r1
+STOP
+STOP
+JDEST 2300
+SLOAD r1, "successor_program"
+MOV r0, r1
+STOP
+STOP
+JDEST 2400
+SLOAD r1, "successor_set"
+LDI r2, "true"
+EQ r1, r1, r2
+MOV r0, r1
+STOP
+STOP
+JDEST 2500
+SLOAD r1, "predecessor_program"
+MOV r0, r1
+STOP
+STOP
+JDEST 2600
+SLOAD r1, "predecessor_set"
+LDI r2, "true"
+EQ r1, r1, r2
+MOV r0, r1
+STOP
+STOP
+JDEST 2700
+SLOAD r1, "snapshot_count"
+LDI r2, 0
+ADD r1, r2, r1
+MOV r0, r1
+STOP
+STOP
+JDEST 2800
+SLOAD r1, "latest_snapshot_index"
+LDI r2, 0
+ADD r1, r2, r1
+MOV r0, r1
+STOP
+STOP
+JDEST 2900
+SLOAD r1, "latest_snapshot_id"
+MOV r0, r1
+STOP
+STOP
+JDEST 3000
+SLOAD r1, "latest_observed_at"
+MOV r0, r1
+STOP
+STOP
+JDEST 3100
+SLOAD r1, "latest_epoch"
+LDI r2, 0
+ADD r1, r2, r1
+MOV r0, r1
+STOP
+STOP
+JDEST 3200
+SLOAD r1, "latest_payload_hash"
+MOV r0, r1
+STOP
+STOP
+JDEST 3300
+SLOAD r1, "latest_evidence_manifest_hash"
+MOV r0, r1
+STOP
+STOP
+JDEST 3400
+SLOAD r1, "latest_source_refs_hash"
+MOV r0, r1
+STOP
+STOP
+JDEST 3500
+SLOAD r1, "latest_summary_hash"
+MOV r0, r1
+STOP
+STOP
+JDEST 3600
+SLOAD r1, "latest_history_row_hash"
+MOV r0, r1
+STOP
+STOP
+JDEST 3700
+SLOAD r1, "latest_payload"
+MOV r0, r1
+STOP
+STOP
+JDEST 3800
+SLOAD r1, "latest_evidence_manifest"
+MOV r0, r1
+STOP
+STOP
+JDEST 3900
+SLOAD r1, "latest_source_refs"
+MOV r0, r1
+STOP
+STOP
+JDEST 4000
+SLOAD r1, "latest_summary"
+MOV r0, r1
+STOP
+STOP
+JDEST 4100
+SLOAD r1, "latest_history_row"
+MOV r0, r1
+STOP
+STOP
+JDEST 4200
+SLOAD r1, "latest_submitter"
+MOV r0, r1
+STOP
+STOP
+JDEST 4300
+LDI r1, 208
+MOV r0, r1
+STOP
+STOP
+JDEST 4400
+LDI r1, 295
+MOV r0, r1
+STOP
+STOP
+JDEST 4500
+LDI r1, 416
+MOV r0, r1
+STOP
+STOP
+JDEST 4600
+LDI r1, 48
+MOV r0, r1
+STOP
+STOP
+JDEST 4700
+SLOAD r1, "history_root"
+MOV r0, r1
+STOP
+STOP
+JDEST 4800
+SLOAD r1, "capsules_root"
+MOV r0, r1
+STOP
+STOP
+JDEST 4900
+SLOAD r1, "capsule_count"
+LDI r2, 0
+ADD r1, r2, r1
+MOV r0, r1
+STOP
+STOP
+JDEST 5000
+SLOAD r1, "open_capsule_base_id"
+MOV r0, r1
+STOP
+STOP
+JDEST 5100
+SLOAD r1, "open_capsule_segment"
+LDI r2, 0
+ADD r1, r2, r1
+MOV r0, r1
+STOP
+STOP
+JDEST 5200
+SLOAD r1, "open_capsule_id"
+MOV r0, r1
+STOP
+STOP
+JDEST 5300
+SLOAD r1, "open_capsule_body"
+MOV r0, r1
+STOP
+STOP
+JDEST 5400
+SLOAD r1, "open_capsule_row_count"
+LDI r2, 0
+ADD r1, r2, r1
+MOV r0, r1
+STOP
+STOP
+JDEST 5500
+SLOAD r1, "open_capsule_end_root"
+MOV r0, r1
+STOP
+STOP
+JDEST 5600
+SLOAD r1, "latest_capsule_id"
+MOV r0, r1
+STOP
+STOP
+JDEST 5700
+SLOAD r1, "latest_capsule_body_hash"
+MOV r0, r1
+STOP
+STOP
+JDEST 5800
+SLOAD r1, "latest_capsule_meta_hash"
+MOV r0, r1
+STOP
+STOP
+JDEST 5900
+SLOAD r1, "latest_capsule_root_after"
+MOV r0, r1
+STOP
+STOP
+JDEST 6000
+MLOAD r1, 1001
+LDI r2, "history_capsule_body_by_id:"
+CONCAT r2, r2, r1
+SLOADK r3, r2
+MOV r0, r3
+STOP
+STOP
+JDEST 6100
+MLOAD r1, 1001
+LDI r2, "history_capsule_meta_by_id:"
+CONCAT r2, r2, r1
+SLOADK r3, r2
+MOV r0, r3
+STOP
+STOP
+JDEST 6200
+MLOAD r1, 1001
+LDI r2, "history_capsule_root_after_by_id:"
+CONCAT r2, r2, r1
+SLOADK r3, r2
+MOV r0, r3
+STOP
+STOP
+JDEST 6300
+SLOAD r1, "latest_snapshot_index"
+LDI r2, 0
+ADD r1, r2, r1
+LDI r3, ""
+CONCAT r3, r3, r1
+LDI r4, "|"
+CONCAT r5, r3, r4
+SLOAD r6, "latest_snapshot_id"
+CONCAT r7, r5, r6
+LDI r8, "|"
+CONCAT r9, r7, r8
+SLOAD r10, "latest_payload_hash"
+CONCAT r11, r9, r10
+LDI r12, "|"
+CONCAT r13, r11, r12
+SLOAD r14, "latest_history_row_hash"
+CONCAT r15, r13, r14
+LDI r16, "|"
+CONCAT r17, r15, r16
+SLOAD r18, "history_root"
+CONCAT r19, r17, r18
+LDI r20, "|"
+CONCAT r21, r19, r20
+SLOAD r22, "capsules_root"
+CONCAT r23, r21, r22
+MOV r0, r23
+STOP
+STOP
+JDEST 6400
+MLOAD r1, 1001
+MLOAD r2, 1002
+SLOAD r3, "initialized"
+LDI r4, "true"
+EQ r3, r3, r4
+LDI r5, true
+NEQ r5, r3, r5
+JIF r5, 10065
+LDI r6, "already initialized"
+EMIT "Require", r6
+REVERT
+JDEST 10065
+ASSERT_ADDR r1
+LDI r3, true
+ASSERT_ADDR r2
+LDI r3, true
+LDI r3, true
+JIF r3, 10066
+LDI r4, "false"
+JMP 10067
+JDEST 10066
+LDI r4, "true"
+JDEST 10067
+SSTORE "initialized", r4
+CALLER r3
+SSTORE "owner", r3
+SSTORE "operator", r1
+CALLER r3
+SSTORE "successor_program", r3
+LDI r3, false
+JIF r3, 10068
+LDI r4, "false"
+JMP 10069
+JDEST 10068
+LDI r4, "true"
+JDEST 10069
+SSTORE "successor_set", r4
+SSTORE "predecessor_program", r2
+LDI r3, true
+JIF r3, 10070
+LDI r4, "false"
+JMP 10071
+JDEST 10070
+LDI r4, "true"
+JDEST 10071
+SSTORE "predecessor_set", r4
+LDI r3, false
+JIF r3, 10072
+LDI r4, "false"
+JMP 10073
+JDEST 10072
+LDI r4, "true"
+JDEST 10073
+SSTORE "paused", r4
+LDI r3, 0
+SSTORE "snapshot_count", r3
+LDI r3, 0
+SSTORE "latest_snapshot_index", r3
+LDI r3, ""
+SSTORE "latest_snapshot_id", r3
+LDI r3, ""
+SSTORE "latest_observed_at", r3
+LDI r3, 0
+SSTORE "latest_epoch", r3
+LDI r3, ""
+SSTORE "latest_payload_hash", r3
+LDI r3, ""
+SSTORE "latest_evidence_manifest_hash", r3
+LDI r3, ""
+SSTORE "latest_source_refs_hash", r3
+LDI r3, ""
+SSTORE "latest_summary_hash", r3
+LDI r3, ""
+SSTORE "latest_history_row_hash", r3
+LDI r3, ""
+SSTORE "latest_payload", r3
+LDI r3, ""
+SSTORE "latest_evidence_manifest", r3
+LDI r3, ""
+SSTORE "latest_source_refs", r3
+LDI r3, ""
+SSTORE "latest_summary", r3
+LDI r3, ""
+SSTORE "latest_history_row", r3
+CALLER r3
+SSTORE "latest_submitter", r3
+LDI r3, "octra-vitals:history-root:v1"
+LDI r4, "
+"
+CONCAT r5, r3, r4
+SHA256 r6, r5
+SSTORE "history_root", r6
+LDI r3, "octra-vitals:capsules-root:v1"
+LDI r4, "
+"
+CONCAT r5, r3, r4
+SHA256 r6, r5
+SSTORE "capsules_root", r6
+LDI r3, 0
+SSTORE "capsule_count", r3
+LDI r3, ""
+SSTORE "open_capsule_base_id", r3
+LDI r3, 0
+SSTORE "open_capsule_segment", r3
+LDI r3, ""
+SSTORE "open_capsule_id", r3
+LDI r3, ""
+SSTORE "open_capsule_body", r3
+LDI r3, 0
+SSTORE "open_capsule_row_count", r3
+LDI r3, 0
+SSTORE "open_capsule_first_index", r3
+SLOAD r3, "history_root"
+SSTORE "open_capsule_start_root", r3
+SLOAD r3, "history_root"
+SSTORE "open_capsule_end_root", r3
+LDI r3, ""
+SSTORE "latest_capsule_id", r3
+LDI r3, ""
+SSTORE "latest_capsule_body_hash", r3
+LDI r3, ""
+SSTORE "latest_capsule_meta_hash", r3
+LDI r3, ""
+SSTORE "latest_capsule_root_after", r3
+EMIT "Initialized", r1
+EMIT "PredecessorProgramSet", r2
+LDI r3, true
+MOV r0, r3
+STOP
+STOP
+JDEST 6500
+MLOAD r1, 1001
+CALL_INT r2, 300
+ASSERT_ADDR r1
+LDI r2, true
+SSTORE "operator", r1
+EMIT "OperatorUpdated", r1
+LDI r2, true
+MOV r0, r2
+STOP
+STOP
+JDEST 6600
+MLOAD r1, 1001
+CALL_INT r2, 300
+JIF r1, 10074
+LDI r2, "false"
+JMP 10075
+JDEST 10074
+LDI r2, "true"
+JDEST 10075
+SSTORE "paused", r2
+EMIT "Paused", r1
+LDI r2, true
+MOV r0, r2
+STOP
+STOP
+JDEST 6700
+MLOAD r1, 1001
+CALL_INT r2, 300
+ASSERT_ADDR r1
+LDI r2, true
+SLOAD r2, "successor_set"
+LDI r3, "true"
+EQ r2, r2, r3
+LDI r4, true
+NEQ r4, r2, r4
+JIF r4, 10076
+LDI r5, "successor already set"
+EMIT "Require", r5
+REVERT
+JDEST 10076
+SSTORE "successor_program", r1
+LDI r2, true
+JIF r2, 10077
+LDI r3, "false"
+JMP 10078
+JDEST 10077
+LDI r3, "true"
+JDEST 10078
+SSTORE "successor_set", r3
+EMIT "SuccessorProgramSet", r1
+LDI r2, true
+MOV r0, r2
+STOP
+STOP
+JDEST 6800
+MLOAD r1, 1001
+MLOAD r2, 1002
+MLOAD r3, 1003
+MLOAD r4, 1004
+MLOAD r5, 1005
+MLOAD r6, 1006
+MLOAD r7, 1007
+MLOAD r8, 1008
+MLOAD r9, 1009
+MLOAD r10, 1010
+MLOAD r11, 1011
+MLOAD r12, 1012
+MLOAD r13, 1013
+MLOAD r14, 1014
+MLOAD r15, 1015
+MLOAD r16, 1016
+MLOAD r17, 1017
+CALL_INT r18, 400
+SLOAD r18, "paused"
+LDI r19, "true"
+EQ r18, r18, r19
+LDI r20, true
+NEQ r20, r18, r20
+JIF r20, 10079
+LDI r21, "paused"
+EMIT "Require", r21
+REVERT
+JDEST 10079
+MSTORE 1001, r1
+CALL_INT r18, 800
+MSTORE 1001, r2
+CALL_INT r18, 900
+LDI r18, "vitals."
+CONCAT r19, r18, r2
+EQ r20, r1, r19
+JIF r20, 10080
+LDI r21, "snapshot id must match observed_at"
+EMIT "Require", r21
+REVERT
+JDEST 10080
+LDI r18, 0
+GT r19, r3, r18
+JIF r19, 10081
+LDI r20, "observed_at_unix"
+EMIT "Require", r20
+REVERT
+JDEST 10081
+LDI r18, "octra-vitals-snapshot-v0"
+EQ r19, r6, r18
+JIF r19, 10082
+LDI r20, "payload schema"
+EMIT "Require", r20
+REVERT
+JDEST 10082
+LDI r18, "octra-vitals-summary-row-v0"
+EQ r19, r7, r18
+JIF r19, 10083
+LDI r20, "summary schema"
+EMIT "Require", r20
+REVERT
+JDEST 10083
+LDI r18, "octra-vitals-history-row-v1"
+EQ r19, r8, r18
+JIF r19, 10084
+LDI r20, "history schema"
+EMIT "Require", r20
+REVERT
+JDEST 10084
+SLOAD r18, "snapshot_count"
+LDI r19, 0
+ADD r18, r19, r18
+LDI r20, 1
+ADD r21, r18, r20
+EQ r22, r5, r21
+JIF r22, 10085
+LDI r23, "snapshot index"
+EMIT "Require", r23
+REVERT
+JDEST 10085
+SLOAD r18, "latest_epoch"
+LDI r19, 0
+ADD r18, r19, r18
+GT r20, r4, r18
+JIF r20, 10086
+SLOAD r22, "latest_epoch"
+LDI r23, 0
+ADD r22, r23, r22
+EQ r24, r4, r22
+LDI r25, true
+NEQ r25, r24, r25
+JIF r25, 10088
+SLOAD r26, "latest_observed_at"
+GT r27, r2, r26
+MOV r25, r27
+JMP 10089
+JDEST 10088
+LDI r25, false
+JDEST 10089
+MOV r21, r25
+JMP 10087
+JDEST 10086
+LDI r21, true
+JDEST 10087
+JIF r21, 10090
+LDI r28, "snapshot moved backward"
+EMIT "Require", r28
+REVERT
+JDEST 10090
+MSTORE 1001, r9
+CALL_INT r18, 500
+MSTORE 1001, r10
+CALL_INT r18, 500
+MSTORE 1001, r11
+CALL_INT r18, 500
+MSTORE 1001, r12
+CALL_INT r18, 500
+STRLEN r18, r13
+LDI r19, 0
+GT r20, r18, r19
+JIF r20, 10091
+LDI r21, "payload required"
+EMIT "Require", r21
+REVERT
+JDEST 10091
+STRLEN r18, r14
+LDI r19, 0
+GT r20, r18, r19
+JIF r20, 10092
+LDI r21, "evidence required"
+EMIT "Require", r21
+REVERT
+JDEST 10092
+STRLEN r18, r15
+LDI r19, 0
+GT r20, r18, r19
+JIF r20, 10093
+LDI r21, "source refs required"
+EMIT "Require", r21
+REVERT
+JDEST 10093
+STRLEN r18, r16
+LDI r19, 208
+EQ r20, r18, r19
+JIF r20, 10094
+LDI r21, "summary row length"
+EMIT "Require", r21
+REVERT
+JDEST 10094
+STRLEN r18, r13
+LDI r19, 12000
+GT r20, r18, r19
+LDI r21, true
+NEQ r20, r20, r21
+JIF r20, 10095
+LDI r22, "payload too large"
+EMIT "Require", r22
+REVERT
+JDEST 10095
+STRLEN r18, r14
+LDI r19, 8000
+GT r20, r18, r19
+LDI r21, true
+NEQ r20, r20, r21
+JIF r20, 10096
+LDI r22, "evidence too large"
+EMIT "Require", r22
+REVERT
+JDEST 10096
+STRLEN r18, r15
+LDI r19, 4096
+GT r20, r18, r19
+LDI r21, true
+NEQ r20, r20, r21
+JIF r20, 10097
+LDI r22, "source refs too large"
+EMIT "Require", r22
+REVERT
+JDEST 10097
+LDI r18, "sha256:"
+LDI r19, "octra-vitals:snapshot:v0"
+LDI r20, "
+"
+CONCAT r21, r19, r20
+CONCAT r22, r21, r13
+SHA256 r23, r22
+CONCAT r24, r18, r23
+EQ r25, r24, r9
+JIF r25, 10098
+LDI r26, "payload hash mismatch"
+EMIT "Require", r26
+REVERT
+JDEST 10098
+LDI r18, "sha256:"
+LDI r19, "octra-vitals:evidence:v0"
+LDI r20, "
+"
+CONCAT r21, r19, r20
+CONCAT r22, r21, r14
+SHA256 r23, r22
+CONCAT r24, r18, r23
+EQ r25, r24, r10
+JIF r25, 10099
+LDI r26, "evidence hash mismatch"
+EMIT "Require", r26
+REVERT
+JDEST 10099
+LDI r18, "sha256:"
+LDI r19, "octra-vitals:source-refs:v0"
+LDI r20, "
+"
+CONCAT r21, r19, r20
+CONCAT r22, r21, r15
+SHA256 r23, r22
+CONCAT r24, r18, r23
+EQ r25, r24, r11
+JIF r25, 10100
+LDI r26, "source refs mismatch"
+EMIT "Require", r26
+REVERT
+JDEST 10100
+LDI r18, "sha256:"
+LDI r19, "octra-vitals:summary:v0"
+LDI r20, "
+"
+CONCAT r21, r19, r20
+CONCAT r22, r21, r16
+SHA256 r23, r22
+CONCAT r24, r18, r23
+EQ r25, r24, r12
+JIF r25, 10101
+LDI r26, "summary hash mismatch"
+EMIT "Require", r26
+REVERT
+JDEST 10101
+MSTORE 1001, r17
+MSTORE 1002, r5
+MSTORE 1003, r3
+MSTORE 1004, r9
+CALL_INT r18, 1200
+LDI r18, 0
+LDI r19, 10
+SUBSTR r20, r2, r18, r19
+MOV r18, r20
+LDI r19, 11
+LDI r20, 2
+SUBSTR r21, r2, r19, r20
+MOV r19, r21
+LDI r20, "00"
+LDI r21, "12"
+LT r22, r19, r21
+LDI r23, true
+NEQ r22, r22, r23
+JIF r22, 10102
+JMP 10103
+JDEST 10102
+LDI r21, "12"
+MOV r20, r21
+JDEST 10103
+LDI r21, "T"
+CONCAT r22, r18, r21
+CONCAT r23, r22, r20
+MOV r21, r23
+MSTORE 1001, r21
+CALL_INT r22, 1000
+SLOAD r22, "open_capsule_row_count"
+LDI r23, 0
+ADD r22, r23, r22
+LDI r24, 0
+GT r25, r22, r24
+LDI r26, true
+NEQ r26, r25, r26
+JIF r26, 10104
+SLOAD r27, "open_capsule_base_id"
+NEQ r28, r27, r21
+MOV r26, r28
+JMP 10105
+JDEST 10104
+LDI r26, false
+JDEST 10105
+JIF r26, 10106
+JMP 10107
+JDEST 10106
+CALL_INT r22, 1700
+JDEST 10107
+SLOAD r22, "open_capsule_row_count"
+LDI r23, 0
+ADD r22, r23, r22
+LDI r24, 0
+EQ r25, r22, r24
+JIF r25, 10108
+JMP 10109
+JDEST 10108
+SLOAD r22, "open_capsule_base_id"
+NEQ r23, r22, r21
+JIF r23, 10110
+JMP 10111
+JDEST 10110
+SSTORE "open_capsule_base_id", r21
+LDI r22, 0
+SSTORE "open_capsule_segment", r22
+JDEST 10111
+SLOAD r22, "open_capsule_segment"
+LDI r23, 0
+ADD r22, r23, r22
+MSTORE 1001, r21
+MSTORE 1002, r22
+CALL_INT r24, 1500
+SSTORE "open_capsule_id", r24
+SSTORE "open_capsule_first_index", r5
+SLOAD r22, "open_capsule_end_root"
+SSTORE "open_capsule_start_root", r22
+JDEST 10109
+SLOAD r22, "open_capsule_id"
+LDI r23, "octra-vitals:history-row:v1"
+LDI r24, "
+"
+CONCAT r25, r23, r24
+CONCAT r26, r25, r17
+SHA256 r27, r26
+MOV r23, r27
+LDI r24, "octra-vitals:history-root:v1"
+LDI r25, "
+"
+CONCAT r26, r24, r25
+SLOAD r27, "open_capsule_end_root"
+CONCAT r28, r26, r27
+LDI r29, "
+"
+CONCAT r30, r28, r29
+CONCAT r31, r30, r23
+SHA256 r32, r31
+MOV r24, r32
+SLOAD r25, "open_capsule_body"
+CONCAT r26, r25, r17
+SSTORE "open_capsule_body", r26
+SLOAD r25, "open_capsule_row_count"
+LDI r26, 0
+ADD r25, r26, r25
+LDI r27, 1
+ADD r28, r25, r27
+SSTORE "open_capsule_row_count", r28
+SSTORE "open_capsule_end_root", r24
+SSTORE "history_root", r24
+SSTORE "snapshot_count", r5
+SSTORE "latest_snapshot_index", r5
+SSTORE "latest_snapshot_id", r1
+SSTORE "latest_observed_at", r2
+SSTORE "latest_epoch", r4
+SSTORE "latest_payload_hash", r9
+SSTORE "latest_evidence_manifest_hash", r10
+SSTORE "latest_source_refs_hash", r11
+SSTORE "latest_summary_hash", r12
+SSTORE "latest_history_row_hash", r23
+SSTORE "latest_payload", r13
+SSTORE "latest_evidence_manifest", r14
+SSTORE "latest_source_refs", r15
+SSTORE "latest_summary", r16
+SSTORE "latest_history_row", r17
+CALLER r25
+SSTORE "latest_submitter", r25
+SLOAD r25, "open_capsule_row_count"
+LDI r26, 0
+ADD r25, r26, r25
+LDI r27, 48
+EQ r28, r25, r27
+JIF r28, 10112
+JMP 10113
+JDEST 10112
+CALL_INT r25, 1700
+JDEST 10113
+CALLER r25
+EMIT "SnapshotRecorded", r1, r5, r4, r9, r23, r2, r22, r25
+LDI r25, true
+MOV r0, r25
+STOP
+STOP

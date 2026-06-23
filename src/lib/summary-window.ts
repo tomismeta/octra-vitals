@@ -33,6 +33,7 @@ export interface ProgramHistoryWindow {
   window: string;
   window_hash: string;
   rows: SummaryRow[];
+  history_discovery?: string;
 }
 
 function digits(value: string | number | bigint, width: number, label: string): string {

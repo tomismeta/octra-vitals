@@ -59,7 +59,7 @@ interface ProgressCapsule {
 
 interface ProgressFile {
   schema: "octra-vitals-history-body-map-progress-v1";
-  status: "initialized" | "running" | "completed" | "failed";
+  status: "initialized" | "running" | "partial" | "completed" | "failed";
   generated_at: string;
   updated_at: string;
   rpc_url: string;
@@ -262,6 +262,16 @@ function configuredTargetCapsuleCount(): number {
 function configuredRowLimit(): number {
   const value = Number(process.env.VITALS_HISTORY_BODY_MAP_PROBE_ROW_LIMIT || "48");
   if (![12, 24, 48, 96].includes(value)) throw new Error("VITALS_HISTORY_BODY_MAP_PROBE_ROW_LIMIT must be one of 12,24,48,96");
+  return value;
+}
+
+function configuredRowsPerRun(): number {
+  const configured = process.env.VITALS_HISTORY_BODY_MAP_PROBE_ROWS_PER_RUN;
+  if (!configured) return Number.POSITIVE_INFINITY;
+  const value = Number(configured);
+  if (!Number.isInteger(value) || value <= 0 || value > 96) {
+    throw new Error("VITALS_HISTORY_BODY_MAP_PROBE_ROWS_PER_RUN must be a positive integer no greater than 96");
+  }
   return value;
 }
 
@@ -553,7 +563,7 @@ async function createFreshProgress(
 
 async function run(): Promise<void> {
   const rpcUrl = octraProgramRpcUrl();
-  if (!/devnet/i.test(rpcUrl) && process.env.VITALS_HISTORY_BODY_MAP_PROBE_ALLOW_NON_DEVNET !== "1") {
+  if (!/devnet/i.test(rpcUrl)) {
     throw new Error(`refusing to run history body-map probe against non-devnet RPC: ${rpcUrl}`);
   }
   const artifact = JSON.parse(await readFile(compilePath, "utf8")) as CompileArtifact;
@@ -565,6 +575,7 @@ async function run(): Promise<void> {
   }
   const targetCapsules = configuredTargetCapsuleCount();
   const rowLimit = configuredRowLimit();
+  const rowsPerRun = configuredRowsPerRun();
   const outputPath = reportPath();
   const progressFilePath = progressPath(outputPath);
 
@@ -576,6 +587,7 @@ async function run(): Promise<void> {
       rpc_url: rpcUrl,
       target_capsules: targetCapsules,
       row_limit: rowLimit,
+      rows_per_run: Number.isFinite(rowsPerRun) ? rowsPerRun : null,
       rows_total: targetCapsules * rowLimit,
       body_bytes_per_capsule: rowLimit * 295,
       source_hash: artifact.source_hash,
@@ -596,11 +608,11 @@ async function run(): Promise<void> {
   if (!submitAck) throw new Error("set VITALS_HISTORY_BODY_MAP_PROBE_ACK=1 to acknowledge devnet body-map probe submission");
 
   const wallet = loadWalletFromEnv({
-    privateKeyEnv: ["VITALS_DEPLOYER_PRIVATE_KEY_B64", "VITALS_OPERATOR_PRIVATE_KEY_B64", "OCTRA_PRIVATE_KEY_B64"],
-    addressEnv: ["VITALS_DEPLOYER_ADDRESS", "VITALS_OPERATOR_ADDRESS"],
+    privateKeyEnv: ["VITALS_HISTORY_PROBE_PRIVATE_KEY_B64"],
+    addressEnv: ["VITALS_HISTORY_PROBE_ADDRESS"],
     label: "history body-map probe wallet"
   });
-  if (!wallet) throw new Error("history body-map probe requires VITALS_DEPLOYER_PRIVATE_KEY_B64 or VITALS_OPERATOR_PRIVATE_KEY_B64");
+  if (!wallet) throw new Error("history body-map probe requires VITALS_HISTORY_PROBE_PRIVATE_KEY_B64");
 
   let progress: ProgressFile;
   if (await pathExists(progressFilePath)) {
@@ -623,6 +635,7 @@ async function run(): Promise<void> {
   await validateProgramState(progress);
   const callOu = process.env.VITALS_HISTORY_BODY_MAP_PROBE_CALL_OU || await recommendedOu("call", "1000");
   let nonce = await nextNonce(wallet.address);
+  let rowsAppendedThisRun = 0;
 
   while (progress.capsules.filter((capsule) => capsule.status === "sealed").length < progress.target_capsules) {
     let capsule = progress.capsules.find((candidate) => candidate.status === "open") || null;
@@ -654,10 +667,53 @@ async function run(): Promise<void> {
     }
 
     while (capsule.append_tx_hashes.length < capsule.row_count) {
+      if (rowsAppendedThisRun >= rowsPerRun) {
+        progress.status = "partial";
+        progress.error = null;
+        await saveProgress(progressFilePath, progress);
+        const readback = await readContractViews(progress.rpc_url, progress.program_address, progress.capsules, progress.running_capsules_root);
+        const report = {
+          schema: "octra-vitals-history-body-map-resumable-run-v1",
+          status: "partial",
+          generated_at: isoStamp(),
+          rpc_url: progress.rpc_url,
+          wallet_address: progress.wallet_address,
+          program_address: progress.program_address,
+          target_capsules: progress.target_capsules,
+          row_limit: progress.row_limit,
+          rows_per_run: Number.isFinite(rowsPerRun) ? rowsPerRun : null,
+          rows_appended_this_run: rowsAppendedThisRun,
+          rows_total_target: progress.target_capsules * progress.row_limit,
+          rows_recorded: progress.next_index - 1,
+          source_hash: progress.source_hash,
+          bytecode_hash: progress.bytecode_hash,
+          verification_hash: progress.verification_hash,
+          progress_path: progressFilePath,
+          deploy: progress.deploy,
+          initialize: progress.initialize,
+          stored_capsules: progress.capsules.map(publicCapsuleReport),
+          readback
+        };
+        await writeJson(outputPath, report);
+        console.log(stableJson({
+          status: "partial",
+          rpc_url: progress.rpc_url,
+          program_address: progress.program_address,
+          target_capsules: progress.target_capsules,
+          row_limit: progress.row_limit,
+          rows_appended_this_run: rowsAppendedThisRun,
+          rows_recorded: progress.next_index - 1,
+          report_path: outputPath,
+          progress_path: progressFilePath,
+          capsules_root: progress.running_capsules_root
+        }));
+        return;
+      }
       const rowIndex = capsule.first_index + capsule.append_tx_hashes.length;
       const row = syntheticProbeRow(rowIndex);
       const append = await submitCall(wallet, progress.program_address, "append_probe_row", [capsule.capsule_id, row.snapshot_index, encodeHistoryRow(row)], nonce, callOu);
       nonce += 1;
+      rowsAppendedThisRun += 1;
       capsule.append_calls.push(append);
       capsule.append_tx_hashes.push(append.tx_hash);
       progress.next_index = rowIndex + 1;
@@ -684,22 +740,27 @@ async function run(): Promise<void> {
     capsule.capsules_root_after_seal = progress.running_capsules_root;
     await saveProgress(progressFilePath, progress);
     await validateProgramState(progress);
+    if (rowsAppendedThisRun >= rowsPerRun) break;
   }
 
   const readback = await readContractViews(progress.rpc_url, progress.program_address, progress.capsules, progress.running_capsules_root);
-  progress.status = "completed";
+  const completed = progress.capsules.filter((capsule) => capsule.status === "sealed").length >= progress.target_capsules;
+  progress.status = completed ? "completed" : "partial";
   progress.error = null;
   await saveProgress(progressFilePath, progress);
   const report = {
     schema: "octra-vitals-history-body-map-resumable-run-v1",
-    status: "submitted",
+    status: completed ? "submitted" : "partial",
     generated_at: isoStamp(),
     rpc_url: progress.rpc_url,
     wallet_address: progress.wallet_address,
     program_address: progress.program_address,
     target_capsules: progress.target_capsules,
     row_limit: progress.row_limit,
-    rows_total: progress.target_capsules * progress.row_limit,
+    rows_per_run: Number.isFinite(rowsPerRun) ? rowsPerRun : null,
+    rows_appended_this_run: rowsAppendedThisRun,
+    rows_total_target: progress.target_capsules * progress.row_limit,
+    rows_recorded: progress.next_index - 1,
     source_hash: progress.source_hash,
     bytecode_hash: progress.bytecode_hash,
     verification_hash: progress.verification_hash,
@@ -711,11 +772,13 @@ async function run(): Promise<void> {
   };
   await writeJson(outputPath, report);
   console.log(stableJson({
-    status: "submitted",
+    status: completed ? "submitted" : "partial",
     rpc_url: progress.rpc_url,
     program_address: progress.program_address,
     target_capsules: progress.target_capsules,
     row_limit: progress.row_limit,
+    rows_appended_this_run: rowsAppendedThisRun,
+    rows_recorded: progress.next_index - 1,
     report_path: outputPath,
     progress_path: progressFilePath,
     capsules_root: progress.running_capsules_root

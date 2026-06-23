@@ -29,9 +29,26 @@ reports/aml-history-devnet-map-calendar-3.json
 reports/aml-history-devnet-body-map-2x48.json
 reports/aml-history-devnet-body-map-4x48.json
 reports/aml-history-devnet-body-map-4x48.progress.json
+reports/aml-history-devnet-body-map-cadence.json
+reports/aml-history-devnet-body-map-circle-12-existing.json
+reports/aml-history-devnet-body-map-circle-48.json
+reports/aml-history-devnet-body-map-circle-cadence-2caps.json
+reports/aml-history-devnet-body-map-circle-cadence-2caps.json.progress.json
+reports/aml-history-devnet-body-map-circle-wallclock-soak-3h.json
+reports/aml-history-devnet-body-map-circle-wallclock-soak-3h.json.progress.json
+reports/history-verification-benchmark-2026-06-23T040302Z.json
+reports/history-cost-model-2026-06-23T040301Z.json
 ```
 
 The shareable summary is this file. The raw reports are not required for a public push.
+
+Remote probe artifacts were copied off `/tmp` to a durable devnet host path during and after the wall-clock soak:
+
+```text
+octra-dev:/home/exedev/dev/octra-vitals-history-probe-artifacts/current
+```
+
+The disposable wallet env file is not part of that copied tree.
 
 ## Compile Results
 
@@ -222,6 +239,233 @@ resume source            reports/aml-history-devnet-body-map-2x48.json
 
 Interpretation: the resident-body map shape can be extended beyond the initial two capsules, and the cross-capsule root remains verifiable after four retained body-sized map entries. The resumable runner also fixes the operational gap exposed by the 96-row stress test: a failed long run now leaves enough public progress to continue without restarting from scratch.
 
+### Production-Cadence Soak Tick
+
+The resumable runner was updated to support one-row invocations via `VITALS_HISTORY_BODY_MAP_PROBE_ROWS_PER_RUN=1`, then exercised once against the existing disposable standalone devnet program.
+
+Program:
+
+```text
+octCehSDj3iw4egE1KuDvyMbrZu8efY3j67D9xEQT3RrTSn
+```
+
+Result:
+
+```text
+status                  partial
+target capsules          5
+row limit                48
+rows appended this run   1
+rows recorded            193
+capsules_root            59bbbad32a10a8698143c0fcc3988180ed652038999356db72eeca64a94c030d
+error                    null
+```
+
+Interpretation: the probe can now be driven at a 15-minute updater cadence without racing through all remaining rows in one process. The first cadence tick opened capsule 5 and appended one row, leaving the existing four sealed capsules intact. This is a standalone-program cadence tick; the programmed-Circle cadence soak still depends on the parity/funding gate below.
+
+### Programmed Circle Parity
+
+A programmed Site Circle parity pass succeeded at the conservative 48-row capsule size.
+
+Circle:
+
+```text
+circle_id              oct9HoM5zCHfJHP8BRmHQtb5mdvqsMZkiZRRjajUt6ep7S8
+owner                  oct2TRuwrUoEmDwf7t9nW54Zhs69AZUzMEhctpa5TP64JGZ
+runtime                octb
+has_program            true
+code_hash              6124c2a3e721940cfde1ad48b0125d5358488c033df990c1eb7699199f572f1a
+code_bytes             4,084
+```
+
+Run:
+
+```text
+row_limit              48
+snapshot_count         48
+capsule_count          1
+body bytes             14,160
+meta bytes             346
+tx-index bytes         3,072
+deploy tx              c463b629207f6d5b67b44592d162a696bab105b323576c448f39af22abe88dff
+program_update tx      3d8fdf2aac740c8b8c852fbbe471becabe536da8f4f11c6d87958134f04e6ce6
+seal tx                9bc7440de0f23fe085ba61ed26cc10eb068a284b66949949c914a9f065de1ab5
+program_update OU      50,000
+initialize effort      2,239
+append effort avg/max  1,481.5 / 1,692
+seal effort            3,127
+readback_ok            true
+capsules_root          4ca6bd3feec25ce123cd5accdb01f5f823407724a4e32d854a9128b291860ec2
+```
+
+Readback result:
+
+```text
+capsules_root matched  true
+body matched           true
+meta matched           true
+tx-index matched       true
+open row count         0
+```
+
+Interpretation: the resident body-map shape now has parity across standalone AML and programmed Site Circle for the baseline 48-row capsule size. The production host shape can install the formally verified AML, append a full 12-hour capsule, seal retained body/meta/tx-index values, and return exact stored values later.
+
+The disposable wallet balance after this pass was about `1.739001` devnet OCT.
+
+### Programmed Circle Multi-Capsule Cadence Runner
+
+A dedicated programmed-Circle cadence runner was added after the 48-row parity pass. It resumes against an already-initialized programmed Circle, writes a progress file, appends a bounded number of rows per invocation, and seals only when the open capsule reaches the row limit.
+
+The first cadence invocation appended exactly one row to capsule 2:
+
+```text
+circle_id              oct9HoM5zCHfJHP8BRmHQtb5mdvqsMZkiZRRjajUt6ep7S8
+rows_appended_this_run 1
+rows_recorded          49
+target_capsules        2
+capsules_root          4ca6bd3feec25ce123cd5accdb01f5f823407724a4e32d854a9128b291860ec2
+```
+
+The same runner then completed the remaining rows in an accelerated pass and sealed capsule 2:
+
+```text
+rows_appended_this_run 47
+rows_recorded          96
+base capsule count     1
+target capsules        2
+row limit              48
+capsule id             2026-06-07T12
+body bytes             14,160
+meta bytes             346
+tx-index bytes         3,072
+append effort avg/max  1,481.5 / 1,692
+seal effort            3,127
+seal tx                f7e617c88c5d2bc3dcd8d4842fbf3cd1a5c7ac347056323ca1b5a7045041ae9b
+capsules_root          8438f1955031812a72bb723f97169532f1fdc8e3f9f7bb19783ba0aa3edba332
+```
+
+Readback:
+
+```text
+capsules_root matched  true
+open root matched      true
+capsule body matched   true
+capsule meta matched   true
+capsule tx-index       true
+```
+
+Interpretation: the programmed Site Circle can continue after an initial sealed capsule, carry the history root forward, open a second deterministic capsule, append rows through a resumable cadence runner, seal the second body/meta/tx-index, and return exact stored values. This clears the multi-capsule programmed-Circle mechanics gate. The state shape and runner behavior have now been exercised across two sealed programmed-Circle capsules.
+
+The disposable wallet balance after this pass was about `1.690001` devnet OCT.
+
+### Programmed Circle 15-Minute Wall-Clock Soak
+
+A true 15-minute cadence soak then ran against the same programmed Circle instead of compressing writes into one process.
+
+```text
+circle_id              oct9HoM5zCHfJHP8BRmHQtb5mdvqsMZkiZRRjajUt6ep7S8
+wall-clock duration    3h
+ticks                  12 / 12
+rows before soak       96
+rows after soak        108
+open capsule           2026-06-08T00
+open capsule rows      12
+base sealed capsules   2
+capsules_root matched  true
+open root matched      true
+error                  none
+durable artifact copy  complete
+```
+
+The report status remains `partial` because this soak intentionally appended 12 rows into capsule 3 and did not fill/seal the 48-row capsule. That status means "open capsule still in progress," not failure. The watcher copied the final artifacts to:
+
+```text
+octra-dev:/home/exedev/dev/octra-vitals-history-probe-artifacts/current
+```
+
+Interpretation: the cadence runner can survive real 15-minute spacing, re-enter cleanly on each tick, preserve the existing sealed capsules, append to an open capsule, and read back matching roots. A longer soak that fills and seals capsule 3 would be useful hardening, but the first wall-clock cadence gate has passed.
+
+#### Earlier 12-Row Programmed Circle Smoke Pass
+
+A first programmed Site Circle smoke pass succeeded using the existing disposable Circle from the failed funding attempt.
+
+```text
+circle_id              oct4w52E3Px5caekgZt4azxt9vdhuvbvqCc3w2a1c8BmXjt
+row_limit              12
+snapshot_count         12
+body bytes             3,540
+tx-index bytes         768
+program_update tx      13f9845a6fd3cf2f58641623c6f415d0f08cba4124bb514e60fea93a1d9d80e1
+seal tx                40ce3a17b30ba4b4cf72484ac03b079cad2f5860d96d6b9e5db6f4bfb64b8985
+readback_ok            true
+```
+
+### Programmed Circle Funding Note
+
+A programmed Site Circle parity runner was added and compiled, then attempted against devnet using the same disposable probe wallet.
+
+Compile result matched the resident body-map AML artifact:
+
+```text
+source_hash       sha256:1fd669fe7af973c5d21511b7bda64203c6552e7dab8ded1fd4f3b02d17876a92
+bytecode_hash     sha256:6124c2a3e721940cfde1ad48b0125d5358488c033df990c1eb7699199f572f1a
+verification_hash sha256:9c0458dccb89efa3ba94fe4eff3269de2ca1e16d8244b80bec6f16dee6bc01c3
+```
+
+Disposable Circle created:
+
+```text
+circle_id              oct4w52E3Px5caekgZt4azxt9vdhuvbvqCc3w2a1c8BmXjt
+owner                  oct2TRuwrUoEmDwf7t9nW54Zhs69AZUzMEhctpa5TP64JGZ
+runtime                octb
+has_program            false
+code_bytes             0
+```
+
+The Circle deploy consumed the transaction at deploy nonce 299. The next `circle_program_update` failed before submission with insufficient balance:
+
+```text
+program_update history body-map probe Circle submit failed nonce=300 op_type=circle_program_update message_bytes=5463 data_bytes=0: octra_submit failed: insufficient balance
+```
+
+Original interpretation:
+
+- programmed Circle creation works for the disposable probe wallet;
+- this is a funding/cost gate, not an AML correctness failure;
+- the probe runner now writes partial failure reports so future attempts keep the Circle id, nonce, and exact failure.
+
+The first retry reused the empty Circle, installed the program, and completed a 12-row parity pass. After topping up the same disposable wallet, the separate 48-row programmed-Circle pass above completed successfully. Do not use the live devnet updater wallet for these probes.
+
+### Local Verification Benchmark
+
+Synthetic local verification was run against the same fixed-width 48-row capsule shape. This measures local CPU only; it excludes RPC latency and UI rendering.
+
+| Horizon | Capsules | Rows | Bytes verified | Median local verify |
+| --- | ---: | ---: | ---: | ---: |
+| 1 day | 2 | 96 | 35,156 | 0.539 ms |
+| 7 days | 14 | 672 | 246,092 | 2.868 ms |
+| 30 days | 60 | 2,880 | 1,054,680 | 10.819 ms |
+| 1 year | 730 | 35,040 | 12,831,940 | 125.305 ms |
+
+Interpretation: hash/root verification is not the likely bottleneck. Real browser testing still needs actual programmed-Circle reads because RPC latency, response size, and layout/rendering are outside this local benchmark.
+
+### Cost Model
+
+Using the measured 48-row resident body-map baseline:
+
+```text
+snapshots per day        96
+snapshots per year       35,040
+capsules per year        730
+yearly append effort     51,929,280
+yearly seal effort       2,282,710
+yearly total effort      54,211,990
+yearly AML bytes         ~10.589 MB without tx index
+yearly AML bytes         ~12.832 MB with tx index
+```
+
+This is an effort/byte model, not a final OCT cost projection. Mainnet OCT cost must be calibrated from live fee policy and receipts.
+
 ## 96-Row Stress Test
 
 The 96-row/day-capsule path completed, but only after recovery.
@@ -249,10 +493,9 @@ Conclusion: 96-row/day capsules are technically viable in AML/RPC, but long prob
 
 ## What Is Missing
 
-- Browser verification timing for 1-day, 7-day, 30-day, and 1-year views.
-- A production-like cadence test, because tight back-to-back stress writes are harsher than one snapshot every 15 minutes.
+- Browser verification timing using real programmed-Circle reads for 1-day, 7-day, 30-day, and 1-year views.
+- A longer wall-clock cadence soak that fills and seals a third programmed-Circle capsule.
 - A longer resident-body map probe beyond four sealed capsules, ideally over production cadence rather than tight back-to-back writes.
-- A programmed Site Circle probe, because standalone AML success is not automatically equivalent to the production host shape.
 - A successor-program design review that converts the measured probe shape into a real v1 AML state contract.
 - A cutover/migration plan that preserves v0 honestly without fake backfill.
 

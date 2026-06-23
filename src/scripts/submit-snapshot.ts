@@ -6,8 +6,17 @@ import { fileURLToPath } from "node:url";
 import { circleProgramViewAtUrl, configuredProgrammedCircleId, stateTargetMode, type StateTargetMode } from "../lib/circle-program.js";
 import { contractCall, contractCallAtUrl, contractReceipt, feeTelemetry, octraProgramRpcUrls, octraRpc, recommendedOu } from "../lib/octra-rpc.js";
 import { loadOperatorWalletFromEnv, publicTransactionJson, signTransaction, transactionHash, type OctraTransaction } from "../lib/octra-transaction.js";
+import {
+  decodeHistoryV1CapsuleMeta,
+  historyV1CapsuleBodyHashHex,
+  historyV1CapsuleMetaHashHex,
+  historyV1FoldCapsulesRootHex,
+  historyV1FoldHistoryRootHex,
+  historyV1RowHashHex,
+  HISTORY_V1_ROW_LEN
+} from "../lib/aml-history-v1.js";
 import { parseSummaryWindow } from "../lib/summary-window.js";
-import type { RecordSnapshotCall } from "./build-record-snapshot-call.js";
+import type { RecordSnapshotCall, RecordSnapshotCallV1 } from "./build-record-snapshot-call.js";
 
 export interface SubmitSnapshotOptions {
   dataDir?: string | null;
@@ -214,6 +223,27 @@ function verifySnapshotReceipt(receipt: any, targetId: string, call: RecordSnaps
   const snapshotEvent = events.find((event: any) => event.event === "SnapshotRecorded");
   const values = Array.isArray(snapshotEvent?.values) ? snapshotEvent.values : [];
   const snapshotId = snapshotIdOfCall(call);
+  if (call.commit_mode === "v1") {
+    const checks = {
+      contract_matches: summary.contract === targetId,
+      method_matches: summary.method === call.method,
+      success: summary.success === true,
+      snapshot_event_present: Boolean(snapshotEvent),
+      snapshot_id_matches: snapshotId ? values[0] === snapshotId : false,
+      snapshot_index_matches: call.snapshot_index ? String(values[1]) === String(call.snapshot_index) : true,
+      payload_hash_matches: values[3] === call.expected_hashes.payload_hash,
+      history_row_hash_matches: values[4] === call.expected_hashes.history_row_hash
+    };
+    const ok = Object.values(checks).every(Boolean);
+    if (!ok) {
+      throw new Error(`contract_receipt did not match submitted v1 snapshot: ${JSON.stringify(checks)}`);
+    }
+    return {
+      ...summary,
+      verified_against_call: true,
+      checks
+    };
+  }
   const checks = {
     contract_matches: summary.contract === targetId,
     method_matches: summary.method === call.method,
@@ -237,7 +267,7 @@ function verifySnapshotReceipt(receipt: any, targetId: string, call: RecordSnaps
   };
 }
 
-async function readAndVerifyProgramReadback(programAddress: string, call: RecordSnapshotCall): Promise<Record<string, unknown>> {
+async function readAndVerifyProgramReadbackV0(programAddress: string, call: RecordSnapshotCall): Promise<Record<string, unknown>> {
   const [latestPayloadHash, latestEvidenceHash, latestSourceRefsHash, latestSummaryHash, latestSummary, latestIndex, window, windowHash, firstIndex, rowCount] = await Promise.all([
     contractCall<string>(programAddress, "get_latest_payload_hash"),
     contractCall<string>(programAddress, "get_latest_evidence_manifest_hash"),
@@ -286,7 +316,78 @@ async function readAndVerifyProgramReadback(programAddress: string, call: Record
   };
 }
 
-async function readAndVerifyCircleReadbackFromUrl(circleId: string, call: RecordSnapshotCall, url: string): Promise<Record<string, unknown>> {
+async function readAndVerifyProgramReadbackV1(programAddress: string, call: RecordSnapshotCallV1): Promise<Record<string, unknown>> {
+  const [
+    latestPayloadHash,
+    latestEvidenceHash,
+    latestSourceRefsHash,
+    latestSummaryHash,
+    latestSummary,
+    latestIndex,
+    latestHistoryRow,
+    latestHistoryRowHash,
+    historyRoot,
+    capsulesRoot,
+    openCapsuleBody,
+    openCapsuleRowCount,
+    openCapsuleEndRoot,
+    capsuleCount,
+    latestCapsuleId,
+    latestCapsuleRootAfter
+  ] = await Promise.all([
+    contractCall<string>(programAddress, "get_latest_payload_hash"),
+    contractCall<string>(programAddress, "get_latest_evidence_manifest_hash"),
+    contractCall<string>(programAddress, "get_latest_source_refs_hash"),
+    contractCall<string>(programAddress, "get_latest_summary_hash"),
+    contractCall<string>(programAddress, "get_latest_summary"),
+    contractCall<number>(programAddress, "get_latest_snapshot_index"),
+    contractCall<string>(programAddress, "get_latest_history_row"),
+    contractCall<string>(programAddress, "get_latest_history_row_hash"),
+    contractCall<string>(programAddress, "get_history_root"),
+    contractCall<string>(programAddress, "get_capsules_root"),
+    contractCall<string>(programAddress, "get_open_capsule_body"),
+    contractCall<number>(programAddress, "get_open_capsule_row_count"),
+    contractCall<string>(programAddress, "get_open_capsule_end_root"),
+    contractCall<number>(programAddress, "get_capsule_count"),
+    contractCall<string>(programAddress, "get_latest_capsule_id"),
+    contractCall<string>(programAddress, "get_latest_capsule_root_after")
+  ]);
+  const latestCapsuleBody = Number(openCapsuleRowCount || 0) === 0 && latestCapsuleId
+    ? await contractCall<string>(programAddress, "get_history_capsule_body", [latestCapsuleId])
+    : "";
+  const latestCapsuleMeta = Number(openCapsuleRowCount || 0) === 0 && latestCapsuleId
+    ? await contractCall<string>(programAddress, "get_history_capsule_meta", [latestCapsuleId])
+    : "";
+  return verifyV1Readback({
+    call,
+    latestPayloadHash,
+    latestEvidenceHash,
+    latestSourceRefsHash,
+    latestSummaryHash,
+    latestSummary,
+    latestIndex,
+    latestHistoryRow,
+    latestHistoryRowHash,
+    historyRoot,
+    capsulesRoot,
+    openCapsuleBody,
+    openCapsuleRowCount,
+    openCapsuleEndRoot,
+    capsuleCount,
+    latestCapsuleId,
+    latestCapsuleRootAfter,
+    latestCapsuleBody,
+    latestCapsuleMeta
+  });
+}
+
+async function readAndVerifyProgramReadback(programAddress: string, call: RecordSnapshotCall): Promise<Record<string, unknown>> {
+  return call.commit_mode === "v1"
+    ? readAndVerifyProgramReadbackV1(programAddress, call)
+    : readAndVerifyProgramReadbackV0(programAddress, call);
+}
+
+async function readAndVerifyCircleReadbackFromUrlV0(circleId: string, call: RecordSnapshotCall, url: string): Promise<Record<string, unknown>> {
   const [latestPayloadHash, latestEvidenceHash, latestSourceRefsHash, latestSummaryHash, latestSummary, latestIndex, window, windowHash, firstIndex, rowCount] = await Promise.all([
     circleProgramViewAtUrl<string>(url, circleId, "get_latest_payload_hash"),
     circleProgramViewAtUrl<string>(url, circleId, "get_latest_evidence_manifest_hash"),
@@ -336,8 +437,225 @@ async function readAndVerifyCircleReadbackFromUrl(circleId: string, call: Record
   };
 }
 
+function verifyV1Readback(input: {
+  call: RecordSnapshotCallV1;
+  latestPayloadHash: string;
+  latestEvidenceHash: string;
+  latestSourceRefsHash: string;
+  latestSummaryHash: string;
+  latestSummary: string;
+  latestIndex: number;
+  latestHistoryRow: string;
+  latestHistoryRowHash: string;
+  historyRoot: string;
+  capsulesRoot: string;
+  openCapsuleBody: string;
+  openCapsuleRowCount: number;
+  openCapsuleEndRoot: string;
+  capsuleCount: number;
+  latestCapsuleId: string;
+  latestCapsuleRootAfter: string;
+  latestCapsuleBody?: string;
+  latestCapsuleMeta?: string;
+  rpc_url?: string;
+}): Record<string, unknown> {
+  const {
+    call,
+    latestPayloadHash,
+    latestEvidenceHash,
+    latestSourceRefsHash,
+    latestSummaryHash,
+    latestSummary,
+    latestIndex,
+    latestHistoryRow,
+    latestHistoryRowHash,
+    historyRoot,
+    capsulesRoot,
+    openCapsuleBody,
+    openCapsuleRowCount,
+    openCapsuleEndRoot,
+    capsuleCount,
+    latestCapsuleId,
+    latestCapsuleRootAfter,
+    latestCapsuleBody,
+    latestCapsuleMeta,
+    rpc_url
+  } = input;
+  if (latestPayloadHash !== call.expected_hashes.payload_hash) {
+    throw new Error(`readback payload hash mismatch: expected ${call.expected_hashes.payload_hash}, got ${latestPayloadHash}`);
+  }
+  if (latestEvidenceHash !== call.expected_hashes.evidence_manifest_hash) {
+    throw new Error(`readback evidence hash mismatch: expected ${call.expected_hashes.evidence_manifest_hash}, got ${latestEvidenceHash}`);
+  }
+  if (latestSourceRefsHash !== call.expected_hashes.source_refs_hash) {
+    throw new Error(`readback source refs hash mismatch: expected ${call.expected_hashes.source_refs_hash}, got ${latestSourceRefsHash}`);
+  }
+  if (latestSummaryHash !== call.expected_hashes.summary_hash) {
+    throw new Error(`readback summary hash mismatch: expected ${call.expected_hashes.summary_hash}, got ${latestSummaryHash}`);
+  }
+  if (latestSummary !== call.summary.row) {
+    throw new Error("readback latest summary row does not match submitted summary row");
+  }
+  if (latestHistoryRow !== call.history.row) {
+    throw new Error("readback latest history row does not match submitted history row");
+  }
+  const recomputedHistoryRowHash = historyV1RowHashHex(latestHistoryRow);
+  if (recomputedHistoryRowHash !== latestHistoryRowHash) {
+    throw new Error(`readback latest history row hash is not faithful: expected ${recomputedHistoryRowHash}, got ${latestHistoryRowHash}`);
+  }
+  if (latestHistoryRowHash !== call.expected_hashes.history_row_hash) {
+    throw new Error(`readback history row hash mismatch: expected ${call.expected_hashes.history_row_hash}, got ${latestHistoryRowHash}`);
+  }
+  if (Number(latestIndex) !== call.snapshot_index) {
+    throw new Error(`readback latest index mismatch: expected ${call.snapshot_index}, got ${latestIndex}`);
+  }
+  if (Number(openCapsuleRowCount || 0) > 0) {
+    if (!openCapsuleBody.endsWith(call.history.row)) {
+      throw new Error("readback open capsule body does not end with submitted history row");
+    }
+    const rowLen = call.history.row.length;
+    if (openCapsuleBody.length !== Number(openCapsuleRowCount || 0) * rowLen) {
+      throw new Error("readback open capsule body length does not match open capsule row count");
+    }
+  } else if (latestCapsuleBody) {
+    if (!latestCapsuleBody.endsWith(call.history.row)) {
+      throw new Error("readback latest sealed capsule body does not end with submitted history row");
+    }
+  }
+  if (historyRoot !== openCapsuleEndRoot) {
+    throw new Error("readback history root does not match open capsule end root");
+  }
+  let latestCapsuleVerified = false;
+  if (latestCapsuleId) {
+    if (!latestCapsuleBody || !latestCapsuleMeta) {
+      throw new Error("readback latest sealed capsule is missing body or metadata");
+    }
+    const meta = decodeHistoryV1CapsuleMeta(latestCapsuleMeta);
+    if (meta.capsule_id !== latestCapsuleId) {
+      throw new Error(`readback latest capsule id mismatch: expected ${latestCapsuleId}, got ${meta.capsule_id}`);
+    }
+    const rowCount = Number(meta.row_count);
+    if (rowCount < 1) throw new Error("readback latest sealed capsule row count is empty");
+    if (latestCapsuleBody.length !== rowCount * HISTORY_V1_ROW_LEN) {
+      throw new Error("readback latest sealed capsule body length does not match metadata row count");
+    }
+    const rows: string[] = [];
+    for (let offset = 0; offset < latestCapsuleBody.length; offset += HISTORY_V1_ROW_LEN) {
+      rows.push(latestCapsuleBody.slice(offset, offset + HISTORY_V1_ROW_LEN));
+    }
+    const bodyHash = historyV1CapsuleBodyHashHex(latestCapsuleBody);
+    if (bodyHash !== meta.body_hash_hex) {
+      throw new Error(`readback latest sealed capsule body hash mismatch: expected ${meta.body_hash_hex}, got ${bodyHash}`);
+    }
+    const metaHash = historyV1CapsuleMetaHashHex(latestCapsuleMeta);
+    const endRoot = historyV1FoldHistoryRootHex(meta.start_root_hex, rows);
+    if (endRoot !== meta.end_root_hex) {
+      throw new Error(`readback latest sealed capsule end root mismatch: expected ${meta.end_root_hex}, got ${endRoot}`);
+    }
+    const rootAfter = historyV1FoldCapsulesRootHex(meta.capsules_root_before_hex, meta.capsule_id, bodyHash, metaHash, endRoot);
+    if (rootAfter !== latestCapsuleRootAfter) {
+      throw new Error(`readback latest sealed capsule root-after mismatch: expected ${latestCapsuleRootAfter}, got ${rootAfter}`);
+    }
+    if (capsulesRoot !== latestCapsuleRootAfter) {
+      throw new Error("readback capsules root does not match latest sealed capsule root-after");
+    }
+    latestCapsuleVerified = true;
+  }
+  return {
+    payload_hash: latestPayloadHash,
+    evidence_manifest_hash: latestEvidenceHash,
+    source_refs_hash: latestSourceRefsHash,
+    summary_hash: latestSummaryHash,
+    latest_summary_row: latestSummary,
+    latest_snapshot_index: latestIndex,
+    history_row_hash: latestHistoryRowHash,
+    history_root: historyRoot,
+    capsules_root: capsulesRoot,
+    open_capsule_rows: Number(openCapsuleRowCount || 0),
+    capsule_count: Number(capsuleCount || 0),
+    latest_capsule_id: latestCapsuleId || null,
+    latest_capsule_root_after: latestCapsuleRootAfter || null,
+    latest_capsule_verified: latestCapsuleVerified,
+    ...(rpc_url ? { rpc_url } : {}),
+    matches_expected: true
+  };
+}
+
+async function readAndVerifyCircleReadbackFromUrlV1(circleId: string, call: RecordSnapshotCallV1, url: string): Promise<Record<string, unknown>> {
+  const [
+    latestPayloadHash,
+    latestEvidenceHash,
+    latestSourceRefsHash,
+    latestSummaryHash,
+    latestSummary,
+    latestIndex,
+    latestHistoryRow,
+    latestHistoryRowHash,
+    historyRoot,
+    capsulesRoot,
+    openCapsuleBody,
+    openCapsuleRowCount,
+    openCapsuleEndRoot,
+    capsuleCount,
+    latestCapsuleId,
+    latestCapsuleRootAfter
+  ] = await Promise.all([
+    circleProgramViewAtUrl<string>(url, circleId, "get_latest_payload_hash"),
+    circleProgramViewAtUrl<string>(url, circleId, "get_latest_evidence_manifest_hash"),
+    circleProgramViewAtUrl<string>(url, circleId, "get_latest_source_refs_hash"),
+    circleProgramViewAtUrl<string>(url, circleId, "get_latest_summary_hash"),
+    circleProgramViewAtUrl<string>(url, circleId, "get_latest_summary"),
+    circleProgramViewAtUrl<number>(url, circleId, "get_latest_snapshot_index"),
+    circleProgramViewAtUrl<string>(url, circleId, "get_latest_history_row"),
+    circleProgramViewAtUrl<string>(url, circleId, "get_latest_history_row_hash"),
+    circleProgramViewAtUrl<string>(url, circleId, "get_history_root"),
+    circleProgramViewAtUrl<string>(url, circleId, "get_capsules_root"),
+    circleProgramViewAtUrl<string>(url, circleId, "get_open_capsule_body"),
+    circleProgramViewAtUrl<number>(url, circleId, "get_open_capsule_row_count"),
+    circleProgramViewAtUrl<string>(url, circleId, "get_open_capsule_end_root"),
+    circleProgramViewAtUrl<number>(url, circleId, "get_capsule_count"),
+    circleProgramViewAtUrl<string>(url, circleId, "get_latest_capsule_id"),
+    circleProgramViewAtUrl<string>(url, circleId, "get_latest_capsule_root_after")
+  ]);
+  const [latestCapsuleBody, latestCapsuleMeta] = latestCapsuleId
+    ? await Promise.all([
+      circleProgramViewAtUrl<string>(url, circleId, "get_history_capsule_body", [latestCapsuleId]),
+      circleProgramViewAtUrl<string>(url, circleId, "get_history_capsule_meta", [latestCapsuleId])
+    ])
+    : ["", ""];
+  return verifyV1Readback({
+    call,
+    latestPayloadHash,
+    latestEvidenceHash,
+    latestSourceRefsHash,
+    latestSummaryHash,
+    latestSummary,
+    latestIndex,
+    latestHistoryRow,
+    latestHistoryRowHash,
+    historyRoot,
+    capsulesRoot,
+    openCapsuleBody,
+    openCapsuleRowCount,
+    openCapsuleEndRoot,
+    capsuleCount,
+    latestCapsuleId,
+    latestCapsuleRootAfter,
+    latestCapsuleBody,
+    latestCapsuleMeta,
+    rpc_url: url
+  });
+}
+
+async function readAndVerifyCircleReadbackFromUrl(circleId: string, call: RecordSnapshotCall, url: string): Promise<Record<string, unknown>> {
+  return call.commit_mode === "v1"
+    ? readAndVerifyCircleReadbackFromUrlV1(circleId, call, url)
+    : readAndVerifyCircleReadbackFromUrlV0(circleId, call, url);
+}
+
 function assertSameCircleReadback(primary: Record<string, unknown>, candidate: Record<string, unknown>): void {
-  for (const key of ["payload_hash", "evidence_manifest_hash", "source_refs_hash", "summary_hash", "latest_summary_row", "latest_snapshot_index", "summary_window_hash", "summary_window_rows"]) {
+  for (const key of ["payload_hash", "evidence_manifest_hash", "source_refs_hash", "summary_hash", "latest_summary_row", "latest_snapshot_index", "summary_window_hash", "summary_window_rows", "history_row_hash", "history_root", "capsules_root", "open_capsule_rows", "capsule_count", "latest_capsule_id", "latest_capsule_root_after", "latest_capsule_verified"]) {
+    if (!(key in primary) && !(key in candidate)) continue;
     if (candidate[key] !== primary[key]) {
       throw new Error(`programmed Circle readback RPC mismatch for ${key} from ${candidate.rpc_url}`);
     }
@@ -425,8 +743,10 @@ export async function submitSnapshotCall(
   options: SubmitSnapshotOptions = {}
 ): Promise<Record<string, any>> {
   if (
-    call.schema !== "octra-vitals-record-snapshot-call-v0" ||
-    call.method !== "record_snapshot_v0" ||
+    !(
+      (call.schema === "octra-vitals-record-snapshot-call-v0" && call.method === "record_snapshot_v0") ||
+      (call.schema === "octra-vitals-record-snapshot-call-v1" && call.method === "record_snapshot_v1")
+    ) ||
     !Array.isArray(call.params)
   ) {
     throw new Error("not a supported record_snapshot call bundle");
@@ -464,6 +784,7 @@ export async function submitSnapshotCall(
         params: call.params,
         snapshot_index: call.snapshot_index || null,
         summary: call.summary || null,
+        history: call.commit_mode === "v1" ? call.history : null,
         expected_hashes: call.expected_hashes
       },
       next_step: targetKind === "circle_program"
@@ -498,7 +819,9 @@ export async function submitSnapshotCall(
       expected_hashes: call.expected_hashes,
       readback: existingReadback,
       readonly_check: {
-        method: "get_latest_payload_hash/get_latest_summary_hash/get_recent_summary_window_hash",
+        method: call.commit_mode === "v1"
+          ? "get_latest_payload_hash/get_latest_summary_hash/get_latest_history_row_hash"
+          : "get_latest_payload_hash/get_latest_summary_hash/get_recent_summary_window_hash",
         expected_after_confirm: call.expected_hashes.payload_hash,
         actual_after_confirm: existingReadback.payload_hash
       }
@@ -627,7 +950,9 @@ export async function submitSnapshotCall(
     pre_submit_state: preSubmitState,
     readback,
     readonly_check: {
-      method: "get_latest_payload_hash/get_latest_summary_hash/get_recent_summary_window_hash",
+      method: call.commit_mode === "v1"
+        ? "get_latest_payload_hash/get_latest_summary_hash/get_latest_history_row_hash"
+        : "get_latest_payload_hash/get_latest_summary_hash/get_recent_summary_window_hash",
       expected_after_confirm: call.expected_hashes.payload_hash,
       actual_after_confirm: readback.payload_hash
     }

@@ -424,6 +424,44 @@ const requiredCircleProgramMethods = [
   "record_snapshot_v0"
 ];
 
+const requiredCircleProgramMethodsV1 = [
+  "manifest",
+  "is_initialized",
+  "get_snapshot_count",
+  "get_latest_snapshot_index",
+  "get_latest_snapshot_id",
+  "get_latest_observed_at",
+  "get_latest_epoch",
+  "get_latest_payload_hash",
+  "get_latest_evidence_manifest_hash",
+  "get_latest_source_refs_hash",
+  "get_latest_summary_hash",
+  "get_latest_history_row_hash",
+  "get_latest_snapshot",
+  "get_latest_evidence_manifest",
+  "get_latest_source_refs",
+  "get_latest_summary",
+  "get_latest_history_row",
+  "get_history_root",
+  "get_capsules_root",
+  "get_open_capsule_id",
+  "get_open_capsule_body",
+  "get_open_capsule_row_count",
+  "get_open_capsule_end_root",
+  "get_latest_capsule_id",
+  "get_history_capsule_body",
+  "get_history_capsule_meta",
+  "get_history_capsule_root_after",
+  "get_latest_bundle",
+  "record_snapshot_v1"
+];
+
+function programmedCircleArtifactDir(): string {
+  const configured = process.env.VITALS_PROGRAMMED_CIRCLE_ARTIFACT_DIR;
+  if (configured && !configured.includes("..") && !configured.includes("/") && !configured.includes("\\")) return configured;
+  return process.env.VITALS_RECORD_SNAPSHOT_VERSION === "v1" ? "program-v1" : "program-circle";
+}
+
 function methodNames(programInfo: any): string[] {
   if (!programInfo || typeof programInfo !== "object" || !Array.isArray(programInfo.methods)) return [];
   return programInfo.methods
@@ -472,17 +510,29 @@ async function loadCircleProgramVerification(manifest: Record<string, any>): Pro
   }
 
   const checkedAt = new Date().toISOString().replace(/\.\d{3}Z$/, "Z");
-  const sourceResult = await readFile(join(root, "program-circle", "main.aml"), "utf8").then(
+  const artifactDir = programmedCircleArtifactDir();
+  const expectedAmlManifest = artifactDir === "program-v1" ? "vitals-circle-state.v1" : "vitals-circle-state.v0";
+  const requiredMethods = artifactDir === "program-v1" ? requiredCircleProgramMethodsV1 : requiredCircleProgramMethods;
+  const sourceResult = await readFile(join(root, artifactDir, "main.aml"), "utf8").then(
     (source) => ({ source, source_hash: `sha256:${sha256Hex(source)}` }),
     () => null
   );
-  const localArtifacts = await loadProgramArtifacts("program-circle", "octra-vitals-program-circle-artifacts-v0");
+  const localArtifacts = await loadProgramArtifacts(artifactDir, "octra-vitals-program-circle-artifacts-v0");
   const localVerification = localArtifacts.formal_verification || {};
   const localCertificate = localArtifacts.formal_certificate || {};
   const deployReport = await loadProgrammedCircleDeployReport();
-  const expectedBytecodeHash = normalizeHash(process.env.VITALS_PROGRAMMED_CIRCLE_BYTECODE_HASH || manifest.programmed_circle_bytecode_hash || deployReport?.bytecode_hash || localCertificate.bytecode_hash);
-  const expectedSourceHash = normalizeHash(process.env.VITALS_PROGRAMMED_CIRCLE_SOURCE_HASH || manifest.programmed_circle_source_hash || deployReport?.source_hash || sourceResult?.source_hash || localCertificate.source_hash);
-  const expectedVerificationHash = normalizeHash(process.env.VITALS_PROGRAMMED_CIRCLE_VERIFICATION_HASH || manifest.programmed_circle_verification_hash || localCertificate.verification_hash);
+  const compatibleDeployReport = artifactDir === "program-v1" && deployReport?.schema !== "octra-vitals-program-v1-devnet-deploy-v0"
+    ? null
+    : deployReport;
+  const expectedBytecodeHash = artifactDir === "program-v1"
+    ? normalizeHash(process.env.VITALS_PROGRAMMED_CIRCLE_V1_BYTECODE_HASH || localCertificate.bytecode_hash || compatibleDeployReport?.bytecode_hash || process.env.VITALS_PROGRAMMED_CIRCLE_BYTECODE_HASH || manifest.programmed_circle_bytecode_hash)
+    : normalizeHash(process.env.VITALS_PROGRAMMED_CIRCLE_BYTECODE_HASH || manifest.programmed_circle_bytecode_hash || deployReport?.bytecode_hash || localCertificate.bytecode_hash);
+  const expectedSourceHash = artifactDir === "program-v1"
+    ? normalizeHash(process.env.VITALS_PROGRAMMED_CIRCLE_V1_SOURCE_HASH || sourceResult?.source_hash || localCertificate.source_hash || compatibleDeployReport?.source_hash || process.env.VITALS_PROGRAMMED_CIRCLE_SOURCE_HASH || manifest.programmed_circle_source_hash)
+    : normalizeHash(process.env.VITALS_PROGRAMMED_CIRCLE_SOURCE_HASH || manifest.programmed_circle_source_hash || deployReport?.source_hash || sourceResult?.source_hash || localCertificate.source_hash);
+  const expectedVerificationHash = artifactDir === "program-v1"
+    ? normalizeHash(process.env.VITALS_PROGRAMMED_CIRCLE_V1_VERIFICATION_HASH || localCertificate.verification_hash || process.env.VITALS_PROGRAMMED_CIRCLE_VERIFICATION_HASH || manifest.programmed_circle_verification_hash)
+    : normalizeHash(process.env.VITALS_PROGRAMMED_CIRCLE_VERIFICATION_HASH || manifest.programmed_circle_verification_hash || localCertificate.verification_hash);
   const expectedOwner = chooseValue(process.env.VITALS_CIRCLE_OWNER_ADDRESS, process.env.VITALS_DEPLOYER_ADDRESS, manifest.programmed_circle_owner_address, deployReport?.deployer_address);
   const expectedOperator = chooseValue(process.env.VITALS_CIRCLE_OPERATOR_ADDRESS, process.env.VITALS_OPERATOR_ADDRESS, manifest.programmed_circle_operator_address, deployReport?.operator_address);
   const configuredMinProgramRpcUrls = positiveIntegerEnv("VITALS_MIN_PROGRAM_RPC_URLS", 1);
@@ -545,7 +595,7 @@ async function loadCircleProgramVerification(manifest: Record<string, any>): Pro
   }
   const rpcAgreement = rpcMismatchReasons.length === 0;
   const methods = methodNames(program);
-  const missingMethods = requiredCircleProgramMethods.filter((method) => !methods.includes(method));
+  const missingMethods = requiredMethods.filter((method) => !methods.includes(method));
   const codeHash = normalizeHash(program?.code_hash);
   const codeHashMatches = expectedBytecodeHash ? hashMatches(codeHash, expectedBytecodeHash) : null;
   const sourceHashMatches = expectedSourceHash && sourceResult?.source_hash ? hashMatches(sourceResult.source_hash, expectedSourceHash) : null;
@@ -592,7 +642,7 @@ async function loadCircleProgramVerification(manifest: Record<string, any>): Pro
     local_formal_certificate_bytecode_matches: hashMatches(localCertificate.bytecode_hash, expectedBytecodeHash),
     local_formal_certificate_verification_matches: expectedVerificationHash ? hashMatches(localCertificate.verification_hash, expectedVerificationHash) : null,
     methods,
-    required_methods: requiredCircleProgramMethods,
+    required_methods: requiredMethods,
     missing_methods: missingMethods,
     required_methods_present: missingMethods.length === 0,
     circle_roots: {
@@ -624,7 +674,7 @@ async function loadCircleProgramVerification(manifest: Record<string, any>): Pro
       rpcAgreement &&
       rpcUrlCountOk &&
       (initializedResult.status === "fulfilled" && nativeBool(initializedResult.value)) &&
-      (manifestResult.status === "fulfilled" && manifestResult.value === "vitals-circle-state.v0")
+      (manifestResult.status === "fulfilled" && manifestResult.value === expectedAmlManifest)
     ),
     errors: {
       program_info: programInfoResult.status === "rejected" ? String(programInfoResult.reason?.message || programInfoResult.reason) : null,
@@ -981,7 +1031,7 @@ async function loadHistoryIntegrity(manifest: Record<string, any>): Promise<Reco
       checked_at: new Date().toISOString().replace(/\.\d{3}Z$/, "Z"),
       canonical_state_read: true,
       source: target.kind === "circle_program" ? "vitals_circle_program_history" : "vitals_state_program_history",
-      history_discovery: "aml_summary_window",
+      history_discovery: history.history_discovery || "aml_summary_window",
       state_target_mode: target.kind,
       state_target_id: target.id,
       row_count: history.row_count,
@@ -1576,7 +1626,7 @@ function nativeReadiness(manifest: Record<string, any>) {
     circle_program_errors: circleProgram.errors || null,
     canonical_history_readable: historyVerified,
     history_rows: history.row_count || 0,
-    history_window_hash: history.window_hash || null,
+      history_window_hash: history.window_hash || null,
     successor_set: live.successor_set ?? null,
     successor_program: live.successor_program || null,
     state_source_mode: mode,
@@ -1656,7 +1706,7 @@ async function serveHistory(res: http.ServerResponse, head = false): Promise<voi
       authority: {
         source: target.kind === "circle_program" ? "vitals_circle_program_history" : "vitals_state_program_history",
         canonical_state_read: true,
-        history_discovery: "aml_summary_window",
+        history_discovery: history.history_discovery || "aml_summary_window",
         state_target_mode: target.kind,
         state_target_id: target.id,
         state_program_address: target.kind === "state_program" ? target.id : configuredProgramAddress(manifest.state_program_address),

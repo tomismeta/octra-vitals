@@ -7,6 +7,8 @@ Octra Vitals v0 stores the latest full snapshot plus a bounded 48-row summary wi
 This is a v1/successor-program design, not an in-place public v0 change. Public v0 deliberately avoids unbounded maps and retains only the recent summary window. Forever history requires a new AML state shape, a devnet probe, and a controlled cutover.
 
 The devnet probe plan is captured in [AML History Devnet Probe](aml-history-devnet-probe.md).
+The handoff-level successor design is captured in [AML History v1 Successor Plan](aml-history-v1-successor-plan.md).
+The four-lens audit decision is captured in [AML History v1 Final Audit](aml-history-v1-final-audit.md).
 
 ## Goals
 
@@ -123,9 +125,10 @@ body_hash
 start_root
 end_root
 tx_index_hash
+capsules_root_before
 ```
 
-`body_hash` content-addresses the capsule body. `start_root` and `end_root` make deep slice verification cheap: a browser or verifier folds only the rows in that capsule and checks the result against the end root. It does not need to replay all history from genesis. `row_len` is intentionally stored even when derivable from `history_schema_id`, because the meta row should remain self-describing for future verifiers. `tx_index_hash` is optional and commits to the capsule's transaction lookup index when that index is retained in AML.
+`body_hash` content-addresses the capsule body. `start_root` and `end_root` make row verification inside a capsule cheap: a browser or verifier folds only the rows in that capsule and checks the result against the end root. `capsules_root_before` plus the separate AML-stored `capsule_root_after_by_id[capsule_id]` makes deep historical capsule verification bounded without putting a circular `root_after` value inside the meta hash. `row_len` is intentionally stored even when derivable from `history_schema_id`, because the meta row should remain self-describing for future verifiers. `tx_index_hash` is optional and commits to the capsule's transaction lookup index when that index is retained in AML.
 
 Each capsule family and calendar tier should have its own domain-separated root family. Do not fold raw rows, extension rows, day summaries, month summaries, and year summaries into one undifferentiated hash domain. Separate domains keep the verification story clean and avoid confusing derived views with source observations.
 
@@ -267,6 +270,7 @@ The devnet gate should compare these candidates on:
 
 - write effort and fee per snapshot;
 - maximum safe retained row count per capsule;
+- maximum safe retained capsule count per program, including hundreds of body-sized map entries;
 - browser verification time for 1-day, 7-day, 30-day, and 1-year slices;
 - RPC/read count for each UI horizon;
 - formal verification behavior with maps and packed metadata;
@@ -307,11 +311,13 @@ This path is not a substitute for AML capsules unless Octra later exposes a cano
 
 ## Transaction Lookup Index
 
-For easier audit lookup, each sealed capsule may include a transaction lookup index aligned 1:1 with its observation rows.
+For easier audit lookup, a sealed capsule can eventually have a transaction lookup index aligned 1:1 with its observation rows.
 
 The current `record_snapshot` transaction hash should not be part of the row written by that same transaction. That creates a circular or preimage-dependent design: the transaction hash depends on the call arguments, and the call arguments would include the transaction hash. AML also should not need to know its enclosing transaction hash to validate the row.
 
-Instead, the producer can attach transaction lookup data when a capsule seals, because all `record_snapshot` transaction hashes for the completed capsule are known by then. The preferred shape is:
+Do not include an AML-resident transaction index in the v1 MVP. It is useful, but it introduces a circular boundary-case: the transaction that writes the final row and seals a capsule cannot know its own transaction hash. Adding the index safely requires either a separate post-seal attachment transaction or an index that intentionally omits the sealing transaction and is documented as incomplete. Neither belongs in the first clean forever-history contract.
+
+If transaction lookup is added later, the preferred shape is:
 
 ```text
 capsule_tx_index[capsule_id] = fixed-width tx hashes aligned to row order
@@ -320,12 +326,12 @@ capsule_meta.tx_index_hash   = sha256(domain + capsule_tx_index)
 
 This index is a convenience and forensic pointer, not the primary proof of the row. A verifier can use a listed transaction hash to fetch the transaction, then compare the submitted row/call arguments back to the AML-retained row and capsule roots.
 
-The devnet probe should measure this both ways:
+The devnet probe should keep measuring this both ways, but outside the MVP:
 
 - full AML-resident transaction index per sealed capsule;
 - hash-only transaction index commitment with the full index retained in host/archive storage.
 
-Full tx hashes are useful, but they add permanent bytes per row. If the cost is acceptable, AML-resident transaction lookup is preferable for usability. If not, `tx_index_hash` plus archive/index availability is the fallback.
+Full tx hashes are useful, but they add permanent bytes per row and require a non-circular write path. If the cost and write pattern are acceptable later, AML-resident transaction lookup is preferable for usability. If not, `tx_index_hash` plus archive/index availability is the fallback.
 
 ## Formal Invariants
 
@@ -377,9 +383,10 @@ Operator-signed checkpoints alone are not an acceptable replacement for AML-resi
 
 - Exact AML map support in programmed Site Circle verification.
 - Whether a growing `map[capsule_id] -> sealed body` with 14KB+ values remains safe, readable, and cost-effective after many capsules. Four retained 48-row bodies have passed in standalone devnet AML.
-- Whether a persistent cross-capsule root can be maintained cheaply while preserving O(capsule) browser verification for historical slices.
+- Whether a persistent cross-capsule root plus per-capsule `capsules_root_after` checkpoints can preserve bounded browser verification for historical slices.
 - Maximum safe field size, return size, and transaction write footprint.
 - Append cost for each candidate capsule size.
+- Annual and multi-year fee estimates compared to an explicit budget threshold.
 - Browser verification cost for 1-day, 7-day, 30-day, and 1-year slices.
 - Best compact fixed-width row encoding: current pipe fields, raw digest fields, base36/base64url integers, or similar.
 - Whether extension capsules are needed immediately or should wait for the first additional field family.

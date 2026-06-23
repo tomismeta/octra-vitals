@@ -1,7 +1,8 @@
 import { canonicalJson, sha256Tagged } from "./canonical-json.js";
 import { circleProgramViewAtUrl } from "./circle-program.js";
 import { contractCallAtUrl, octraProgramRpcUrls } from "./octra-rpc.js";
-import { assertLatestSummaryMatchesSnapshot, parseSummaryWindow, summaryHash, type ProgramHistoryWindow } from "./summary-window.js";
+import { decodeHistoryV1Rows, type HistoryV1ObservationRow } from "./aml-history-v1.js";
+import { assertLatestSummaryMatchesSnapshot, encodeSummaryRow, parseSummaryWindow, summaryHash, summaryWindowHash, SUMMARY_ROW_LEN, type ProgramHistoryWindow, type SummaryRow } from "./summary-window.js";
 import type { EvidenceEntry, EvidenceManifest, SnapshotArtifact, SnapshotEnvelope, SnapshotPayload, SourceRef } from "./types.js";
 
 const SNAPSHOT_HASH_DOMAIN = process.env.VITALS_SNAPSHOT_HASH_DOMAIN || "octra-vitals:snapshot:v0";
@@ -83,6 +84,41 @@ function assertSameHistory(primary: ProgramHistoryWindow, candidate: ProgramHist
       throw new Error(`program history RPC mismatch from ${url}: ${label}`);
     }
   }
+}
+
+function summaryRowFromHistoryV1Row(row: HistoryV1ObservationRow): SummaryRow {
+  return {
+    row_version: "00",
+    snapshot_index: row.snapshot_index,
+    observed_at_unix: row.observed_at_unix,
+    octra_epoch: row.octra_epoch,
+    external_block: row.external_block,
+    issued_raw: row.issued_raw,
+    burned_raw: row.burned_raw,
+    encrypted_raw: row.encrypted_raw,
+    total_locked_raw: row.total_locked_raw,
+    total_wrapped_raw: row.total_wrapped_raw,
+    total_unclaimed_raw: row.total_unclaimed_raw,
+    route_count: row.route_count,
+    payload_hash_prefix: row.payload_hash_hex.slice(0, 24)
+  };
+}
+
+function programHistoryWindowFromHistoryV1Body(body: string): ProgramHistoryWindow {
+  const historyRows = decodeHistoryV1Rows(body);
+  const rows = historyRows.map(summaryRowFromHistoryV1Row);
+  const window = rows.map(encodeSummaryRow).join("");
+  const firstIndex = rows[0]?.snapshot_index || 0;
+  const windowHash = summaryWindowHash(window);
+  return {
+    first_index: firstIndex,
+    row_count: rows.length,
+    row_len: SUMMARY_ROW_LEN,
+    window,
+    window_hash: windowHash,
+    rows,
+    history_discovery: "aml_history_v1_capsule"
+  };
 }
 
 async function readLatestProgramSnapshotFromUrl(programAddress: string, url: string): Promise<SnapshotReadback> {
@@ -277,7 +313,7 @@ export async function readLatestCircleProgramSnapshot(circleId: string): Promise
   return primary.snapshot;
 }
 
-async function readProgramSummaryHistoryFromUrl(programAddress: string, url: string): Promise<ProgramHistoryWindow> {
+async function readProgramSummaryHistoryFromUrlV0(programAddress: string, url: string): Promise<ProgramHistoryWindow> {
   const [window, windowHash, firstIndex, rowCount] = await Promise.all([
     contractCallAtUrl<string>(url, programAddress, "get_recent_summary_window"),
     contractCallAtUrl<string>(url, programAddress, "get_recent_summary_window_hash"),
@@ -287,7 +323,33 @@ async function readProgramSummaryHistoryFromUrl(programAddress: string, url: str
   return parseSummaryWindow(window || "", Number(firstIndex || 0), Number(rowCount || 0), windowHash);
 }
 
-async function readCircleProgramSummaryHistoryFromUrl(circleId: string, url: string): Promise<ProgramHistoryWindow> {
+async function readProgramSummaryHistoryFromUrlV1(programAddress: string, url: string): Promise<ProgramHistoryWindow> {
+  const [openBody, openRowCount, latestCapsuleId] = await Promise.all([
+    contractCallAtUrl<string>(url, programAddress, "get_open_capsule_body"),
+    contractCallAtUrl<number>(url, programAddress, "get_open_capsule_row_count"),
+    contractCallAtUrl<string>(url, programAddress, "get_latest_capsule_id").catch(() => "")
+  ]);
+  if (Number(openRowCount || 0) > 0 && openBody) {
+    return programHistoryWindowFromHistoryV1Body(openBody);
+  }
+  if (latestCapsuleId) {
+    const latestBody = await contractCallAtUrl<string>(url, programAddress, "get_history_capsule_body", [latestCapsuleId]);
+    if (latestBody) return programHistoryWindowFromHistoryV1Body(latestBody);
+  }
+  return programHistoryWindowFromHistoryV1Body("");
+}
+
+async function readProgramSummaryHistoryFromUrl(programAddress: string, url: string): Promise<ProgramHistoryWindow> {
+  try {
+    return await readProgramSummaryHistoryFromUrlV0(programAddress, url);
+  } catch (error) {
+    const manifest = await contractCallAtUrl<string>(url, programAddress, "manifest").catch(() => "");
+    if (manifest === "vitals-circle-state.v1") return readProgramSummaryHistoryFromUrlV1(programAddress, url);
+    throw error;
+  }
+}
+
+async function readCircleProgramSummaryHistoryFromUrlV0(circleId: string, url: string): Promise<ProgramHistoryWindow> {
   const [window, windowHash, firstIndex, rowCount] = await Promise.all([
     circleProgramViewAtUrl<string>(url, circleId, "get_recent_summary_window"),
     circleProgramViewAtUrl<string>(url, circleId, "get_recent_summary_window_hash"),
@@ -295,6 +357,32 @@ async function readCircleProgramSummaryHistoryFromUrl(circleId: string, url: str
     circleProgramViewAtUrl<number>(url, circleId, "get_recent_summary_window_row_count")
   ]);
   return parseSummaryWindow(window || "", Number(firstIndex || 0), Number(rowCount || 0), windowHash);
+}
+
+async function readCircleProgramSummaryHistoryFromUrlV1(circleId: string, url: string): Promise<ProgramHistoryWindow> {
+  const [openBody, openRowCount, latestCapsuleId] = await Promise.all([
+    circleProgramViewAtUrl<string>(url, circleId, "get_open_capsule_body"),
+    circleProgramViewAtUrl<number>(url, circleId, "get_open_capsule_row_count"),
+    circleProgramViewAtUrl<string>(url, circleId, "get_latest_capsule_id").catch(() => "")
+  ]);
+  if (Number(openRowCount || 0) > 0 && openBody) {
+    return programHistoryWindowFromHistoryV1Body(openBody);
+  }
+  if (latestCapsuleId) {
+    const latestBody = await circleProgramViewAtUrl<string>(url, circleId, "get_history_capsule_body", [latestCapsuleId]);
+    if (latestBody) return programHistoryWindowFromHistoryV1Body(latestBody);
+  }
+  return programHistoryWindowFromHistoryV1Body("");
+}
+
+async function readCircleProgramSummaryHistoryFromUrl(circleId: string, url: string): Promise<ProgramHistoryWindow> {
+  try {
+    return await readCircleProgramSummaryHistoryFromUrlV0(circleId, url);
+  } catch (error) {
+    const manifest = await circleProgramViewAtUrl<string>(url, circleId, "manifest").catch(() => "");
+    if (manifest === "vitals-circle-state.v1") return readCircleProgramSummaryHistoryFromUrlV1(circleId, url);
+    throw error;
+  }
 }
 
 export async function readCircleProgramSummaryHistory(circleId: string): Promise<ProgramHistoryWindow> {

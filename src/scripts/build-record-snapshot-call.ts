@@ -6,11 +6,17 @@ import { fileURLToPath } from "node:url";
 import { canonicalJson } from "../lib/canonical-json.js";
 import { circleProgramViewAtUrl, configuredProgrammedCircleId, stateTargetMode } from "../lib/circle-program.js";
 import { contractCallAtUrl, octraProgramRpcUrls } from "../lib/octra-rpc.js";
+import {
+  encodeHistoryV1Row,
+  historyV1RowFromSnapshot,
+  historyV1RowHashHex,
+  HISTORY_V1_SCHEMA_VERSION
+} from "../lib/aml-history-v1.js";
 import { sourceRefsHash, verifySnapshotArtifactHashes } from "../lib/program-state.js";
 import { encodeSummaryRow, summaryHash, summaryRowFromSnapshot, SUMMARY_SCHEMA_VERSION } from "../lib/summary-window.js";
 import type { SnapshotArtifact } from "../lib/types.js";
 
-export interface RecordSnapshotCall {
+export interface RecordSnapshotCallV0 {
   schema: "octra-vitals-record-snapshot-call-v0";
   commit_mode: "v0";
   generated_at: string;
@@ -38,6 +44,42 @@ export interface RecordSnapshotCall {
   };
 }
 
+export interface RecordSnapshotCallV1 {
+  schema: "octra-vitals-record-snapshot-call-v1";
+  commit_mode: "v1";
+  generated_at: string;
+  program_address: string;
+  target_kind?: "state_program" | "circle_program";
+  circle_id?: string;
+  method: "record_snapshot_v1";
+  params: unknown[];
+  compact_message_bytes: number;
+  snapshot_index: number;
+  summary: {
+    schema_version: string;
+    row: string;
+    row_hash: string;
+  };
+  history: {
+    schema_version: string;
+    row: string;
+    row_hash: string;
+  };
+  expected_hashes: {
+    payload_hash: string;
+    evidence_manifest_hash: string;
+    source_refs_hash: string;
+    summary_hash: string;
+    history_row_hash: string;
+  };
+  readonly_check: {
+    method: string;
+    expected_after_submit: string;
+  };
+}
+
+export type RecordSnapshotCall = RecordSnapshotCallV0 | RecordSnapshotCallV1;
+
 export interface BuildRecordSnapshotCallOptions {
   compactMaxMessageBytes?: number;
   generatedAt?: string;
@@ -45,6 +87,7 @@ export interface BuildRecordSnapshotCallOptions {
   snapshotIndex?: number;
   stateSourceMode?: string;
   submitEnabled?: boolean;
+  recordVersion?: "v0" | "v1";
 }
 
 const root = resolve(new URL("../..", import.meta.url).pathname);
@@ -69,6 +112,14 @@ function minProgramRpcUrls(forceMultiRpc: boolean): number {
     throw new Error("VITALS_MIN_PROGRAM_RPC_URLS must be a positive integer");
   }
   return Math.max(forceMultiRpc ? 2 : 1, parsed);
+}
+
+function recordSnapshotVersion(options: BuildRecordSnapshotCallOptions): "v0" | "v1" {
+  const value = options.recordVersion || process.env.VITALS_RECORD_SNAPSHOT_VERSION || "v0";
+  if (value !== "v0" && value !== "v1") {
+    throw new Error("VITALS_RECORD_SNAPSHOT_VERSION must be v0 or v1");
+  }
+  return value;
 }
 
 async function nextSnapshotIndex(options: BuildRecordSnapshotCallOptions = {}): Promise<number> {
@@ -168,6 +219,73 @@ export async function buildRecordSnapshotCall(
   const snapshotIndex = await nextSnapshotIndex(options);
   const summaryRow = encodeSummaryRow(summaryRowFromSnapshot(snapshot, snapshotIndex));
   const latestSummaryHash = summaryHash(summaryRow);
+  const version = recordSnapshotVersion(options);
+
+  if (version === "v1") {
+    const historyRowModel = historyV1RowFromSnapshot(snapshot, snapshotIndex);
+    const historyRow = encodeHistoryV1Row(historyRowModel);
+    const historyRowHash = historyV1RowHashHex(historyRow);
+    const params = [
+      envelope.snapshot_id,
+      envelope.observed_at,
+      historyRowModel.observed_at_unix,
+      payload.octra.epoch,
+      snapshotIndex,
+      payload.schema_version,
+      SUMMARY_SCHEMA_VERSION,
+      HISTORY_V1_SCHEMA_VERSION,
+      envelope.payload_hash,
+      envelope.evidence_manifest_hash,
+      refsHash,
+      latestSummaryHash,
+      canonicalPayload,
+      canonicalEvidenceManifest,
+      canonicalSourceRefs,
+      summaryRow,
+      historyRow
+    ];
+    const compactMessageBytes = Buffer.byteLength(JSON.stringify(params));
+    const compactMaxMessageBytes = options.compactMaxMessageBytes ??
+      Number(process.env.VITALS_COMPACT_SNAPSHOT_MAX_MESSAGE_BYTES || 20_000);
+    if (compactMessageBytes > compactMaxMessageBytes) {
+      throw new Error(`record_snapshot_v1 call would be ${compactMessageBytes} bytes, above VITALS_COMPACT_SNAPSHOT_MAX_MESSAGE_BYTES=${compactMaxMessageBytes}`);
+    }
+
+    const circleId = configuredProgrammedCircleId();
+    return {
+      schema: "octra-vitals-record-snapshot-call-v1",
+      commit_mode: "v1",
+      generated_at: options.generatedAt || isoNow(),
+      program_address: options.programAddress || process.env.VITALS_STATE_PROGRAM_ADDRESS || circleId || "pending",
+      target_kind: stateTargetMode(),
+      ...(circleId ? { circle_id: circleId } : {}),
+      method: "record_snapshot_v1",
+      params,
+      compact_message_bytes: compactMessageBytes,
+      snapshot_index: snapshotIndex,
+      summary: {
+        schema_version: SUMMARY_SCHEMA_VERSION,
+        row: summaryRow,
+        row_hash: latestSummaryHash
+      },
+      history: {
+        schema_version: HISTORY_V1_SCHEMA_VERSION,
+        row: historyRow,
+        row_hash: historyRowHash
+      },
+      expected_hashes: {
+        payload_hash: envelope.payload_hash,
+        evidence_manifest_hash: envelope.evidence_manifest_hash,
+        source_refs_hash: refsHash,
+        summary_hash: latestSummaryHash,
+        history_row_hash: historyRowHash
+      },
+      readonly_check: {
+        method: "get_latest_history_row_hash",
+        expected_after_submit: historyRowHash
+      }
+    };
+  }
 
   const params = [
     envelope.snapshot_id,
