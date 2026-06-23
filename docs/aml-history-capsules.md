@@ -376,6 +376,8 @@ Operator-signed checkpoints alone are not an acceptable replacement for AML-resi
 ## Open Questions For Devnet Probe
 
 - Exact AML map support in programmed Site Circle verification.
+- Whether a growing `map[capsule_id] -> sealed body` with 14KB+ values remains safe, readable, and cost-effective after multiple capsules.
+- Whether a persistent cross-capsule root can be maintained cheaply while preserving O(capsule) browser verification for historical slices.
 - Maximum safe field size, return size, and transaction write footprint.
 - Append cost for each candidate capsule size.
 - Browser verification cost for 1-day, 7-day, 30-day, and 1-year slices.

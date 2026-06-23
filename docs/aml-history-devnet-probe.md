@@ -229,6 +229,7 @@ Local report artifacts were copied to ignored paths:
 reports/aml-history-devnet-pilot-12.json
 reports/aml-history-devnet-pilot-48.json
 reports/aml-history-devnet-map-calendar-3.json
+reports/aml-history-devnet-body-map-2x48.json
 ```
 
 Interpretation:
@@ -240,7 +241,11 @@ Interpretation:
 - Seal/reset costs were small relative to append writes.
 - AML maps using `map[string]string` compiled, formally verified, wrote packed capsule metadata/calendar rows, and read back exact values.
 - Calendar metadata writes are cheap enough to keep Candidate B alive: one bundle containing a capsule meta row plus day/month/year nodes cost 2,009 effort in the probe.
-- Do not proceed to conversion/history preservation solely from this result. The current strongest candidates are 48-row or 96-row AML-resident capsules plus map-backed capsule metadata and calendar stat nodes; 96-row capsules now deserve serious consideration because daily capsule identity is much cleaner.
+- Do not proceed to conversion/history preservation solely from the initial open-body/map-calendar result. That first probe validated open capsule bodies and small metadata maps, not a growing AML map of sealed body-sized values.
+- The resident-body map probe stored two sealed 48-row bodies in AML, stored aligned tx-index strings, read all of them back, and verified a persistent cross-capsule root.
+- Body-map seal cost rose to 3,127 effort because each seal writes the retained body, metadata, tx index, and root; that is expected and now measurable.
+- The next design gate is longer resident-body retention and the same shape in a programmed Site Circle.
+- 96-row capsules still deserve consideration because daily capsule identity is cleaner, but they should be judged after resident-body retention and programmed-Circle behavior are measured.
 
 Operational lessons:
 
@@ -248,3 +253,4 @@ Operational lessons:
 - Future long probes should use a dedicated probe wallet and write progress reports after deploy, initialize, and every N appends.
 - Long-running probes should be resumable/progress-reporting by default.
 - A production-like cadence test is still preferable before a real successor deployment because one snapshot every 15 minutes is gentler than a tight back-to-back stress loop.
+- Seal and reset should be one atomic transition in v1. The first probe accepted an operator-supplied reset root, which is acceptable for a disposable probe but not for a canonical history contract.

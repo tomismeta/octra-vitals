@@ -9,6 +9,7 @@ export const HISTORY_ROOT_DOMAIN = "octra-vitals:history-root:v1-probe";
 export const CAPSULE_BODY_HASH_DOMAIN = "octra-vitals:capsule-body:v1-probe";
 export const CAPSULE_META_HASH_DOMAIN = "octra-vitals:capsule-meta:v1-probe";
 export const CAPSULE_TX_INDEX_HASH_DOMAIN = "octra-vitals:capsule-tx-index:v1-probe";
+export const CAPSULES_ROOT_HASH_DOMAIN = "octra-vitals:capsules-root:v1-probe";
 export const CALENDAR_STAT_NODE_HASH_DOMAIN = "octra-vitals:calendar-stat-node:v1-probe";
 export const HISTORY_ROW_LEN = 295;
 export const CAPSULE_META_LEN = 346;
@@ -165,6 +166,25 @@ function capsuleFamilyFromCode(code: string): string {
 
 export function emptyHistoryRootHex(): string {
   return taggedHashHex(HISTORY_ROOT_DOMAIN, "");
+}
+
+export function emptyCapsulesRootHex(): string {
+  return taggedHashHex(CAPSULES_ROOT_HASH_DOMAIN, "");
+}
+
+export function foldCapsulesRootHex(
+  startRootHex: string,
+  capsuleId: string,
+  bodyHashHex: string,
+  metaHashHex: string,
+  endRootHex: string
+): string {
+  const root = hex64(startRootHex, "capsules_root_hex");
+  if (!/^\d{4}-\d{2}-\d{2}T\d{2}$/.test(capsuleId)) throw new Error("capsule_id must be YYYY-MM-DDTHH");
+  return taggedHashHex(
+    CAPSULES_ROOT_HASH_DOMAIN,
+    `${root}\n${capsuleId}\n${hex64(bodyHashHex, "body_hash_hex")}\n${hex64(metaHashHex, "meta_hash_hex")}\n${hex64(endRootHex, "end_root_hex")}`
+  );
 }
 
 export function foldHistoryRootHex(startRootHex: string, encodedRows: string[]): string {

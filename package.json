@@ -44,6 +44,8 @@
     "history-probe:run-devnet": "npm run history-probe:compile && node dist/scripts/run-history-probe-devnet.js",
     "history-map-probe:compile": "npm run build && node dist/scripts/compile-history-map-probe.js",
     "history-map-probe:run-devnet": "npm run history-map-probe:compile && node dist/scripts/run-history-map-probe-devnet.js",
+    "history-body-map-probe:compile": "npm run build && node dist/scripts/compile-history-body-map-probe.js",
+    "history-body-map-probe:run-devnet": "npm run history-body-map-probe:compile && node dist/scripts/run-history-body-map-probe-devnet.js",
     "release:plan": "bash deploy/mainnet/plan-release.sh",
     "circle:release": "npm run build && node dist/scripts/build-producer-audit-manifest.js && node dist/scripts/build-site-circle-release.js",
     "circle:deploy": "npm run build && node dist/scripts/build-producer-audit-manifest.js && node dist/scripts/deploy-site-circle.js",

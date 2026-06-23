@@ -9,9 +9,11 @@ import {
   capsuleIdForUnix,
   decodeCapsuleMeta,
   decodeHistoryRow,
+  emptyCapsulesRootHex,
   encodeCalendarStatNode,
   emptyHistoryRootHex,
   encodeHistoryRow,
+  foldCapsulesRootHex,
   HISTORY_ROW_LEN,
   makeCapsule,
   makeTxIndex,
@@ -74,6 +76,40 @@ test("transaction lookup index is aligned and optional", () => {
 
   assert.equal(txIndex.length, 2 * 64);
   assert.notEqual(capsule.meta.tx_index_hash_hex, "0".repeat(64));
+});
+
+test("capsules root commits to sealed body, metadata, and row-root order", () => {
+  const first = makeCapsule([syntheticHistoryRow(1), syntheticHistoryRow(2)]);
+  const second = makeCapsule([syntheticHistoryRow(3), syntheticHistoryRow(4)], {
+    startRootHex: first.meta.end_root_hex
+  });
+  const firstMetaHash = first.meta_hash_hex;
+  const secondMetaHash = second.meta_hash_hex;
+
+  const afterFirst = foldCapsulesRootHex(
+    emptyCapsulesRootHex(),
+    first.meta.capsule_id,
+    first.body_hash_hex,
+    firstMetaHash,
+    first.meta.end_root_hex
+  );
+  const afterSecond = foldCapsulesRootHex(
+    afterFirst,
+    second.meta.capsule_id,
+    second.body_hash_hex,
+    secondMetaHash,
+    second.meta.end_root_hex
+  );
+
+  assert.match(afterSecond, /^[0-9a-f]{64}$/);
+  assert.notEqual(afterFirst, afterSecond);
+  assert.notEqual(afterSecond, foldCapsulesRootHex(
+    emptyCapsulesRootHex(),
+    second.meta.capsule_id,
+    second.body_hash_hex,
+    secondMetaHash,
+    second.meta.end_root_hex
+  ));
 });
 
 test("calendar stat node is fixed-width and hashable", () => {
