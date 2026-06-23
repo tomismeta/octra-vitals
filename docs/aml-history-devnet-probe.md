@@ -230,6 +230,7 @@ reports/aml-history-devnet-pilot-12.json
 reports/aml-history-devnet-pilot-48.json
 reports/aml-history-devnet-map-calendar-3.json
 reports/aml-history-devnet-body-map-2x48.json
+reports/aml-history-devnet-body-map-4x48.json
 ```
 
 Interpretation:
@@ -243,8 +244,9 @@ Interpretation:
 - Calendar metadata writes are cheap enough to keep Candidate B alive: one bundle containing a capsule meta row plus day/month/year nodes cost 2,009 effort in the probe.
 - Do not proceed to conversion/history preservation solely from the initial open-body/map-calendar result. That first probe validated open capsule bodies and small metadata maps, not a growing AML map of sealed body-sized values.
 - The resident-body map probe stored two sealed 48-row bodies in AML, stored aligned tx-index strings, read all of them back, and verified a persistent cross-capsule root.
+- The resumable body-map runner extended the same disposable program to four sealed 48-row bodies. It wrote progress after every append/seal and read all four bodies, metas, and tx-index strings back successfully.
 - Body-map seal cost rose to 3,127 effort because each seal writes the retained body, metadata, tx index, and root; that is expected and now measurable.
-- The next design gate is longer resident-body retention and the same shape in a programmed Site Circle.
+- The next design gate is the same shape in a programmed Site Circle, then a production-cadence soak.
 - 96-row capsules still deserve consideration because daily capsule identity is cleaner, but they should be judged after resident-body retention and programmed-Circle behavior are measured.
 
 Operational lessons:

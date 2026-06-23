@@ -12,7 +12,8 @@ The probe tested three things:
 
 - fixed-width open AML capsule bodies for 15-minute observations;
 - `map[string]string` support for small capsule metadata and calendar stat nodes;
-- the practical cost/risk of larger 96-row/day capsules.
+- the practical cost/risk of larger 96-row/day capsules;
+- AML-resident sealed body retention with resumable progress reporting.
 
 Important caveat: the first capsule probe did not store sealed bodies forever. It kept one open capsule body in AML, computed its hash at seal time, then reset the open body. The map/calendar probe stored small metadata rows and calendar nodes, not body-sized historical capsules. These results are encouraging but they do not yet prove a growing AML map of sealed 14KB+ capsule bodies.
 
@@ -26,6 +27,8 @@ reports/aml-history-devnet-pilot-48.json
 reports/aml-history-devnet-pilot-96-resumed.json
 reports/aml-history-devnet-map-calendar-3.json
 reports/aml-history-devnet-body-map-2x48.json
+reports/aml-history-devnet-body-map-4x48.json
+reports/aml-history-devnet-body-map-4x48.progress.json
 ```
 
 The shareable summary is this file. The raw reports are not required for a public push.
@@ -170,7 +173,54 @@ capsule 2026-06-07T00    body true, meta true, tx-index true
 capsule 2026-06-07T12    body true, meta true, tx-index true
 ```
 
-Interpretation: a standalone devnet AML program can retain multiple sealed 14,160-byte capsule bodies in `map[string]string`, retain aligned 3,072-byte transaction indexes, and return all of them later by capsule id. This materially strengthens the AML-resident history case, but it is still not a programmed Site Circle result and it only proves two stored capsules, not months of accumulated map growth.
+Interpretation: a standalone devnet AML program can retain multiple sealed 14,160-byte capsule bodies in `map[string]string`, retain aligned 3,072-byte transaction indexes, and return all of them later by capsule id. This materially strengthens the AML-resident history case, but it is still not a programmed Site Circle result and the first body-map run only proved two stored capsules, not months of accumulated map growth.
+
+### Resumable Resident Body Map Extension
+
+The 2-capsule body-map program was then extended in place using a resumable runner seeded from the first report.
+
+Program:
+
+```text
+octCehSDj3iw4egE1KuDvyMbrZu8efY3j67D9xEQT3RrTSn
+```
+
+Measured write:
+
+```text
+target capsules          4
+rows per capsule         48
+total rows               192
+body bytes each          14,160
+metadata bytes each      346
+tx-index bytes each      3,072
+new append effort avg/max 1,482 / 1,692
+seal effort each         3,127
+final capsules_root      59bbbad32a10a8698143c0fcc3988180ed652038999356db72eeca64a94c030d
+```
+
+Readback result:
+
+```text
+snapshot_count           192
+capsule_count            4
+capsules_root matched    true
+open row count           0
+capsule 2026-06-07T00    body true, meta true, tx-index true
+capsule 2026-06-07T12    body true, meta true, tx-index true
+capsule 2026-06-08T00    body true, meta true, tx-index true
+capsule 2026-06-08T12    body true, meta true, tx-index true
+```
+
+Progress behavior:
+
+```text
+progress file            reports/aml-history-devnet-body-map-4x48.progress.json
+progress writes          after seed, every append, every seal, final completion
+resume source            reports/aml-history-devnet-body-map-2x48.json
+```
+
+Interpretation: the resident-body map shape can be extended beyond the initial two capsules, and the cross-capsule root remains verifiable after four retained body-sized map entries. The resumable runner also fixes the operational gap exposed by the 96-row stress test: a failed long run now leaves enough public progress to continue without restarting from scratch.
 
 ## 96-Row Stress Test
 
@@ -200,9 +250,8 @@ Conclusion: 96-row/day capsules are technically viable in AML/RPC, but long prob
 ## What Is Missing
 
 - Browser verification timing for 1-day, 7-day, 30-day, and 1-year views.
-- A built-in resumable/progress-reporting long-run probe so failures do not lose partial state.
 - A production-like cadence test, because tight back-to-back stress writes are harsher than one snapshot every 15 minutes.
-- A longer resident-body map probe that stores more than two sealed capsules and writes progress after every append/seal.
+- A longer resident-body map probe beyond four sealed capsules, ideally over production cadence rather than tight back-to-back writes.
 - A programmed Site Circle probe, because standalone AML success is not automatically equivalent to the production host shape.
 - A successor-program design review that converts the measured probe shape into a real v1 AML state contract.
 - A cutover/migration plan that preserves v0 honestly without fake backfill.
@@ -215,15 +264,16 @@ Use the measured path as the current devnet-favored target, still gated before p
 48-row open capsule body is the conservative measured baseline
 96-row open capsule body is technically viable after recovery
 map-backed small capsule metadata/calendar rows are viable in standalone AML
-sealed 48-row body retention in AML maps is viable for two capsules in standalone AML
-aligned tx-index retention in AML maps is viable for two capsules in standalone AML
+sealed 48-row body retention in AML maps is viable for four capsules in standalone AML
+aligned tx-index retention in AML maps is viable for four capsules in standalone AML
+resumable progress reporting works for long devnet body-map probes
 latest full payload/evidence/source refs retained separately
 raw evidence archive remains host-side by content hash
 ```
 
 The 96-row/day capsule option is viable enough to keep in the design space. It is more elegant operationally because capsule ids line up with UTC days, but the 48-row/12-hour option remains the conservative measured baseline.
 
-The next engineering step should be a resumable resident-body runner that writes progress after every append/seal, then repeats this probe with a longer capsule count and, after that, in a programmed Site Circle shape. A production-cadence soak is still useful for wallet/RPC reliability, but it should not be treated as proof of forever AML-resident history by itself.
+The next engineering step should be the same resident-body shape in a programmed Site Circle, followed by a production-cadence soak. A longer standalone run is still useful, but the largest remaining architecture uncertainty is now Circle parity rather than whether body-sized AML map entries can work at all.
 
 ## Push Recommendation
 
