@@ -1187,23 +1187,9 @@ function historySpan(rows=activeSeries()){
   if(h) return `${h}h`;
   return `${m}m`;
 }
-function historyWindowStatus(){
-  const rows = activeSeries();
-  if(!hasCanonicalHistoryWindow(rows)) return "latest snapshot only";
-  const first = parseRowTime(rows[0]);
-  const last = parseRowTime(rows[rows.length - 1]);
-  const cfg = selectedHistoryWindow();
-  const span = historySpan(rows);
-  if(first == null || last == null || !cfg) return span;
-  const actual = Math.max(0, last - first);
-  return actual >= cfg.ms * 0.95 ? `${cfg.label} window` : `${span} available`;
-}
 function syncHistoryWindowControls(){
   document.querySelectorAll("[data-history-window]").forEach((btn)=>{
     btn.setAttribute("aria-pressed", String(btn.dataset.historyWindow === sparkWindow));
-  });
-  document.querySelectorAll("[data-history-status]").forEach((node)=>{
-    node.textContent = historyWindowStatus();
   });
 }
 function compactDelta(raw){
