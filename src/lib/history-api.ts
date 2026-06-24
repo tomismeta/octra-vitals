@@ -200,12 +200,16 @@ export function historyApiCoverage(snapshots: NormalizedHistorySnapshot[], filte
 }
 
 export function emptyHistoryProof(historyModel: string, verified: boolean): HistoryApiProof {
+  return verifiedHistoryProof(historyModel, verified, []);
+}
+
+export function verifiedHistoryProof(historyModel: string, verified: boolean, eras: unknown[] = [], families: unknown[] = [], capsules: unknown[] = []): HistoryApiProof {
   const factFamilyVerified = verified && historyModel.includes("fact_family") && historyModel.includes("verified");
   return {
     history_model: historyModel,
     proof_status: factFamilyVerified ? "fact_family_verified" : verified ? "summary_window_verified" : "unavailable",
-    eras: [],
-    families: [],
-    capsules: []
+    eras,
+    families,
+    capsules
   };
 }

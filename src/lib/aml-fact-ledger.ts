@@ -28,6 +28,7 @@ export const FACT_LEDGER_CAPSULE_BODY_HASH_DOMAIN = "octra-vitals:fact-capsule-b
 export const FACT_LEDGER_CAPSULE_META_HASH_DOMAIN = "octra-vitals:fact-capsule-meta:v1";
 export const FACT_LEDGER_CATALOG_ROOT_DOMAIN = "octra-vitals:fact-catalog-root:v1";
 export const FACT_LEDGER_FAMILY_SET_HASH_DOMAIN = "octra-vitals:fact-family-set:v1";
+export const FACT_LEDGER_ERA_ANCHOR_HASH_DOMAIN = "octra-vitals:fact-ledger-era-anchor:v1";
 export const FACT_LEDGER_EMPTY_TX_INDEX_HASH_HEX = "0".repeat(64);
 export const FACT_LEDGER_EMPTY_FAMILY_ID = "9999";
 export const FACT_LEDGER_EMPTY_CAPSULE_ID = "none".padEnd(24, "_");
@@ -124,6 +125,16 @@ export interface PackedMetricFactRow {
   payload_hash_hex: string;
 }
 
+export interface FactLedgerEraAnchorInput {
+  networkId: string;
+  predecessorProgram: string;
+  predecessorFinalRoot: string;
+  predecessorFinalIndex: number;
+  eraProgram: string;
+  eraFirstSnapshotIndex: number;
+  familyId?: string;
+}
+
 const FAMILY_KIND_CODES: Record<FactFamilyKind, string> = {
   core: "00",
   source_auxiliary: "01",
@@ -211,6 +222,11 @@ function taggedHashHex(domain: string, value: string): string {
   return sha256Hex(`${domain}\n${value}`);
 }
 
+function manifestText(value = FACT_LEDGER_MANIFEST): string {
+  if (!value || !/^[a-z0-9:._-]+$/i.test(value)) throw new Error("fact ledger manifest is malformed");
+  return value;
+}
+
 function digits(value: string | number | bigint, width: number, label: string): string {
   const text = String(value);
   if (!/^\d+$/.test(text)) throw new Error(`${label} must be unsigned decimal digits`);
@@ -283,12 +299,12 @@ function decodeCode<T extends string>(map: Record<string, T | undefined>, code: 
   return value;
 }
 
-export function factLedgerEmptyFamilyRootHex(familyId: string, schemaId: string): string {
-  return taggedHashHex(FACT_LEDGER_FAMILY_ROOT_DOMAIN, `${FACT_LEDGER_MANIFEST}\n${code4(familyId, "family_id")}\n${code4(schemaId, "schema_id")}`);
+export function factLedgerEmptyFamilyRootHex(familyId: string, schemaId: string, manifest = FACT_LEDGER_MANIFEST): string {
+  return taggedHashHex(FACT_LEDGER_FAMILY_ROOT_DOMAIN, `${manifestText(manifest)}\n${code4(familyId, "family_id")}\n${code4(schemaId, "schema_id")}`);
 }
 
-export function factLedgerEmptyFamilyCapsulesRootHex(familyId: string, schemaId: string): string {
-  return taggedHashHex(FACT_LEDGER_FAMILY_CAPSULES_ROOT_DOMAIN, `${FACT_LEDGER_MANIFEST}\n${code4(familyId, "family_id")}\n${code4(schemaId, "schema_id")}`);
+export function factLedgerEmptyFamilyCapsulesRootHex(familyId: string, schemaId: string, manifest = FACT_LEDGER_MANIFEST): string {
+  return taggedHashHex(FACT_LEDGER_FAMILY_CAPSULES_ROOT_DOMAIN, `${manifestText(manifest)}\n${code4(familyId, "family_id")}\n${code4(schemaId, "schema_id")}`);
 }
 
 export function factLedgerEmptyCatalogRootHex(): string {
@@ -313,16 +329,16 @@ function defaultOnePerSnapshotKey(encodedRow: string): string {
   return encodedRow.slice(3, 13);
 }
 
-export function factLedgerRowHashHex(familyId: string, schemaId: string, encodedRow: string, rowKey = defaultOnePerSnapshotKey(encodedRow)): string {
+export function factLedgerRowHashHex(familyId: string, schemaId: string, encodedRow: string, rowKey = defaultOnePerSnapshotKey(encodedRow), manifest = FACT_LEDGER_MANIFEST): string {
   code4(familyId, "family_id");
   code4(schemaId, "schema_id");
-  return taggedHashHex(FACT_LEDGER_ROW_HASH_DOMAIN, `${FACT_LEDGER_MANIFEST}\n${familyId}\n${schemaId}\n${fixedText(rowKey, 20, "row_key")}\n${encodedRow}`);
+  return taggedHashHex(FACT_LEDGER_ROW_HASH_DOMAIN, `${manifestText(manifest)}\n${familyId}\n${schemaId}\n${fixedText(rowKey, 20, "row_key")}\n${encodedRow}`);
 }
 
-export function factLedgerFoldFamilyRootHex(familyId: string, schemaId: string, startRootHex: string, encodedRows: string[]): string {
+export function factLedgerFoldFamilyRootHex(familyId: string, schemaId: string, startRootHex: string, encodedRows: string[], manifest = FACT_LEDGER_MANIFEST): string {
   let root = hex64(startRootHex, "start_root_hex");
   for (const row of encodedRows) {
-    root = taggedHashHex(FACT_LEDGER_FAMILY_ROOT_DOMAIN, `${FACT_LEDGER_MANIFEST}\n${familyId}\n${schemaId}\n${root}\n${factLedgerRowHashHex(familyId, schemaId, row)}`);
+    root = taggedHashHex(FACT_LEDGER_FAMILY_ROOT_DOMAIN, `${manifestText(manifest)}\n${familyId}\n${schemaId}\n${root}\n${factLedgerRowHashHex(familyId, schemaId, row, defaultOnePerSnapshotKey(row), manifest)}`);
   }
   return root;
 }
@@ -334,13 +350,14 @@ export function factLedgerFoldFamilyCapsulesRootHex(input: {
   capsuleId: string;
   bodyHashHex: string;
   rowRootAfterHex: string;
+  manifest?: string;
 }): string {
   const familyId = code4(input.familyId, "family_id");
   const schemaId = code4(input.schemaId, "schema_id");
   return taggedHashHex(
     FACT_LEDGER_FAMILY_CAPSULES_ROOT_DOMAIN,
     [
-      FACT_LEDGER_MANIFEST,
+      manifestText(input.manifest),
       familyId,
       schemaId,
       hex64(input.startRootHex, "start_root_hex"),
@@ -351,12 +368,12 @@ export function factLedgerFoldFamilyCapsulesRootHex(input: {
   );
 }
 
-export function factLedgerCapsuleBodyHashHex(familyId: string, schemaId: string, body: string, rowLen: number): string {
+export function factLedgerCapsuleBodyHashHex(familyId: string, schemaId: string, body: string, rowLen: number, manifest = FACT_LEDGER_MANIFEST): string {
   code4(familyId, "family_id");
   code4(schemaId, "schema_id");
   if (!Number.isSafeInteger(rowLen) || rowLen <= 0) throw new Error("rowLen must be positive");
   if (body.length % rowLen !== 0) throw new Error("capsule body must be row aligned");
-  return taggedHashHex(FACT_LEDGER_CAPSULE_BODY_HASH_DOMAIN, `${FACT_LEDGER_MANIFEST}\n${familyId}\n${schemaId}\n${body}`);
+  return taggedHashHex(FACT_LEDGER_CAPSULE_BODY_HASH_DOMAIN, `${manifestText(manifest)}\n${familyId}\n${schemaId}\n${body}`);
 }
 
 export function factLedgerCapsuleMetaHashHex(metaRow: string): string {
@@ -370,6 +387,21 @@ export function factLedgerFamilySetHashHex(capsuleId: string, familyRoots: Array
     .sort((a, b) => a.family_id.localeCompare(b.family_id));
   const text = [fixedText(capsuleId, 24, "capsule_id"), ...normalized.map((item) => `${item.family_id}:${item.root_hex}`)].join("\n");
   return taggedHashHex(FACT_LEDGER_FAMILY_SET_HASH_DOMAIN, text);
+}
+
+export function factLedgerEraAnchorHashHex(input: FactLedgerEraAnchorInput): string {
+  const familyId = code4(input.familyId || FACT_LEDGER_CORE_FAMILY_ID, "family_id");
+  const text = [
+    FACT_LEDGER_ERA_ANCHOR_HASH_DOMAIN,
+    input.networkId,
+    input.predecessorProgram,
+    hex64(input.predecessorFinalRoot, "predecessor_final_root"),
+    String(input.predecessorFinalIndex),
+    input.eraProgram,
+    String(input.eraFirstSnapshotIndex),
+    familyId
+  ].join("\n");
+  return sha256Hex(text);
 }
 
 export function coreFactFamilyDefinition(firstSnapshotIndex = 1): FactFamilyDefinition {

@@ -1,9 +1,20 @@
 import { canonicalJson, sha256Tagged } from "./canonical-json.js";
 import { circleProgramViewAtUrl } from "./circle-program.js";
 import { contractCallAtUrl, octraProgramRpcUrls } from "./octra-rpc.js";
-import { decodeHistoryV1Rows, HISTORY_V1_ROW_LEN, type HistoryV1ObservationRow } from "./aml-history-v1.js";
+import {
+  decodeHistoryV1CapsuleMeta,
+  decodeHistoryV1Rows,
+  historyV1CapsuleBodyHashHex,
+  historyV1CapsuleMetaHashHex,
+  historyV1EmptyHistoryRootHex,
+  historyV1FoldCapsulesRootHex,
+  historyV1FoldHistoryRootHex,
+  HISTORY_V1_ROW_LEN,
+  type HistoryV1ObservationRow
+} from "./aml-history-v1.js";
 import {
   decodeFactCapsuleMeta,
+  factLedgerEraAnchorHashHex,
   factLedgerCapsuleBodyHashHex,
   factLedgerEmptyFamilyCapsulesRootHex,
   factLedgerFoldFamilyCapsulesRootHex,
@@ -11,7 +22,7 @@ import {
   FACT_LEDGER_CORE_FAMILY_ID,
   FACT_LEDGER_CORE_SCHEMA_ID
 } from "./aml-fact-ledger.js";
-import { assertLatestSummaryMatchesSnapshot, encodeSummaryRow, parseSummaryWindow, summaryHash, summaryWindowHash, SUMMARY_ROW_LEN, type ProgramHistoryWindow, type SummaryRow } from "./summary-window.js";
+import { assertLatestSummaryMatchesSnapshot, encodeSummaryRow, parseSummaryWindow, summaryHash, summaryWindowHash, SUMMARY_ROW_LEN, type ProgramHistoryEra, type ProgramHistoryWindow, type SummaryRow } from "./summary-window.js";
 import type { EvidenceEntry, EvidenceManifest, SnapshotArtifact, SnapshotEnvelope, SnapshotPayload, SourceRef } from "./types.js";
 
 const SNAPSHOT_HASH_DOMAIN = process.env.VITALS_SNAPSHOT_HASH_DOMAIN || "octra-vitals:snapshot:v0";
@@ -95,6 +106,57 @@ function assertSameHistory(primary: ProgramHistoryWindow, candidate: ProgramHist
   }
 }
 
+function historyLatestIndex(history: ProgramHistoryWindow): number {
+  return history.rows[history.rows.length - 1]?.snapshot_index || 0;
+}
+
+function historyFirstIndex(history: ProgramHistoryWindow): number {
+  return history.rows[0]?.snapshot_index || history.first_index || 0;
+}
+
+function combinedHistoryWindow(eras: ProgramHistoryWindow[], historyDiscovery = "aml_multi_era_fact_family_core_capsules_verified"): ProgramHistoryWindow {
+  const nonEmpty = eras.filter((era) => era.row_count > 0 && era.rows.length > 0);
+  if (!nonEmpty.length) {
+    return {
+      first_index: 0,
+      row_count: 0,
+      row_len: SUMMARY_ROW_LEN,
+      window: "",
+      window_hash: summaryWindowHash(""),
+      rows: [],
+      history_discovery: historyDiscovery,
+      eras: eras.flatMap((era) => era.eras || [])
+    };
+  }
+  const rows: SummaryRow[] = [];
+  const windows: string[] = [];
+  for (const era of nonEmpty) {
+    if (era.row_len !== SUMMARY_ROW_LEN) throw new Error("era history row length mismatch");
+    const expectedFirst = rows.length === 0 ? historyFirstIndex(era) : (rows[rows.length - 1]?.snapshot_index || 0) + 1;
+    const actualFirst = historyFirstIndex(era);
+    if (actualFirst !== expectedFirst) {
+      throw new Error(`era history index continuity mismatch: expected ${expectedFirst}, got ${actualFirst}`);
+    }
+    rows.push(...era.rows);
+    windows.push(era.window);
+  }
+  const window = windows.join("");
+  const combined: ProgramHistoryWindow = {
+    first_index: rows[0]?.snapshot_index || 0,
+    row_count: rows.length,
+    row_len: SUMMARY_ROW_LEN,
+    window,
+    window_hash: summaryWindowHash(window),
+    rows,
+    history_discovery: historyDiscovery,
+    eras: eras.flatMap((era) => era.eras || [])
+  };
+  const latestEra = eras[eras.length - 1];
+  if (latestEra?.history_root) combined.history_root = latestEra.history_root;
+  if (latestEra?.capsules_root) combined.capsules_root = latestEra.capsules_root;
+  return combined;
+}
+
 function summaryRowFromHistoryV1Row(row: HistoryV1ObservationRow): SummaryRow {
   return {
     row_version: "00",
@@ -130,6 +192,76 @@ function programHistoryWindowFromHistoryV1Body(body: string, historyDiscovery = 
   };
 }
 
+function verifiedHistoryWindowFromHistoryV1(input: {
+  sealedCapsule?: { id: string; body: string; meta: string; rootAfter: string } | null;
+  openBody: string;
+  openRowCount: number;
+  openEndRoot: string;
+  historyRoot: string;
+  capsulesRoot?: string | null;
+  capsuleCount?: number;
+}): ProgramHistoryWindow {
+  const bodies: string[] = [];
+  let openStartRoot = historyV1EmptyHistoryRootHex();
+
+  if (input.sealedCapsule?.id) {
+    const capsule = input.sealedCapsule;
+    if (!capsule.body || !capsule.meta || !capsule.rootAfter) {
+      throw new Error("history v1 sealed capsule readback is incomplete");
+    }
+    const meta = decodeHistoryV1CapsuleMeta(capsule.meta);
+    if (meta.capsule_id !== capsule.id) {
+      throw new Error(`history v1 capsule id mismatch: expected ${capsule.id}, got ${meta.capsule_id}`);
+    }
+    if (capsule.body.length !== Number(meta.row_count) * HISTORY_V1_ROW_LEN) {
+      throw new Error("history v1 capsule body length does not match metadata row count");
+    }
+    const rows = splitHistoryRows(capsule.body);
+    const bodyHash = historyV1CapsuleBodyHashHex(capsule.body);
+    if (bodyHash !== meta.body_hash_hex) {
+      throw new Error("history v1 capsule body hash mismatch");
+    }
+    const metaHash = historyV1CapsuleMetaHashHex(capsule.meta);
+    const endRoot = historyV1FoldHistoryRootHex(meta.start_root_hex, rows);
+    if (endRoot !== meta.end_root_hex) {
+      throw new Error("history v1 capsule end root mismatch");
+    }
+    const rootAfter = historyV1FoldCapsulesRootHex(meta.capsules_root_before_hex, meta.capsule_id, bodyHash, metaHash, endRoot);
+    if (rootAfter !== capsule.rootAfter) {
+      throw new Error("history v1 capsule root-after mismatch");
+    }
+    if (input.capsulesRoot && rootAfter !== input.capsulesRoot && Number(input.capsuleCount || 0) <= 1) {
+      throw new Error("history v1 capsules root mismatch");
+    }
+    openStartRoot = meta.end_root_hex;
+    bodies.push(capsule.body);
+  } else if (Number(input.capsuleCount || 0) > 0) {
+    throw new Error("history v1 sealed capsule count is nonzero but latest capsule is unavailable");
+  }
+
+  if (Number(input.openRowCount || 0) > 0) {
+    if (input.openBody.length !== Number(input.openRowCount || 0) * HISTORY_V1_ROW_LEN) {
+      throw new Error("history v1 open capsule body length does not match row count");
+    }
+    const rows = splitHistoryRows(input.openBody);
+    const endRoot = historyV1FoldHistoryRootHex(openStartRoot, rows);
+    if (endRoot !== input.openEndRoot) {
+      throw new Error("history v1 open capsule end root mismatch");
+    }
+    if (input.historyRoot !== input.openEndRoot) {
+      throw new Error("history v1 history root does not match open capsule end root");
+    }
+    bodies.push(input.openBody);
+  } else if (input.historyRoot !== openStartRoot) {
+    throw new Error("history v1 history root does not match latest sealed capsule root");
+  }
+
+  const window = programHistoryWindowFromHistoryV1Body(bodies.join(""), "aml_history_v1_capsule_tail_verified");
+  window.history_root = input.historyRoot;
+  window.capsules_root = input.capsulesRoot || null;
+  return window;
+}
+
 function factLedgerProbeReadsEnabled(): boolean {
   return process.env.VITALS_ENABLE_FACT_LEDGER_PROBE_READS === "1";
 }
@@ -162,6 +294,7 @@ function hexRootOrNull(value: unknown): string | null {
 }
 
 function verifiedHistoryWindowFromFactLedger(input: {
+  manifest?: string | null;
   catalogRoot: string;
   familyRoot: string;
   familyCapsulesRoot?: string | null;
@@ -174,10 +307,11 @@ function verifiedHistoryWindowFromFactLedger(input: {
   openEndRoot: string;
 }): ProgramHistoryWindow {
   const bodies: string[] = [];
+  const manifest = input.manifest || "octra-vitals-fact-ledger.v2";
   let previousRoot: string | null = null;
   const expectedCapsulesRoot = hexRootOrNull(input.familyCapsulesRoot);
   let previousCapsulesRoot: string | null = input.sealedCapsuleStartOrdinal === 0
-    ? factLedgerEmptyFamilyCapsulesRootHex(FACT_LEDGER_CORE_FAMILY_ID, FACT_LEDGER_CORE_SCHEMA_ID)
+    ? factLedgerEmptyFamilyCapsulesRootHex(FACT_LEDGER_CORE_FAMILY_ID, FACT_LEDGER_CORE_SCHEMA_ID, manifest)
     : null;
   for (const capsule of input.sealedCapsules) {
     if (!capsule.id || !capsule.body || !capsule.meta || !capsule.rootAfter) {
@@ -199,12 +333,12 @@ function verifiedHistoryWindowFromFactLedger(input: {
     if (capsule.body.length !== meta.row_count * HISTORY_V1_ROW_LEN) {
       throw new Error("fact capsule body length does not match metadata row count");
     }
-    const bodyHash = factLedgerCapsuleBodyHashHex(FACT_LEDGER_CORE_FAMILY_ID, FACT_LEDGER_CORE_SCHEMA_ID, capsule.body, HISTORY_V1_ROW_LEN);
+    const bodyHash = factLedgerCapsuleBodyHashHex(FACT_LEDGER_CORE_FAMILY_ID, FACT_LEDGER_CORE_SCHEMA_ID, capsule.body, HISTORY_V1_ROW_LEN, manifest);
     if (bodyHash !== meta.body_hash_hex) {
       throw new Error("fact capsule body hash mismatch");
     }
     const rows = splitHistoryRows(capsule.body);
-    const endRoot = factLedgerFoldFamilyRootHex(FACT_LEDGER_CORE_FAMILY_ID, FACT_LEDGER_CORE_SCHEMA_ID, meta.start_root_hex, rows);
+    const endRoot = factLedgerFoldFamilyRootHex(FACT_LEDGER_CORE_FAMILY_ID, FACT_LEDGER_CORE_SCHEMA_ID, meta.start_root_hex, rows, manifest);
     if (endRoot !== meta.end_root_hex) {
       throw new Error("fact capsule end root mismatch");
     }
@@ -214,7 +348,8 @@ function verifiedHistoryWindowFromFactLedger(input: {
       startRootHex: meta.family_root_before_hex,
       capsuleId: capsule.id,
       bodyHashHex: meta.body_hash_hex,
-      rowRootAfterHex: meta.end_root_hex
+      rowRootAfterHex: meta.end_root_hex,
+      manifest
     });
     if (meta.family_root_after_hex !== familyCapsulesRootAfter) {
       throw new Error("fact capsule family capsules root mismatch");
@@ -245,7 +380,7 @@ function verifiedHistoryWindowFromFactLedger(input: {
       throw new Error("fact open capsule body length does not match row count");
     }
     const rows = splitHistoryRows(input.openBody);
-    const endRoot = factLedgerFoldFamilyRootHex(FACT_LEDGER_CORE_FAMILY_ID, FACT_LEDGER_CORE_SCHEMA_ID, input.openStartRoot, rows);
+    const endRoot = factLedgerFoldFamilyRootHex(FACT_LEDGER_CORE_FAMILY_ID, FACT_LEDGER_CORE_SCHEMA_ID, input.openStartRoot, rows, manifest);
     if (endRoot !== input.openEndRoot) {
       throw new Error("fact open capsule end root mismatch");
     }
@@ -260,7 +395,10 @@ function verifiedHistoryWindowFromFactLedger(input: {
     throw new Error("fact family root does not match latest sealed capsule root");
   }
 
-  return programHistoryWindowFromHistoryV1Body(bodies.join(""), "aml_fact_family_core_capsules_verified");
+  const window = programHistoryWindowFromHistoryV1Body(bodies.join(""), "aml_fact_family_core_capsules_verified");
+  window.history_root = input.familyRoot;
+  window.capsules_root = input.familyCapsulesRoot || null;
+  return window;
 }
 
 async function readLatestProgramSnapshotFromUrl(programAddress: string, url: string): Promise<SnapshotReadback> {
@@ -470,19 +608,32 @@ async function readProgramSummaryHistoryFromUrlV0(programAddress: string, url: s
 }
 
 async function readProgramSummaryHistoryFromUrlV1(programAddress: string, url: string): Promise<ProgramHistoryWindow> {
-  const [openBody, openRowCount, latestCapsuleId] = await Promise.all([
+  const [historyRoot, capsulesRoot, capsuleCount, openBody, openRowCount, openEndRoot, latestCapsuleId] = await Promise.all([
+    contractCallAtUrl<string>(url, programAddress, "get_history_root"),
+    contractCallAtUrl<string>(url, programAddress, "get_capsules_root").catch(() => null),
+    contractCallAtUrl<number>(url, programAddress, "get_capsule_count").catch(() => 0),
     contractCallAtUrl<string>(url, programAddress, "get_open_capsule_body"),
     contractCallAtUrl<number>(url, programAddress, "get_open_capsule_row_count"),
+    contractCallAtUrl<string>(url, programAddress, "get_open_capsule_end_root"),
     contractCallAtUrl<string>(url, programAddress, "get_latest_capsule_id").catch(() => "")
   ]);
-  if (Number(openRowCount || 0) > 0 && openBody) {
-    return programHistoryWindowFromHistoryV1Body(openBody);
-  }
-  if (latestCapsuleId) {
-    const latestBody = await contractCallAtUrl<string>(url, programAddress, "get_history_capsule_body", [latestCapsuleId]);
-    if (latestBody) return programHistoryWindowFromHistoryV1Body(latestBody);
-  }
-  return programHistoryWindowFromHistoryV1Body("");
+  const sealedCapsule = latestCapsuleId
+    ? {
+      id: latestCapsuleId,
+      body: await contractCallAtUrl<string>(url, programAddress, "get_history_capsule_body", [latestCapsuleId]),
+      meta: await contractCallAtUrl<string>(url, programAddress, "get_history_capsule_meta", [latestCapsuleId]),
+      rootAfter: await contractCallAtUrl<string>(url, programAddress, "get_history_capsule_root_after", [latestCapsuleId])
+    }
+    : null;
+  return verifiedHistoryWindowFromHistoryV1({
+    sealedCapsule,
+    openBody,
+    openRowCount: Number(openRowCount || 0),
+    openEndRoot,
+    historyRoot,
+    capsulesRoot,
+    capsuleCount: Number(capsuleCount || 0)
+  });
 }
 
 async function readProgramSummaryHistoryFromUrlFactLedger(programAddress: string, url: string): Promise<ProgramHistoryWindow> {
@@ -512,6 +663,7 @@ async function readProgramSummaryHistoryFromUrlFactLedger(programAddress: string
     sealedCapsules.push(...readCapsules);
   }
   return verifiedHistoryWindowFromFactLedger({
+    manifest: "octra-vitals-fact-ledger.v2",
     catalogRoot,
     familyRoot,
     sealedCapsules,
@@ -544,23 +696,59 @@ async function readCircleProgramSummaryHistoryFromUrlV0(circleId: string, url: s
 }
 
 async function readCircleProgramSummaryHistoryFromUrlV1(circleId: string, url: string): Promise<ProgramHistoryWindow> {
-  const [openBody, openRowCount, latestCapsuleId] = await Promise.all([
+  const [manifest, predecessorProgram, historyRoot, capsulesRoot, capsuleCount, openBody, openRowCount, openEndRoot, latestCapsuleId] = await Promise.all([
+    circleProgramViewAtUrl<string>(url, circleId, "manifest").catch(() => "vitals-circle-state.v1"),
+    circleProgramViewAtUrl<string>(url, circleId, "get_predecessor_program").catch(() => ""),
+    circleProgramViewAtUrl<string>(url, circleId, "get_history_root"),
+    circleProgramViewAtUrl<string>(url, circleId, "get_capsules_root").catch(() => null),
+    circleProgramViewAtUrl<number>(url, circleId, "get_capsule_count").catch(() => 0),
     circleProgramViewAtUrl<string>(url, circleId, "get_open_capsule_body"),
     circleProgramViewAtUrl<number>(url, circleId, "get_open_capsule_row_count"),
+    circleProgramViewAtUrl<string>(url, circleId, "get_open_capsule_end_root"),
     circleProgramViewAtUrl<string>(url, circleId, "get_latest_capsule_id").catch(() => "")
   ]);
-  if (Number(openRowCount || 0) > 0 && openBody) {
-    return programHistoryWindowFromHistoryV1Body(openBody);
-  }
-  if (latestCapsuleId) {
-    const latestBody = await circleProgramViewAtUrl<string>(url, circleId, "get_history_capsule_body", [latestCapsuleId]);
-    if (latestBody) return programHistoryWindowFromHistoryV1Body(latestBody);
-  }
-  return programHistoryWindowFromHistoryV1Body("");
+  const sealedCapsule = latestCapsuleId
+    ? {
+      id: latestCapsuleId,
+      body: await circleProgramViewAtUrl<string>(url, circleId, "get_history_capsule_body", [latestCapsuleId]),
+      meta: await circleProgramViewAtUrl<string>(url, circleId, "get_history_capsule_meta", [latestCapsuleId]),
+      rootAfter: await circleProgramViewAtUrl<string>(url, circleId, "get_history_capsule_root_after", [latestCapsuleId])
+    }
+    : null;
+  const history = verifiedHistoryWindowFromHistoryV1({
+    sealedCapsule,
+    openBody,
+    openRowCount: Number(openRowCount || 0),
+    openEndRoot,
+    historyRoot,
+    capsulesRoot,
+    capsuleCount: Number(capsuleCount || 0)
+  });
+  history.eras = [{
+    era_id: circleId,
+    era_program: circleId,
+    manifest: manifest || "vitals-circle-state.v1",
+    history_model: history.history_discovery || "aml_history_v1_capsule_tail_verified",
+    first_index: historyFirstIndex(history),
+    latest_index: historyLatestIndex(history),
+    row_count: history.row_count,
+    root_hash: history.history_root || null,
+    capsules_root: history.capsules_root || null,
+    predecessor_program: predecessorProgram || null
+  }];
+  return history;
 }
 
 async function readCircleProgramSummaryHistoryFromUrlFactLedger(circleId: string, url: string): Promise<ProgramHistoryWindow> {
-  const [catalogRoot, familyRoot, familyCapsulesRoot, openBody, openRowCount, openStartRoot, openEndRoot, capsuleCount] = await Promise.all([
+  const [manifest, eraProgram, eraNetworkId, predecessorProgram, predecessorFinalRoot, predecessorFinalIndex, predecessorAnchorHash, eraFirstSnapshotIndex, catalogRoot, familyRoot, familyCapsulesRoot, openBody, openRowCount, openStartRoot, openEndRoot, capsuleCount] = await Promise.all([
+    circleProgramViewAtUrl<string>(url, circleId, "manifest").catch(() => ""),
+    circleProgramViewAtUrl<string>(url, circleId, "get_era_program").catch(() => circleId),
+    circleProgramViewAtUrl<string>(url, circleId, "get_era_network_id").catch(() => ""),
+    circleProgramViewAtUrl<string>(url, circleId, "get_predecessor_program").catch(() => ""),
+    circleProgramViewAtUrl<string>(url, circleId, "get_predecessor_final_root").catch(() => ""),
+    circleProgramViewAtUrl<number>(url, circleId, "get_predecessor_final_index").catch(() => 0),
+    circleProgramViewAtUrl<string>(url, circleId, "get_predecessor_anchor_hash").catch(() => ""),
+    circleProgramViewAtUrl<number>(url, circleId, "get_era_first_snapshot_index").catch(() => 0),
     circleProgramViewAtUrl<string>(url, circleId, "get_catalog_root"),
     circleProgramViewAtUrl<string>(url, circleId, "get_family_root", ["0000"]),
     circleProgramViewAtUrl<string>(url, circleId, "get_family_capsules_root", ["0000"]).catch(() => null),
@@ -586,7 +774,8 @@ async function readCircleProgramSummaryHistoryFromUrlFactLedger(circleId: string
     })));
     sealedCapsules.push(...readCapsules);
   }
-  return verifiedHistoryWindowFromFactLedger({
+  const history = verifiedHistoryWindowFromFactLedger({
+    manifest,
     catalogRoot,
     familyRoot,
     familyCapsulesRoot,
@@ -598,6 +787,24 @@ async function readCircleProgramSummaryHistoryFromUrlFactLedger(circleId: string
     openStartRoot,
     openEndRoot
   });
+  history.eras = [{
+    era_id: circleId,
+    era_program: eraProgram || circleId,
+    era_network_id: eraNetworkId || null,
+    manifest: manifest || null,
+    history_model: history.history_discovery || "aml_fact_family_core_capsules_verified",
+    first_index: historyFirstIndex(history),
+    latest_index: historyLatestIndex(history),
+    row_count: history.row_count,
+    root_hash: history.history_root || null,
+    capsules_root: history.capsules_root || null,
+    predecessor_program: predecessorProgram || null,
+    predecessor_final_root: predecessorFinalRoot || null,
+    predecessor_final_index: Number(predecessorFinalIndex || 0),
+    predecessor_anchor_hash: predecessorAnchorHash || null,
+    era_first_snapshot_index: Number(eraFirstSnapshotIndex || 0)
+  }];
+  return history;
 }
 
 async function readCircleProgramSummaryHistoryFromUrl(circleId: string, url: string): Promise<ProgramHistoryWindow> {
@@ -611,15 +818,72 @@ async function readCircleProgramSummaryHistoryFromUrl(circleId: string, url: str
   }
 }
 
+function meaningfulPredecessor(era: ProgramHistoryEra | undefined, circleId: string): boolean {
+  if (!era?.predecessor_program || era.predecessor_program === circleId) return false;
+  if (!Number.isSafeInteger(Number(era.predecessor_final_index || 0)) || Number(era.predecessor_final_index || 0) <= 0) return false;
+  if (!era.predecessor_final_root || !/^[0-9a-f]{64}$/i.test(era.predecessor_final_root)) return false;
+  if (!era.predecessor_anchor_hash || !/^[0-9a-f]{64}$/i.test(era.predecessor_anchor_hash)) return false;
+  return true;
+}
+
+async function readCircleProgramSummaryHistoryFromUrlStitched(circleId: string, url: string, seen = new Set<string>()): Promise<ProgramHistoryWindow> {
+  if (seen.has(circleId)) throw new Error(`cycle in history era predecessor chain at ${circleId}`);
+  if (seen.size >= Number(process.env.VITALS_HISTORY_ERA_LIMIT || 8)) throw new Error("history era predecessor chain exceeds configured limit");
+  const nextSeen = new Set(seen);
+  nextSeen.add(circleId);
+  const current = await readCircleProgramSummaryHistoryFromUrl(circleId, url);
+  const currentEra = current.eras?.[0];
+  if (!meaningfulPredecessor(currentEra, circleId)) return current;
+
+  const predecessorId = currentEra?.predecessor_program || "";
+  const predecessor = await readCircleProgramSummaryHistoryFromUrlStitched(predecessorId, url, nextSeen);
+  const predecessorFinalIndex = Number(currentEra?.predecessor_final_index || 0);
+  const eraFirstIndex = Number(currentEra?.era_first_snapshot_index || 0);
+  const predecessorLatestIndex = historyLatestIndex(predecessor);
+  if (predecessorLatestIndex !== predecessorFinalIndex) {
+    throw new Error(`predecessor era latest index mismatch: expected ${predecessorFinalIndex}, got ${predecessorLatestIndex}`);
+  }
+  const predecessorRoot = predecessor.history_root || "";
+  if (predecessorRoot !== currentEra?.predecessor_final_root) {
+    throw new Error("predecessor era final root mismatch");
+  }
+  if (eraFirstIndex !== predecessorFinalIndex + 1) {
+    throw new Error(`era first index mismatch: expected ${predecessorFinalIndex + 1}, got ${eraFirstIndex}`);
+  }
+  const currentFirstIndex = historyFirstIndex(current);
+  if (currentFirstIndex && currentFirstIndex !== eraFirstIndex) {
+    throw new Error(`current era first row mismatch: expected ${eraFirstIndex}, got ${currentFirstIndex}`);
+  }
+  const currentNetwork = String(currentEra?.era_network_id || "");
+  if (!currentNetwork) throw new Error("current era network id missing for anchor verification");
+  const realExpectedAnchor = factLedgerEraAnchorHashHex({
+    networkId: currentNetwork,
+    predecessorProgram: predecessorId,
+    predecessorFinalRoot: currentEra?.predecessor_final_root || "",
+    predecessorFinalIndex,
+    eraProgram: currentEra?.era_program || circleId,
+    eraFirstSnapshotIndex: eraFirstIndex,
+    familyId: FACT_LEDGER_CORE_FAMILY_ID
+  });
+  if (realExpectedAnchor !== currentEra?.predecessor_anchor_hash) {
+    throw new Error("predecessor era anchor hash mismatch");
+  }
+  currentEra.predecessor_anchor_verified = true;
+  currentEra.boundary_verified = true;
+  const combined = combinedHistoryWindow([predecessor, current]);
+  combined.history_discovery = "aml_multi_era_fact_family_core_capsules_verified";
+  return combined;
+}
+
 export async function readCircleProgramSummaryHistory(circleId: string): Promise<ProgramHistoryWindow> {
   const urls = programRpcUrls();
   const [primaryUrl, ...otherUrls] = urls;
   if (!primaryUrl) throw new Error("no Octra program RPC URL configured");
-  const primary = await readCircleProgramSummaryHistoryFromUrl(circleId, primaryUrl);
+  const primary = await readCircleProgramSummaryHistoryFromUrlStitched(circleId, primaryUrl);
   if (!otherUrls.length) return primary;
   const candidates = await Promise.all(otherUrls.map(async (url) => ({
     url,
-    history: await readCircleProgramSummaryHistoryFromUrl(circleId, url)
+    history: await readCircleProgramSummaryHistoryFromUrlStitched(circleId, url)
   })));
   for (const candidate of candidates) {
     assertSameHistory(primary, candidate.history, candidate.url);

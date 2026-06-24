@@ -63,6 +63,23 @@ Three changes directly address the size fragility found during devnet deployment
 
 The AML state remains boring and bounded per write: one latest payload/evidence/source-ref set, one open capsule body per family, immutable sealed capsules, and small roots/counters.
 
+## Era-Stitching Readiness Pass
+
+The gateway/API verifier now reads the current fact-v2 Circle and recursively verifies its predecessor chain before serving history. Devnet currently stitches four eras:
+
+1. `octCCXubqWXcXSGtHAiwvvgB7DZCFs8wCxEnx6FQu1Fs9Sn` — readable v1 capsule-tail era, rows `#1` through `#23`.
+2. `octCbnRcmQRQyf8B31Hm5rcNAf94PZdMdpYe7gjaFmdjvJ7` — empty fact-ledger bridge era, no renderable rows, but an anchor from the v1 root to the fact-ledger root namespace.
+3. `octDxjWHdLQX3RRmU9tdh16in35wPR9c8uRniBwEpHsG9K8` — fact-v1 era, rows `#24` through `#94`.
+4. `oct5cp4FuVqZJ6W5o1cxVyeE3BvP1R9owZWR9evGmZf3gyu` — current fact-v2 era, rows `#95` onward.
+
+The proof envelope exposes these eras under `/api/history.proof.eras`. Fact-ledger boundaries verify by recomputing `predecessor_anchor_hash` from `(network_id, predecessor_program, predecessor_final_root, predecessor_final_index, era_program, era_first_snapshot_index, core_family_id)`. The v1-to-fact-ledger boundary is intentionally represented as an era boundary, not as one single replayable root over all rows, because the fact-ledger root domain starts a new namespace.
+
+Local gates for this pass:
+
+- `npm test`: 82 passing, including manifest-scoped capsule roots and devnet era-anchor vectors.
+- `npm run native:verify`: passed; fact-v2 AML bytecode remains `sha256:aa30cedd75ab28ef2057a58312afac529d72753dee81768494e2abdba8fb28c2`.
+- Live devnet readback before deploy: stitched history spans rows `#1` through latest and returns `history_model=aml_multi_era_fact_family_core_capsules_verified`.
+
 Latest live headroom, from first fresh fact-v2 devnet snapshot `#95` (`vitals.2026-06-24T22:29:51Z`):
 
 | Field | Used | Limit | Remaining |
@@ -112,7 +129,8 @@ The latest size-headroom report has no warnings. A near-full capsule may warn as
 | Gate | Status | Evidence | To close |
 | --- | --- | --- | --- |
 | `/api/latest` serves program-backed data | done | `/api/latest` returns 200, `status=program`, `source=program` after update | Continue monitoring freshness |
-| `/api/history` sourced from verified fact-family capsules | done | `/api/history?window=1d` returns the fresh fact-v2 row from `aml_fact_family_core_capsules_verified`; coverage is honestly partial until the new era accumulates rows | Continue monitoring |
+| `/api/history` sourced from verified fact-family capsules | done | `/api/history?window=1d` returns stitched fact/v1 history with `aml_multi_era_fact_family_core_capsules_verified` and era-boundary proof metadata | Continue monitoring |
+| Era boundary proof exposed in API | done | `/api/history.proof.eras` carries predecessor roots, indexes, anchor hashes, and `boundary_verified=true` for fact-ledger successor boundaries | Continue monitoring |
 | Browser-side range verification measured | open | — | Measure 1d/7d/30d reads once enough history exists |
 | Coverage honesty for short history | done | UI/API expose available coverage; no fake history is synthesized | Continue monitoring |
 | Completeness for future multi-family snapshots | deferred | Core-only launch is atomic; 1:many families are not active | Decide before adding route/detail families |

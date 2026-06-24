@@ -34,6 +34,29 @@ export interface ProgramHistoryWindow {
   window_hash: string;
   rows: SummaryRow[];
   history_discovery?: string;
+  history_root?: string;
+  capsules_root?: string | null;
+  eras?: ProgramHistoryEra[];
+}
+
+export interface ProgramHistoryEra {
+  era_id: string;
+  era_program: string | null;
+  era_network_id?: string | null;
+  manifest: string | null;
+  history_model: string;
+  first_index: number;
+  latest_index: number;
+  row_count: number;
+  root_hash: string | null;
+  capsules_root: string | null;
+  predecessor_program?: string | null;
+  predecessor_final_root?: string | null;
+  predecessor_final_index?: number | null;
+  predecessor_anchor_hash?: string | null;
+  predecessor_anchor_verified?: boolean;
+  era_first_snapshot_index?: number | null;
+  boundary_verified?: boolean;
 }
 
 function digits(value: string | number | bigint, width: number, label: string): string {

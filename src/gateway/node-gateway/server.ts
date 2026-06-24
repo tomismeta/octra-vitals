@@ -11,7 +11,7 @@ import { configuredProgramAddress, readCircleProgramSummaryHistory, readLatestCi
 import { circleInfoAtUrl, circleProgramInfoAtUrl, contractCall, contractReceipt, contractSource, octraProgramRpcUrls, octraRpc, vmContract } from "../../lib/octra-rpc.js";
 import { configuredTrafficRecorder } from "../../lib/traffic.js";
 import { runtimeVitalsManifest, stableJson } from "../../lib/vitals-manifest.js";
-import { HISTORY_API_SCHEMA, LEGACY_HISTORY_SCHEMA, emptyHistoryProof, filterHistorySnapshots, historyApiCoverage, parseHistoryApiRequest } from "../../lib/history-api.js";
+import { HISTORY_API_SCHEMA, LEGACY_HISTORY_SCHEMA, emptyHistoryProof, filterHistorySnapshots, historyApiCoverage, parseHistoryApiRequest, verifiedHistoryProof } from "../../lib/history-api.js";
 import type { ProgramHistoryWindow } from "../../lib/summary-window.js";
 import type { ProgramArtifacts, SnapshotArtifact } from "../../lib/types.js";
 
@@ -1127,7 +1127,9 @@ async function loadHistoryIntegrity(manifest: Record<string, any>): Promise<Reco
       first_index: history.first_index,
       latest_index: history.rows[history.rows.length - 1]?.snapshot_index || 0,
       row_len: history.row_len,
-      window_hash: history.window_hash
+      window_hash: history.window_hash,
+      era_count: history.eras?.length || 0,
+      eras: history.eras || []
     };
   } catch (error) {
     historyError = error instanceof Error ? error : new Error(String(error));
@@ -1806,7 +1808,7 @@ async function serveHistory(res: http.ServerResponse, url: URL, head = false): P
       row_len: history.row_len,
       window_hash: history.window_hash,
       coverage,
-      proof: emptyHistoryProof(historyModel, true),
+      proof: verifiedHistoryProof(historyModel, true, history.eras || []),
       snapshots,
       authority: {
         source: target.kind === "circle_program" ? "vitals_circle_program_history" : "vitals_state_program_history",

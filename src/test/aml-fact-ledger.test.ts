@@ -23,6 +23,7 @@ import {
   factLedgerEmptyCatalogRootHex,
   factLedgerEmptyFamilyCapsulesRootHex,
   factLedgerEmptyFamilyRootHex,
+  factLedgerEraAnchorHashHex,
   factLedgerFamilySetHashHex,
   factLedgerFoldFamilyCapsulesRootHex,
   factLedgerFoldCatalogRootHex,
@@ -110,6 +111,40 @@ test("fact row hash domain separates family and schema", () => {
   assert.match(coreHash, /^[0-9a-f]{64}$/);
   assert.match(auxiliaryHash, /^[0-9a-f]{64}$/);
   assert.notEqual(coreHash, auxiliaryHash);
+});
+
+test("fact ledger capsule roots are manifest-scoped across eras", () => {
+  const v1Root = factLedgerEmptyFamilyCapsulesRootHex(FACT_LEDGER_CORE_FAMILY_ID, FACT_LEDGER_CORE_SCHEMA_ID, "octra-vitals-fact-ledger.v1");
+  const v2Root = factLedgerEmptyFamilyCapsulesRootHex(FACT_LEDGER_CORE_FAMILY_ID, FACT_LEDGER_CORE_SCHEMA_ID, "octra-vitals-fact-ledger.v2");
+
+  assert.equal(v1Root, "91455e1db38f59893edba258dbdd6f0ebe87eaff31929a0699a76471cca4521d");
+  assert.equal(v2Root, "40d5010c5cdd2c3eb2ad9f12b6a193b512f44c3c0de7f158ee41372e5500b3f9");
+  assert.notEqual(v1Root, v2Root);
+});
+
+test("fact ledger era anchor matches live devnet era boundaries", () => {
+  assert.equal(
+    factLedgerEraAnchorHashHex({
+      networkId: "octra-devnet",
+      predecessorProgram: "octCbnRcmQRQyf8B31Hm5rcNAf94PZdMdpYe7gjaFmdjvJ7",
+      predecessorFinalRoot: "008f25bcfca4b6697b53109e77f176f25d0475cc32097bf5925086ba0ffebdb3",
+      predecessorFinalIndex: 23,
+      eraProgram: "octDxjWHdLQX3RRmU9tdh16in35wPR9c8uRniBwEpHsG9K8",
+      eraFirstSnapshotIndex: 24
+    }),
+    "76089f8110a3affa0d1ca8f5ac62a99e9ba7731fa680da0008420bd482b5e1a6"
+  );
+  assert.equal(
+    factLedgerEraAnchorHashHex({
+      networkId: "octra-devnet",
+      predecessorProgram: "octDxjWHdLQX3RRmU9tdh16in35wPR9c8uRniBwEpHsG9K8",
+      predecessorFinalRoot: "f6194c89408dd0a6b6a89f0a71f6c73b17e1e50a54850bdb3a3d1646ac0d6fdc",
+      predecessorFinalIndex: 94,
+      eraProgram: "oct5cp4FuVqZJ6W5o1cxVyeE3BvP1R9owZWR9evGmZf3gyu",
+      eraFirstSnapshotIndex: 95
+    }),
+    "eff96958b822991ea40b9e6ae9a69e2629fc4f4d15253490faa667108d4e6ad3"
+  );
 });
 
 test("packed metric fact rows keep payload hash position and round-trip active slots", () => {

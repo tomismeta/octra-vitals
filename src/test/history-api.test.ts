@@ -6,6 +6,7 @@ import {
   filterHistorySnapshots,
   historyApiCoverage,
   parseHistoryApiRequest,
+  verifiedHistoryProof,
   type NormalizedHistorySnapshot
 } from "../lib/history-api.js";
 
@@ -99,4 +100,15 @@ test("empty history proof does not overclaim fact-family verification", () => {
   assert.equal(emptyHistoryProof("aml_fact_family_core_capsules", true).proof_status, "summary_window_verified");
   assert.equal(emptyHistoryProof("aml_fact_family_core_capsules_verified", true).proof_status, "fact_family_verified");
   assert.equal(emptyHistoryProof("unavailable", false).proof_status, "unavailable");
+});
+
+test("verified history proof carries era boundary evidence", () => {
+  const proof = verifiedHistoryProof("aml_multi_era_fact_family_core_capsules_verified", true, [
+    { era_id: "old", latest_index: 23 },
+    { era_id: "new", predecessor_final_index: 23, boundary_verified: true }
+  ]);
+
+  assert.equal(proof.proof_status, "fact_family_verified");
+  assert.equal(proof.eras.length, 2);
+  assert.deepEqual(proof.eras[1], { era_id: "new", predecessor_final_index: 23, boundary_verified: true });
 });
