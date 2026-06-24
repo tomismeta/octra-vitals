@@ -287,10 +287,17 @@ function verifySnapshotReceipt(receipt: any, targetId: string, call: RecordSnaps
       method_matches: summary.method === call.method,
       success: summary.success === true,
       snapshot_event_present: Boolean(snapshotEvent),
-      snapshot_id_matches: factLedgerCall ? true : snapshotId ? values[0] === snapshotId : false,
+      snapshot_id_matches: snapshotId ? values[0] === snapshotId : false,
       snapshot_index_matches: call.snapshot_index ? String(values[1]) === String(call.snapshot_index) : true,
       payload_hash_matches: values[3] === call.expected_hashes.payload_hash,
-      history_row_hash_matches: values[4] === call.expected_hashes.history_row_hash
+      history_row_hash_matches: values[4] === call.expected_hashes.history_row_hash,
+      ...(factLedgerCall
+        ? {
+          observed_at_matches: values[5] === call.observed_at,
+          capsule_id_matches: String(values[6] || "").startsWith(`${call.fact_ledger.capsule_base_id}.`),
+          submitter_present: Boolean(values[7])
+        }
+        : {})
     };
     const ok = Object.values(checks).every(Boolean);
     if (!ok) {
@@ -299,8 +306,7 @@ function verifySnapshotReceipt(receipt: any, targetId: string, call: RecordSnaps
     return {
       ...summary,
       verified_against_call: true,
-      checks,
-      ...(factLedgerCall ? { omitted_event_fields: ["snapshot_id", "observed_at", "submitter"] } : {})
+      checks
     };
   }
   const checks = {
@@ -447,6 +453,9 @@ async function readAndVerifyProgramReadbackFactV1(programAddress: string, call: 
     latestSourceRefsHash,
     latestSummaryHash,
     latestSummary,
+    latestSnapshotId,
+    latestObservedAt,
+    latestSubmitter,
     latestIndex,
     latestHistoryRow,
     latestHistoryRowHash,
@@ -465,6 +474,9 @@ async function readAndVerifyProgramReadbackFactV1(programAddress: string, call: 
     contractCall<string>(programAddress, "get_latest_source_refs_hash"),
     contractCall<string>(programAddress, "get_latest_summary_hash"),
     contractCall<string>(programAddress, "get_latest_summary"),
+    contractCall<string>(programAddress, "get_latest_snapshot_id"),
+    contractCall<string>(programAddress, "get_latest_observed_at"),
+    contractCall<string>(programAddress, "get_latest_submitter"),
     contractCall<number>(programAddress, "get_latest_snapshot_index"),
     contractCall<string>(programAddress, "get_latest_history_row"),
     contractCall<string>(programAddress, "get_latest_history_row_hash"),
@@ -492,6 +504,9 @@ async function readAndVerifyProgramReadbackFactV1(programAddress: string, call: 
     latestSourceRefsHash,
     latestSummaryHash,
     latestSummary,
+    latestSnapshotId,
+    latestObservedAt,
+    latestSubmitter,
     latestIndex,
     latestHistoryRow,
     latestHistoryRowHash,
@@ -733,6 +748,9 @@ function verifyFactReadback(input: {
   latestSourceRefsHash: string;
   latestSummaryHash: string;
   latestSummary: string;
+  latestSnapshotId: string;
+  latestObservedAt: string;
+  latestSubmitter: string;
   latestIndex: number;
   latestHistoryRow: string;
   latestHistoryRowHash: string;
@@ -757,6 +775,9 @@ function verifyFactReadback(input: {
     latestSourceRefsHash,
     latestSummaryHash,
     latestSummary,
+    latestSnapshotId,
+    latestObservedAt,
+    latestSubmitter,
     latestIndex,
     latestHistoryRow,
     latestHistoryRowHash,
@@ -791,6 +812,15 @@ function verifyFactReadback(input: {
   }
   if (latestSummary !== call.summary.row) {
     throw new Error("readback latest summary row does not match submitted summary row");
+  }
+  if (latestSnapshotId !== call.snapshot_id) {
+    throw new Error(`readback latest snapshot id mismatch: expected ${call.snapshot_id}, got ${latestSnapshotId}`);
+  }
+  if (latestObservedAt !== call.observed_at) {
+    throw new Error(`readback latest observed_at mismatch: expected ${call.observed_at}, got ${latestObservedAt}`);
+  }
+  if (!latestSubmitter) {
+    throw new Error("readback latest submitter is empty");
   }
   if (latestHistoryRow !== call.history.row) {
     throw new Error("readback latest fact row does not match submitted fact row");
@@ -891,6 +921,9 @@ function verifyFactReadback(input: {
     source_refs_hash: latestSourceRefsHash,
     summary_hash: latestSummaryHash,
     latest_summary_row: latestSummary,
+    latest_snapshot_id: latestSnapshotId,
+    latest_observed_at: latestObservedAt,
+    latest_submitter: latestSubmitter,
     latest_snapshot_index: latestIndex,
     history_row_hash: latestHistoryRowHash,
     catalog_root: catalogRoot,
@@ -980,6 +1013,9 @@ async function readAndVerifyCircleReadbackFromUrlFactV1(circleId: string, call: 
     latestSourceRefsHash,
     latestSummaryHash,
     latestSummary,
+    latestSnapshotId,
+    latestObservedAt,
+    latestSubmitter,
     latestIndex,
     latestHistoryRow,
     latestHistoryRowHash,
@@ -998,6 +1034,9 @@ async function readAndVerifyCircleReadbackFromUrlFactV1(circleId: string, call: 
     circleProgramViewAtUrl<string>(url, circleId, "get_latest_source_refs_hash"),
     circleProgramViewAtUrl<string>(url, circleId, "get_latest_summary_hash"),
     circleProgramViewAtUrl<string>(url, circleId, "get_latest_summary"),
+    circleProgramViewAtUrl<string>(url, circleId, "get_latest_snapshot_id"),
+    circleProgramViewAtUrl<string>(url, circleId, "get_latest_observed_at"),
+    circleProgramViewAtUrl<string>(url, circleId, "get_latest_submitter"),
     circleProgramViewAtUrl<number>(url, circleId, "get_latest_snapshot_index"),
     circleProgramViewAtUrl<string>(url, circleId, "get_latest_history_row"),
     circleProgramViewAtUrl<string>(url, circleId, "get_latest_history_row_hash"),
@@ -1025,6 +1064,9 @@ async function readAndVerifyCircleReadbackFromUrlFactV1(circleId: string, call: 
     latestSourceRefsHash,
     latestSummaryHash,
     latestSummary,
+    latestSnapshotId,
+    latestObservedAt,
+    latestSubmitter,
     latestIndex,
     latestHistoryRow,
     latestHistoryRowHash,

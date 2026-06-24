@@ -124,12 +124,12 @@ contract VitalsFactLedgerState {
 
   private fn only_owner() {
     require_initialized()
-    require(origin == self.owner, "not owner")
+    require(caller == self.owner, "not owner")
   }
 
   private fn only_operator() {
     require_initialized()
-    require(origin == self.owner || origin == self.operator, "not operator")
+    require(caller == self.owner || caller == self.operator, "not operator")
   }
 
   private fn assert_digit(digit_text: string) {
@@ -166,6 +166,7 @@ contract VitalsFactLedgerState {
   }
 
   private fn assert_observed_at(observed_at: string) {
+    require(len(observed_at) == 20, "observed_at length")
     assert_digit(substr(observed_at, 0, 1))
     assert_digit(substr(observed_at, 1, 1))
     assert_digit(substr(observed_at, 2, 1))
@@ -186,6 +187,15 @@ contract VitalsFactLedgerState {
     assert_digit(substr(observed_at, 17, 1))
     assert_digit(substr(observed_at, 18, 1))
     require(substr(observed_at, 19, 1) == "Z", "observed_at UTC suffix")
+  }
+
+  private fn capsule_base_id_for_observed_at(observed_at: string): string {
+    assert_observed_at(observed_at)
+    let hour_text = substr(observed_at, 11, 2)
+    if hour_text >= "12" {
+      return concat(substr(observed_at, 0, 11), "12")
+    }
+    return concat(substr(observed_at, 0, 11), "00")
   }
 
   private fn assert_capsule_base_id(capsule_base_id: string) {
@@ -527,6 +537,7 @@ contract VitalsFactLedgerState {
   private fn append_core_fact_row(capsule_base_id: string, snapshot_index: int, payload_hash: string, row: string): string {
     let family_id = CORE_FAMILY_ID
     let schema_id = CORE_SCHEMA_ID
+    assert_capsule_base_id(capsule_base_id)
     require(len(row) == FACT_ROW_BYTES, "row length")
     if self.family_open_capsule_row_count_by_id[family_id] > 0 && self.family_open_capsule_base_id_by_id[family_id] != capsule_base_id {
       seal_family_capsule(family_id)
@@ -850,7 +861,7 @@ contract VitalsFactLedgerState {
     assert_family_definition(core_family_definition, CORE_FAMILY_ID)
 
     self.initialized = true
-    self.owner = origin
+    self.owner = caller
     self.operator = operator_addr
     self.successor_program = era_program_addr
     self.successor_set = false
@@ -926,10 +937,12 @@ contract VitalsFactLedgerState {
     return true
   }
 
-  public fn record_snapshot_fact_v1(canonical_payload: string, canonical_evidence_manifest: string, canonical_source_refs: string, summary_row: string, core_history_row: string, capsule_base_id: string, epoch_id: int, snapshot_index: int): bool {
+  public fn record_snapshot_fact_v1(canonical_payload: string, canonical_evidence_manifest: string, canonical_source_refs: string, summary_row: string, core_history_row: string, observed_at: string, capsule_base_id: string, epoch_id: int, snapshot_index: int): bool {
     only_operator()
     require(!self.paused, "paused")
-    require(capsule_base_id != "", "capsule base required")
+    assert_observed_at(observed_at)
+    assert_capsule_base_id(capsule_base_id)
+    require(capsule_base_id == capsule_base_id_for_observed_at(observed_at), "capsule observed_at mismatch")
     require(snapshot_index == self.snapshot_count + 1, "snapshot index")
     require(snapshot_index >= self.era_first_snapshot_index, "snapshot before era")
     require(epoch_id > self.latest_epoch || self.latest_epoch == 0, "snapshot moved backward")
@@ -945,14 +958,17 @@ contract VitalsFactLedgerState {
     let source_refs_hash = concat("sha256:", sha256(concat(concat(SOURCE_REFS_HASH_DOMAIN, "\n"), canonical_source_refs)))
     let summary_hash = concat("sha256:", sha256(concat(concat(SUMMARY_HASH_DOMAIN, "\n"), summary_row)))
     assert_core_row_matches_summary(summary_row, core_history_row)
+    assert_fact_row(CORE_FAMILY_ID, CORE_SCHEMA_ID, snapshot_index, payload_hash, core_history_row)
 
     let active_capsule_id = append_core_fact_row(capsule_base_id, snapshot_index, payload_hash, core_history_row)
     let core_row_hash = row_hash(CORE_FAMILY_ID, CORE_SCHEMA_ID, core_history_row)
+    let snapshot_id = concat("vitals.", observed_at)
+    let submitter = to_string(caller)
 
     self.snapshot_count = snapshot_index
     self.latest_snapshot_index = snapshot_index
-    self.latest_snapshot_id = ""
-    self.latest_observed_at = ""
+    self.latest_snapshot_id = snapshot_id
+    self.latest_observed_at = observed_at
     self.latest_epoch = epoch_id
     self.latest_payload_hash = payload_hash
     self.latest_evidence_manifest_hash = evidence_manifest_hash
@@ -964,8 +980,8 @@ contract VitalsFactLedgerState {
     self.latest_source_refs = canonical_source_refs
     self.latest_summary = summary_row
     self.latest_history_row = core_history_row
-    self.latest_submitter = ""
-    emit SnapshotRecorded("", snapshot_index, epoch_id, payload_hash, core_row_hash, "", active_capsule_id, "")
+    self.latest_submitter = submitter
+    emit SnapshotRecorded(snapshot_id, snapshot_index, epoch_id, payload_hash, core_row_hash, observed_at, active_capsule_id, submitter)
     return true
   }
 }

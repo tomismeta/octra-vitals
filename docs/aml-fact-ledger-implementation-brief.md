@@ -221,6 +221,81 @@ Do not implement the attachment path for mainnet launch. `attach_family_row`
 introduces partial snapshot state and should remain a future high-fanout escape
 hatch.
 
+### Capsule Time Binding
+
+Do not let the operator choose a capsule id as an unchecked assertion.
+
+For `record_snapshot_fact_v1`, the producer sends both:
+
+```text
+observed_at
+capsule_base_id
+```
+
+AML validates `observed_at` as exact UTC `YYYY-MM-DDTHH:MM:SSZ`, validates the
+capsule base as `YYYY-MM-DDT00` or `YYYY-MM-DDT12`, and requires the capsule
+base to equal the deterministic half-day derived from `observed_at`.
+
+This keeps capsule placement in the program, not in the gateway. The gateway may
+derive the same value for ergonomics and size planning, but AML remains the
+authority that rejects a snapshot stored under the wrong capsule.
+
+### Operator Authorization
+
+The fact-ledger path uses `caller` for owner/operator checks, matching the
+previous programmed Circle AML programs.
+
+This keeps authorization tied to the immediate Circle/program call context and
+avoids relying on transitive `origin` semantics. Before any future change back
+to `origin`, reopen the security review and prove that intermediated calls
+cannot induce governance or snapshot writes.
+
+### Compatibility Latest Fields
+
+The fact-ledger program keeps the legacy latest getter surface for browser,
+gateway, and receipt compatibility:
+
+```text
+get_latest_snapshot_id()     vitals.<observed_at>
+get_latest_observed_at()     submitted observed_at
+get_latest_submitter()       immediate caller as text
+canonical payload/envelope   hash-gated source of snapshot contents
+```
+
+The gateway/browser still verifies the hash-gated latest payload and evidence,
+but latest id/time should no longer be blank after a fact-ledger write.
+Operator tooling must verify the latest getters and the `SnapshotRecorded`
+event against the submitted call.
+
+### Core Row Faithfulness
+
+`record_snapshot_fact_v1` must call both:
+
+```text
+assert_core_row_matches_summary(summary_row, core_history_row)
+assert_fact_row(core_family, core_schema, snapshot_index, payload_hash, core_history_row)
+```
+
+The first keeps the displayed summary and durable row aligned. The second binds
+the durable row to the row version, snapshot index, schema, and full payload
+hash. The 24-character summary payload prefix is not sufficient by itself.
+
+### Schema Gating
+
+The fact-ledger launch path gates schema at the family-definition and row-version
+level, not by adding ad hoc schema strings to every write argument.
+
+For compatible same-era updates:
+
+- family definitions, schema ids, row lengths, and root domains must remain
+  byte-compatible;
+- old rows and capsules must decode under their original schema;
+- missing fields in older rows must render as `not_captured_before_activation`,
+  never as zero or inferred history.
+
+For incompatible changes, use a new family or a new era rather than silently
+changing the meaning of an existing fixed-width row.
+
 ## Completeness Strategy
 
 Do not default to a per-snapshot completeness map.

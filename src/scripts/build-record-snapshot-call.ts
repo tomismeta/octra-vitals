@@ -364,6 +364,7 @@ export async function buildRecordSnapshotCall(
         canonicalSourceRefs,
         summaryRow,
         historyRow,
+        envelope.observed_at,
         capsuleBaseId,
         payload.octra.epoch,
         snapshotIndex

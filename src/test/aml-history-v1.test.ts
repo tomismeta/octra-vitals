@@ -294,9 +294,10 @@ test("record snapshot builder can emit v1 bundles without changing the v0 defaul
   assert.notEqual(factV1.expected_hashes.history_row_hash, v1.expected_hashes.history_row_hash);
   assert.equal(factV1.snapshot_id, snapshot.envelope.snapshot_id);
   assert.equal(factV1.observed_at, snapshot.envelope.observed_at);
-  assert.equal(factV1.params.length, 8);
+  assert.equal(factV1.params.length, 9);
   assert.equal(factV1.params[0], snapshot.canonical_payload);
-  assert.equal(factV1.params[5], "2026-06-23T12");
-  assert.equal(factV1.params[6], Number(factV1.history.row.slice(27, 39)));
-  assert.equal(factV1.params[7], factV1.snapshot_index);
+  assert.equal(factV1.params[5], snapshot.envelope.observed_at);
+  assert.equal(factV1.params[6], "2026-06-23T12");
+  assert.equal(factV1.params[7], Number(factV1.history.row.slice(27, 39)));
+  assert.equal(factV1.params[8], factV1.snapshot_index);
 });

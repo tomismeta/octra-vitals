@@ -15,16 +15,16 @@ This scorecard records the gates we require before the fact-ledger model is cons
 
 ## Candidate Build
 
-The candidate fact-ledger program was built with `npm run native:verify` on 2026-06-24 and deployed to the devnet Circle in place.
+The candidate fact-ledger program was built with `npm run native:verify` on 2026-06-24 and is the devnet in-place update candidate.
 
 | Artifact | Value |
 | --- | --- |
-| Source hash | `sha256:0be233844291a66a9a50a0607d28efde506c65633416e58f214976a35bf061d2` |
-| Bytecode hash | `sha256:2423f9af739b7307dd741560e1bd1762821ad412a492f1c7423154f16ae5ef63` |
-| Verification hash | `sha256:bf6d1e091139e7e794d3433cefdc031c9726e43b6c6abe07e3385fbc03ded7ea` |
+| Source hash | `sha256:35fa1addba1133f77c14b9828db8d7295112f058de7d3295463a0db8a485dfb0` |
+| Bytecode hash | `sha256:7a2948dfcca3ded66d4e21fd72a5bc141195dcb971b04ee581bf1577c5804601` |
+| Verification hash | `sha256:f5e81d5a10fe00d19a19c28d2e694c0da3818cdb3f5f113698e38e12c57132d6` |
 | Formal result | `safe`, `verified`, 0 errors, 0 warnings |
-| Size | 19,528 bytes |
-| Instructions | 3,214 |
+| Size | 19,787 bytes |
+| Instructions | 3,270 |
 
 The generic fact-ledger substrate probe also verifies cleanly:
 
@@ -34,6 +34,15 @@ The generic fact-ledger substrate probe also verifies cleanly:
 | Bytecode hash | `sha256:2544030e6df0010cce003f0e9030f5b2a3ee1a3ca0d45cfd22970e228e89e375` |
 | Verification hash | `sha256:755b81d964fe3cff6cf9979f6eb358c44941ffd4f266cef7f5abda5734d35a05` |
 | Formal result | `safe`, `verified`, 0 errors, 0 warnings |
+
+## Review-Hardening Changes In This Candidate
+
+Four changes close the follow-up audit findings before the next devnet soak:
+
+1. **AML-owned capsule time binding.** `record_snapshot_fact_v1` now takes `observed_at`, validates the UTC timestamp, derives the deterministic `YYYY-MM-DDT00/12` capsule base in AML, and rejects mismatched caller-provided capsule bases.
+2. **Full core-row assertion.** The write path now calls both `assert_core_row_matches_summary` and `assert_fact_row`, binding the durable row to row version, snapshot index, schema id, and full payload hash.
+3. **Latest identity restored.** Fact-ledger writes now populate `latest_snapshot_id`, `latest_observed_at`, and `latest_submitter`, and emit those fields in `SnapshotRecorded`. Submit/readback tooling verifies them against the submitted call.
+4. **Immediate caller authorization.** Owner/operator checks now use `caller`, matching the prior programmed Circle AML programs and avoiding reliance on transitive `origin` semantics.
 
 ## Growth-Headroom Changes In This Candidate
 
@@ -71,7 +80,9 @@ The latest size-headroom report has no warnings. A near-full capsule may warn as
 | Gate 0 generic substrate verified | done | `npm run fact-ledger-probe:compile`; probe `safe`/`verified` | — |
 | Capsule metadata has distinct row-root and capsule-chain-root semantics | done | `family_root_before` / `family_root_after` now track the capsule chain, not duplicate row roots | Live seal readback |
 | Issue C overflow path is fixed | done | Segment suffix on overflow; unit tests cover same-half overflow capsule IDs | Live over-cadence run |
-| Core row bound to verified summary | done | `assert_core_row_matches_summary` remains in AML | — |
+| Core row bound to verified summary and full payload hash | done | `assert_core_row_matches_summary` + `assert_fact_row` remain in AML | — |
+| Capsule id bound to observed time | done | AML derives half-day capsule base from `observed_at` and rejects mismatches | Live readback after deploy |
+| Latest identity compatibility restored | done | AML writes latest id/time/submitter and submit tooling verifies event/readback | Live readback after deploy |
 | Gateway/browser verifier understands capsule-chain roots | done | JS tests + `/api/history` verifier updated for `get_family_capsules_root` | Live history readback after seal |
 | Unit suite and native verification green | done | 77 JS tests pass; full native verify passes | — |
 
@@ -79,7 +90,7 @@ The latest size-headroom report has no warnings. A near-full capsule may warn as
 
 | Gate | Status | Evidence | To close |
 | --- | --- | --- | --- |
-| Devnet Circle updated to candidate AML | done | Circle `octDxj...HsG9K8` code hash `2423f9af...ae5ef63`; in-place update used 1000 OU | Continue soak |
+| Devnet Circle updated to candidate AML | pending deploy | Target Circle `octDxj...HsG9K8`; candidate code hash `7a2948df...5804601`; use in-place update with 1000 OU | Deploy and verify live code hash |
 | Snapshot reports expose size headroom | done | Latest submit report includes byte use, remaining headroom, dynamic capsule rows, submitted OU, and receipt effort | Continue monitoring |
 | Seal-through a capsule boundary | done | Snapshot `#71` sealed capsule `2026-06-24T12.0000`; tx `960c0bee...698c3039` | Continue soak |
 | Over-cadence in one 12h half opens `.0001` cleanly | done | Snapshot `#72` opened `2026-06-24T12.0001`; tx `0fb7e19d...0cf39a7e` | Continue soak |
