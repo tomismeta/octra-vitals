@@ -1,6 +1,6 @@
 # AML Fact Ledger — Devnet Readiness Scorecard
 
-Status: **fact-v2 mainnet-shaped candidate locally verified; fresh devnet cutover in progress**. Mainnet (`octra.live`) is untouched.
+Status: **fact-v2 mainnet-shaped devnet cutover complete; soak active**. Mainnet (`octra.live`) is untouched.
 Date: 2026-06-24
 Scope: the fact-family ledger running behind `devnet.octra.live`. The old fact-v1 devnet Circle remains a soak artifact; the mainnet-shaped rehearsal uses a fresh fact-v2 programmed Circle with AML and assets together.
 
@@ -10,7 +10,12 @@ This scorecard records the gates we require before the fact-ledger model is cons
 
 - Network: `octra-devnet`.
 - Previous devnet fact-v1 Circle: `octDxjWHdLQX3RRmU9tdh16in35wPR9c8uRniBwEpHsG9K8`.
-- Fresh devnet fact-v2 Circle: pending deployment.
+- Fresh devnet fact-v2 Circle: `oct5cp4FuVqZJ6W5o1cxVyeE3BvP1R9owZWR9evGmZf3gyu`.
+- Fresh fact-v2 deploy tx: `82ef11b79541f5884a8046f11c142e384be350f447db3738c5d6d22d4c9b373d`.
+- Fresh fact-v2 program update tx: `710646bab2a418b66d56439607ec9ab64f3edb3178dec6f45e90b65201c8c747`.
+- Fresh fact-v2 initialize tx: `3ccb91116b18ed072c4e54f3258550a3349b4244c85be0dbeb2565318a8e3830`.
+- First fact-v2 snapshot tx: `046056bd0b08480e7039cdefe97d3a968cc5d5d6b5697221e211a6d587b6bd46`.
+- First scheduled fact-v2 snapshot tx: `404c0522b622b9ea973efe39157b1714c62bf694282e9378c1ea3ab136ca490c`.
 - Devnet wallet: documented separately in `docs/devnet-fact-ledger-wallets.md`; no private material is stored in the repo.
 - Mainnet: no deploy, no configuration change, no wallet access.
 
@@ -58,15 +63,15 @@ Three changes directly address the size fragility found during devnet deployment
 
 The AML state remains boring and bounded per write: one latest payload/evidence/source-ref set, one open capsule body per family, immutable sealed capsules, and small roots/counters.
 
-Latest live headroom, from devnet snapshot `#82` (`vitals.2026-06-24T19:01:20Z`):
+Latest live headroom, from first fresh fact-v2 devnet snapshot `#95` (`vitals.2026-06-24T22:29:51Z`):
 
 | Field | Used | Limit | Remaining |
 | --- | ---: | ---: | ---: |
 | Canonical payload | 2,968 bytes | 12,000 bytes | 9,032 bytes |
 | Evidence manifest | 2,626 bytes | 8,000 bytes | 5,374 bytes |
 | Source refs | 1,270 bytes | 4,096 bytes | 2,826 bytes |
-| Compact record message | 8,063 bytes | 22,000 bytes | 13,937 bytes |
-| Open capsule | 11 rows / 3,245 bytes | 48 rows / 14,160 bytes | 37 rows / 10,915 bytes |
+| Compact record message | 8,077 bytes | 22,000 bytes | 13,923 bytes |
+| Open capsule | 1 row / 295 bytes | 48 rows / 14,160 bytes | 47 rows / 13,865 bytes |
 
 The latest size-headroom report has no warnings. A near-full capsule may warn as it approaches the 48-row seal boundary; that is expected telemetry, not a failure.
 
@@ -85,28 +90,29 @@ The latest size-headroom report has no warnings. A near-full capsule may warn as
 | Capsule metadata has distinct row-root and capsule-chain-root semantics | done | `family_root_before` / `family_root_after` now track the capsule chain, not duplicate row roots | Live seal readback |
 | Issue C overflow path is fixed | done | Segment suffix on overflow; unit tests cover same-half overflow capsule IDs | Live over-cadence run |
 | Core row bound to verified summary and full payload hash | done | `assert_core_row_matches_summary` + `assert_fact_row` remain in AML | — |
-| Capsule id bound to observed time | done | AML derives half-day capsule base from `observed_at` and rejects mismatches; live candidate hash `7a2948df...5804601` | Continue soak |
-| Latest identity compatibility restored | done | AML writes latest id/time/submitter; live snapshot `#82` readback has id/time/submitter populated | Continue soak |
+| Capsule id bound to observed time | done | AML derives half-day capsule base from `observed_at` and rejects mismatches; live fact-v2 hash `aa30cedd...fb28c2` | Continue soak |
+| Latest identity compatibility restored | done | AML writes latest id/time/submitter; fresh fact-v2 snapshot `#95` readback has id/time/submitter populated | Continue soak |
 | Gateway/browser verifier understands capsule-chain roots | done | JS tests + `/api/history` verifier updated for `get_family_capsules_root`; live history proof status `fact_family_verified` | Continue soak |
-| Unit suite and native verification green | done | 77 JS tests pass; full native verify passes | — |
+| Unit suite and native verification green | done | 79 JS tests pass; full native verify passes | — |
 
 ### Liveness, Scale & Data Growth
 
 | Gate | Status | Evidence | To close |
 | --- | --- | --- | --- |
-| Devnet Circle updated to candidate AML | done | Target Circle `octDxj...HsG9K8`; live code hash `7a2948df...5804601`; Circle version 17; in-place update tx `c2fb4942...05dd23a` | Continue soak |
+| Devnet Circle deployed to candidate AML | done | Fresh Circle `oct5cp4...3gyu`; live code hash `aa30cedd...fb28c2`; deploy tx `82ef11b...9b373d`; program update tx `710646...c8c747`; initialize tx `3ccb91...e3830` | Continue soak |
 | Snapshot reports expose size headroom | done | Latest submit report includes byte use, remaining headroom, dynamic capsule rows, submitted OU, and receipt effort | Continue monitoring |
+| Scheduled fact-v2 updater path | done | Timer-produced snapshot `#96` (`vitals.2026-06-24T22:45:10Z`), tx `404c0522...ca490c`, total run 5.5s | Continue soak |
 | Seal-through a capsule boundary | done | Snapshot `#71` sealed capsule `2026-06-24T12.0000`; tx `960c0bee...698c3039` | Continue soak |
 | Over-cadence in one 12h half opens `.0001` cleanly | done | Snapshot `#72` opened `2026-06-24T12.0001`; tx `0fb7e19d...0cf39a7e` | Continue soak |
 | Restart/resume across seal boundary | done | Systemd updater service produced snapshot `#73` after gateway restart and sealed-state resume; tx `1a67242d...61b3b559` | Continue soak |
-| Many-capsule scale in programmed Circle | open | First fact-ledger capsule is sealed and verified; live open capsule has 11/48 rows; more live capsules still need time | Let devnet accumulate capsules; track read/write cost |
+| Many-capsule scale in programmed Circle | open | Fresh fact-v2 era starts at snapshot `#95`; first row is verified, but no fresh fact-v2 seal yet | Let devnet accumulate capsules; track read/write cost |
 
 ### Read Path & Honesty
 
 | Gate | Status | Evidence | To close |
 | --- | --- | --- | --- |
 | `/api/latest` serves program-backed data | done | `/api/latest` returns 200, `status=program`, `source=program` after update | Continue monitoring freshness |
-| `/api/history` sourced from verified fact-family capsules | done | `/api/history?window=1d` returns 59 canonical points, proof status `fact_family_verified` | Continue monitoring |
+| `/api/history` sourced from verified fact-family capsules | done | `/api/history?window=1d` returns the fresh fact-v2 row from `aml_fact_family_core_capsules_verified`; coverage is honestly partial until the new era accumulates rows | Continue monitoring |
 | Browser-side range verification measured | open | — | Measure 1d/7d/30d reads once enough history exists |
 | Coverage honesty for short history | done | UI/API expose available coverage; no fake history is synthesized | Continue monitoring |
 | Completeness for future multi-family snapshots | deferred | Core-only launch is atomic; 1:many families are not active | Decide before adding route/detail families |
@@ -119,7 +125,7 @@ The latest size-headroom report has no warnings. A near-full capsule may warn as
 | Programmed-Circle method surface includes new views | done | `get_family_capsules_root` / `get_capsules_root` added to readiness method list | Live readiness check |
 | No raw private material in repo | done | Secrets remain host-local root-only env files | Continue not printing/copying secrets |
 | Cost optimized for devnet update | done | Existing Circle updated in place at 1000 OU; no fresh Circle deploy | Keep using update path for AML-only devnet patches |
-| Final devnet report | done | Program update report `/var/lib/octra-vitals/reports/fact-ledger-program-update-20260624T184022Z.json`; latest run report `/var/lib/octra-vitals/runs/snapshot-2026-06-24T190120Z-253787/submit_snapshot.json` | Keep updating this scorecard after major gates |
+| Final devnet report | done | Fresh deploy report `/var/lib/octra-vitals/programmed-circle-deploy.json`; first fact-v2 run `/var/lib/octra-vitals/runs/snapshot-2026-06-24T222951Z-256360/submit_snapshot.json` | Keep updating this scorecard after major gates |
 
 ## Mainnet Gate
 
