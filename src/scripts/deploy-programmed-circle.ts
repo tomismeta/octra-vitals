@@ -17,7 +17,7 @@ type ProgrammedCircleProgramKind = "v0" | "fact-ledger";
 
 function programmedCircleProgramKind(): ProgrammedCircleProgramKind {
   const configured = process.env.VITALS_PROGRAMMED_CIRCLE_PROGRAM || process.env.VITALS_RECORD_SNAPSHOT_VERSION;
-  if (configured === "fact-ledger" || configured === "fact-v1") return "fact-ledger";
+  if (configured === "fact-ledger" || configured === "fact-v1" || configured === "fact-v2") return "fact-ledger";
   if (configured === "v0" || configured === undefined || configured === "") return "v0";
   throw new Error("VITALS_PROGRAMMED_CIRCLE_PROGRAM must be v0 or fact-ledger");
 }
@@ -640,8 +640,8 @@ if (!deployEnabled) {
       ...(programKind === "fact-ledger" ? {
         VITALS_PROGRAMMED_CIRCLE_PROGRAM: "fact-ledger",
         VITALS_PROGRAMMED_CIRCLE_ARTIFACT_DIR: artifactDir,
-        VITALS_RECORD_SNAPSHOT_VERSION: "fact-v1",
-        VITALS_FACT_LEDGER_CUTOVER_ACK: `fact-v1:circle_program:${circleId}`,
+        VITALS_RECORD_SNAPSHOT_VERSION: "fact-v2",
+        VITALS_FACT_LEDGER_CUTOVER_ACK: `fact-v2:circle_program:${circleId}`,
         VITALS_FACT_LEDGER_NETWORK_ID: factLedgerNetwork,
         VITALS_FACT_LEDGER_PROGRAMMED_CIRCLE_SOURCE_HASH: `sha256:${sha256Hex(source)}`,
         VITALS_FACT_LEDGER_PROGRAMMED_CIRCLE_BYTECODE_HASH: compile.certificate?.bytecode_hash ? `sha256:${compile.certificate.bytecode_hash}` : null,

@@ -276,6 +276,7 @@ test("record snapshot builder can emit v1 bundles without changing the v0 defaul
   const v0 = await buildRecordSnapshotCall(snapshot, { snapshotIndex: 5, recordVersion: "v0" });
   const v1 = await buildRecordSnapshotCall(snapshot, { snapshotIndex: 5, recordVersion: "v1" });
   const factV1 = await buildRecordSnapshotCall(snapshot, { snapshotIndex: 5, recordVersion: "fact-v1" });
+  const factV2 = await buildRecordSnapshotCall(snapshot, { snapshotIndex: 5, recordVersion: "fact-v2" });
 
   assert.equal(v0.method, "record_snapshot_v0");
   assert.equal(v1.method, "record_snapshot_v1");
@@ -300,4 +301,16 @@ test("record snapshot builder can emit v1 bundles without changing the v0 defaul
   assert.equal(factV1.params[6], "2026-06-23T12");
   assert.equal(factV1.params[7], Number(factV1.history.row.slice(27, 39)));
   assert.equal(factV1.params[8], factV1.snapshot_index);
+  assert.equal(factV2.method, "record_snapshot_fact_v2");
+  assert.equal(factV2.commit_mode, "fact-v2");
+  assert.equal(factV2.fact_ledger.manifest, FACT_LEDGER_MANIFEST);
+  assert.equal(factV2.fact_ledger.aux_count, 0);
+  assert.equal(factV2.fact_ledger.max_aux_rows, 4);
+  assert.equal(factV2.metric_facts.rows.length, 4);
+  assert.equal(factV2.params.length, 14);
+  assert.equal(factV2.params[9], 0);
+  assert.equal(factV2.params[10], "");
+  assert.equal(factV2.params[13], "");
+  assert.equal(factV2.history.row, v1.history.row);
+  assert.equal(factV2.expected_hashes.history_row_hash, factLedgerRowHashHex(FACT_LEDGER_CORE_FAMILY_ID, FACT_LEDGER_CORE_SCHEMA_ID, factV2.history.row));
 });

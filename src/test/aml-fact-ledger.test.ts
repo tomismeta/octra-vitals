@@ -7,15 +7,19 @@ import {
   FACT_LEDGER_CORE_SCHEMA_ID,
   FACT_LEDGER_FAMILY_DEFINITION_LEN,
   FACT_LEDGER_FAMILY_STATE_LEN,
+  FACT_LEDGER_PACKED_METRIC_FAMILY_ID,
+  FACT_LEDGER_PACKED_METRIC_SCHEMA_ID,
   FACT_LEDGER_VERSION,
   coreFactFamilyDefinition,
   decodeCoreAccountingFactRow,
   decodeFactCapsuleMeta,
   decodeFactFamilyDefinition,
   decodeFactFamilyState,
+  decodePackedMetricFactRow,
   encodeCoreAccountingFactRow,
   encodeFactFamilyDefinition,
   encodeFactFamilyState,
+  encodePackedMetricFactRow,
   factLedgerEmptyCatalogRootHex,
   factLedgerEmptyFamilyCapsulesRootHex,
   factLedgerEmptyFamilyRootHex,
@@ -25,6 +29,7 @@ import {
   factLedgerFoldFamilyRootHex,
   factLedgerRowHashHex,
   makeFactCapsule,
+  packedMetricFactFamilyDefinition,
   type FactFamilyState
 } from "../lib/aml-fact-ledger.js";
 import { encodeHistoryV1Row, HISTORY_V1_ROW_LEN, type HistoryV1ObservationRow } from "../lib/aml-history-v1.js";
@@ -75,6 +80,19 @@ test("catalog root changes with family definitions", () => {
   assert.notEqual(afterCore, start);
 });
 
+test("packed metric family definition is dormant-capable and fixed-width", () => {
+  const definition = packedMetricFactFamilyDefinition(10);
+  const encoded = encodeFactFamilyDefinition(definition);
+  const decoded = decodeFactFamilyDefinition(encoded);
+
+  assert.equal(encoded.length, FACT_LEDGER_FAMILY_DEFINITION_LEN);
+  assert.equal(decoded.family_id, FACT_LEDGER_PACKED_METRIC_FAMILY_ID);
+  assert.equal(decoded.schema_id, FACT_LEDGER_PACKED_METRIC_SCHEMA_ID);
+  assert.equal(decoded.family_cardinality, "one_per_snapshot");
+  assert.equal(decoded.status, "reserved");
+  assert.equal(decoded.first_snapshot_index, 10);
+});
+
 test("core fact row is byte-compatible with proven history v1 rows", () => {
   const model = row(7);
   const encoded = encodeCoreAccountingFactRow(model);
@@ -92,6 +110,46 @@ test("fact row hash domain separates family and schema", () => {
   assert.match(coreHash, /^[0-9a-f]{64}$/);
   assert.match(auxiliaryHash, /^[0-9a-f]{64}$/);
   assert.notEqual(coreHash, auxiliaryHash);
+});
+
+test("packed metric fact rows keep payload hash position and round-trip active slots", () => {
+  const encoded = encodePackedMetricFactRow({
+    row_version: FACT_LEDGER_VERSION,
+    snapshot_index: 12,
+    observed_at_unix: 1782216900,
+    family_id: FACT_LEDGER_PACKED_METRIC_FAMILY_ID,
+    schema_id: FACT_LEDGER_PACKED_METRIC_SCHEMA_ID,
+    slots: [
+      {
+        metric_id: "0001",
+        unit_id: "0001",
+        status: "captured",
+        source_class: "source",
+        value_raw: "123456789"
+      },
+      {
+        metric_id: "0002",
+        unit_id: "0001",
+        status: "captured",
+        source_class: "derived",
+        value_raw: "-42"
+      }
+    ],
+    payload_hash_hex: "b".repeat(64)
+  });
+  const decoded = decodePackedMetricFactRow(encoded);
+
+  assert.equal(encoded.length, HISTORY_V1_ROW_LEN);
+  assert.equal(encoded.slice(27, 31), FACT_LEDGER_PACKED_METRIC_FAMILY_ID);
+  assert.equal(encoded.slice(32, 36), FACT_LEDGER_PACKED_METRIC_SCHEMA_ID);
+  assert.equal(encoded.slice(231), "b".repeat(64));
+  assert.equal(factLedgerRowHashHex(FACT_LEDGER_PACKED_METRIC_FAMILY_ID, FACT_LEDGER_PACKED_METRIC_SCHEMA_ID, encoded).length, 64);
+  assert.equal(decoded.snapshot_index, 12);
+  assert.equal(decoded.slots.length, 2);
+  assert.equal(decoded.slots[0]?.metric_id, "0001");
+  assert.equal(decoded.slots[0]?.value_raw, "123456789");
+  assert.equal(decoded.slots[1]?.source_class, "derived");
+  assert.equal(decoded.slots[1]?.value_raw, "-42");
 });
 
 test("family state is fixed-width and keeps coverage separate from definition", () => {

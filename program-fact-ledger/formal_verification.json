@@ -1,0 +1,1725 @@
+{
+  "schema": "aml_safety_report_v1",
+  "engine": "aml_ast_verifier",
+  "proof_model": "formal/coq/aml_value_safety_model.v",
+  "proof_gate": "scripts/check_aml_formal.sh",
+  "program_name": "VitalsFactLedgerState",
+  "verified": true,
+  "safety": "safe",
+  "errors": 0,
+  "warnings": 0,
+  "trace": [
+    {
+      "code": "signed_value_storage",
+      "title": "value-like storage must not use signed int",
+      "status": "pass",
+      "severity": "error",
+      "findings": 0
+    },
+    {
+      "code": "signed_value_parameter",
+      "title": "value-moving public parameters must not use signed int",
+      "status": "pass",
+      "severity": "error",
+      "findings": 0
+    },
+    {
+      "code": "signed_value_flow",
+      "title": "signed values must not flow into value-like storage writes",
+      "status": "pass",
+      "severity": "error",
+      "findings": 0
+    },
+    {
+      "code": "unsigned_arithmetic_range_not_proven",
+      "title": "unsigned arithmetic writes must prove range safety",
+      "status": "pass",
+      "severity": "error",
+      "findings": 0
+    },
+    {
+      "code": "supply_invariant_unproven",
+      "title": "balance and total supply writes should preserve conservation",
+      "status": "pass",
+      "severity": "warning",
+      "findings": 0
+    },
+    {
+      "code": "unsigned_parameter_without_positive_guard",
+      "title": "unsigned value parameters should reject zero unless zero is meaningful",
+      "status": "pass",
+      "severity": "warning",
+      "findings": 0
+    },
+    {
+      "code": "unchecked_transfer_result",
+      "title": "native transfer result should be checked",
+      "status": "pass",
+      "severity": "warning",
+      "findings": 0
+    }
+  ],
+  "function_summaries": [
+    {
+      "name": "require_initialized",
+      "visibility": "private",
+      "direct_calls": [],
+      "direct_writes": [],
+      "transitive_writes": [],
+      "value_writes": [],
+      "signed_params": []
+    },
+    {
+      "name": "only_owner",
+      "visibility": "private",
+      "direct_calls": [
+        "require_initialized"
+      ],
+      "direct_writes": [],
+      "transitive_writes": [],
+      "value_writes": [],
+      "signed_params": []
+    },
+    {
+      "name": "only_operator",
+      "visibility": "private",
+      "direct_calls": [
+        "require_initialized"
+      ],
+      "direct_writes": [],
+      "transitive_writes": [],
+      "value_writes": [],
+      "signed_params": []
+    },
+    {
+      "name": "assert_digit",
+      "visibility": "private",
+      "direct_calls": [],
+      "direct_writes": [],
+      "transitive_writes": [],
+      "value_writes": [],
+      "signed_params": []
+    },
+    {
+      "name": "assert_hash",
+      "visibility": "private",
+      "direct_calls": [
+        "len",
+        "substr"
+      ],
+      "direct_writes": [],
+      "transitive_writes": [],
+      "value_writes": [],
+      "signed_params": []
+    },
+    {
+      "name": "assert_hex64",
+      "visibility": "private",
+      "direct_calls": [
+        "len"
+      ],
+      "direct_writes": [],
+      "transitive_writes": [],
+      "value_writes": [],
+      "signed_params": []
+    },
+    {
+      "name": "assert_code4",
+      "visibility": "private",
+      "direct_calls": [
+        "assert_digit",
+        "len",
+        "substr"
+      ],
+      "direct_writes": [],
+      "transitive_writes": [],
+      "value_writes": [],
+      "signed_params": []
+    },
+    {
+      "name": "assert_network_id",
+      "visibility": "private",
+      "direct_calls": [
+        "len"
+      ],
+      "direct_writes": [],
+      "transitive_writes": [],
+      "value_writes": [],
+      "signed_params": []
+    },
+    {
+      "name": "assert_snapshot_id",
+      "visibility": "private",
+      "direct_calls": [
+        "len",
+        "substr"
+      ],
+      "direct_writes": [],
+      "transitive_writes": [],
+      "value_writes": [],
+      "signed_params": []
+    },
+    {
+      "name": "assert_observed_at",
+      "visibility": "private",
+      "direct_calls": [
+        "assert_digit",
+        "len",
+        "substr"
+      ],
+      "direct_writes": [],
+      "transitive_writes": [],
+      "value_writes": [],
+      "signed_params": []
+    },
+    {
+      "name": "capsule_base_id_for_observed_at",
+      "visibility": "private",
+      "direct_calls": [
+        "assert_observed_at",
+        "concat",
+        "substr"
+      ],
+      "direct_writes": [],
+      "transitive_writes": [],
+      "value_writes": [],
+      "signed_params": []
+    },
+    {
+      "name": "assert_capsule_base_id",
+      "visibility": "private",
+      "direct_calls": [
+        "assert_digit",
+        "len",
+        "substr"
+      ],
+      "direct_writes": [],
+      "transitive_writes": [],
+      "value_writes": [],
+      "signed_params": []
+    },
+    {
+      "name": "assert_capsule_id",
+      "visibility": "private",
+      "direct_calls": [
+        "assert_capsule_base_id",
+        "assert_digit",
+        "len",
+        "substr"
+      ],
+      "direct_writes": [],
+      "transitive_writes": [],
+      "value_writes": [],
+      "signed_params": []
+    },
+    {
+      "name": "decimal_4",
+      "visibility": "private",
+      "direct_calls": [
+        "concat",
+        "to_string"
+      ],
+      "direct_writes": [],
+      "transitive_writes": [],
+      "value_writes": [],
+      "signed_params": [
+        "count_value"
+      ]
+    },
+    {
+      "name": "decimal_6",
+      "visibility": "private",
+      "direct_calls": [
+        "concat",
+        "to_string"
+      ],
+      "direct_writes": [],
+      "transitive_writes": [],
+      "value_writes": [],
+      "signed_params": [
+        "count_value"
+      ]
+    },
+    {
+      "name": "decimal_8",
+      "visibility": "private",
+      "direct_calls": [
+        "concat",
+        "to_string"
+      ],
+      "direct_writes": [],
+      "transitive_writes": [],
+      "value_writes": [],
+      "signed_params": [
+        "count_value"
+      ]
+    },
+    {
+      "name": "decimal_10",
+      "visibility": "private",
+      "direct_calls": [
+        "concat",
+        "to_string"
+      ],
+      "direct_writes": [],
+      "transitive_writes": [],
+      "value_writes": [],
+      "signed_params": [
+        "count_value"
+      ]
+    },
+    {
+      "name": "capsule_id_for",
+      "visibility": "private",
+      "direct_calls": [
+        "concat",
+        "decimal_4"
+      ],
+      "direct_writes": [],
+      "transitive_writes": [],
+      "value_writes": [],
+      "signed_params": [
+        "capsule_segment"
+      ]
+    },
+    {
+      "name": "is_empty_slot",
+      "visibility": "private",
+      "direct_calls": [],
+      "direct_writes": [],
+      "transitive_writes": [],
+      "value_writes": [],
+      "signed_params": []
+    },
+    {
+      "name": "family_capsule_key",
+      "visibility": "private",
+      "direct_calls": [
+        "assert_code4",
+        "concat"
+      ],
+      "direct_writes": [],
+      "transitive_writes": [],
+      "value_writes": [],
+      "signed_params": []
+    },
+    {
+      "name": "family_capsule_ordinal_key",
+      "visibility": "private",
+      "direct_calls": [
+        "assert_code4",
+        "concat",
+        "decimal_8"
+      ],
+      "direct_writes": [],
+      "transitive_writes": [],
+      "value_writes": [],
+      "signed_params": [
+        "ordinal"
+      ]
+    },
+    {
+      "name": "is_family_registered",
+      "visibility": "private",
+      "direct_calls": [
+        "assert_code4",
+        "is_empty_slot"
+      ],
+      "direct_writes": [],
+      "transitive_writes": [],
+      "value_writes": [],
+      "signed_params": []
+    },
+    {
+      "name": "require_family_registered",
+      "visibility": "private",
+      "direct_calls": [
+        "is_family_registered"
+      ],
+      "direct_writes": [],
+      "transitive_writes": [],
+      "value_writes": [],
+      "signed_params": []
+    },
+    {
+      "name": "schema_id_for_family",
+      "visibility": "private",
+      "direct_calls": [
+        "require_family_registered",
+        "substr"
+      ],
+      "direct_writes": [],
+      "transitive_writes": [],
+      "value_writes": [],
+      "signed_params": []
+    },
+    {
+      "name": "assert_family_definition",
+      "visibility": "private",
+      "direct_calls": [
+        "len",
+        "substr"
+      ],
+      "direct_writes": [],
+      "transitive_writes": [],
+      "value_writes": [],
+      "signed_params": []
+    },
+    {
+      "name": "fold_catalog_root",
+      "visibility": "private",
+      "direct_calls": [
+        "concat",
+        "sha256"
+      ],
+      "direct_writes": [],
+      "transitive_writes": [],
+      "value_writes": [],
+      "signed_params": []
+    },
+    {
+      "name": "row_hash",
+      "visibility": "private",
+      "direct_calls": [
+        "concat",
+        "sha256",
+        "substr"
+      ],
+      "direct_writes": [],
+      "transitive_writes": [],
+      "value_writes": [],
+      "signed_params": []
+    },
+    {
+      "name": "fold_family_root",
+      "visibility": "private",
+      "direct_calls": [
+        "concat",
+        "row_hash",
+        "sha256"
+      ],
+      "direct_writes": [],
+      "transitive_writes": [],
+      "value_writes": [],
+      "signed_params": []
+    },
+    {
+      "name": "empty_family_capsules_root",
+      "visibility": "private",
+      "direct_calls": [
+        "concat",
+        "sha256"
+      ],
+      "direct_writes": [],
+      "transitive_writes": [],
+      "value_writes": [],
+      "signed_params": []
+    },
+    {
+      "name": "fold_family_capsules_root",
+      "visibility": "private",
+      "direct_calls": [
+        "concat",
+        "sha256"
+      ],
+      "direct_writes": [],
+      "transitive_writes": [],
+      "value_writes": [],
+      "signed_params": []
+    },
+    {
+      "name": "assert_fact_row",
+      "visibility": "private",
+      "direct_calls": [
+        "decimal_10",
+        "len",
+        "substr"
+      ],
+      "direct_writes": [],
+      "transitive_writes": [],
+      "value_writes": [],
+      "signed_params": [
+        "snapshot_index"
+      ]
+    },
+    {
+      "name": "aux_fact_family_id",
+      "visibility": "private",
+      "direct_calls": [
+        "assert_code4",
+        "decimal_10",
+        "len",
+        "require_family_registered",
+        "schema_id_for_family",
+        "substr"
+      ],
+      "direct_writes": [],
+      "transitive_writes": [],
+      "value_writes": [],
+      "signed_params": [
+        "snapshot_index"
+      ]
+    },
+    {
+      "name": "assert_core_row_matches_summary",
+      "visibility": "private",
+      "direct_calls": [
+        "substr"
+      ],
+      "direct_writes": [],
+      "transitive_writes": [],
+      "value_writes": [],
+      "signed_params": []
+    },
+    {
+      "name": "register_family_internal",
+      "visibility": "private",
+      "direct_calls": [
+        "assert_code4",
+        "assert_family_definition",
+        "assert_hex64",
+        "decimal_4",
+        "empty_family_capsules_root",
+        "fold_catalog_root",
+        "is_family_registered",
+        "schema_id_for_family"
+      ],
+      "direct_writes": [
+        "catalog_root",
+        "family_capsule_count_by_id",
+        "family_capsules_root_by_id",
+        "family_count",
+        "family_definition_by_id",
+        "family_id_by_ordinal",
+        "family_latest_capsule_id_by_id",
+        "family_latest_index_by_id",
+        "family_open_capsule_base_id_by_id",
+        "family_open_capsule_body_by_id",
+        "family_open_capsule_end_root_by_id",
+        "family_open_capsule_first_index_by_id",
+        "family_open_capsule_id_by_id",
+        "family_open_capsule_row_count_by_id",
+        "family_open_capsule_segment_by_id",
+        "family_open_capsule_start_root_by_id",
+        "family_root_by_id"
+      ],
+      "transitive_writes": [
+        "catalog_root",
+        "family_capsule_count_by_id",
+        "family_capsules_root_by_id",
+        "family_count",
+        "family_definition_by_id",
+        "family_id_by_ordinal",
+        "family_latest_capsule_id_by_id",
+        "family_latest_index_by_id",
+        "family_open_capsule_base_id_by_id",
+        "family_open_capsule_body_by_id",
+        "family_open_capsule_end_root_by_id",
+        "family_open_capsule_first_index_by_id",
+        "family_open_capsule_id_by_id",
+        "family_open_capsule_row_count_by_id",
+        "family_open_capsule_segment_by_id",
+        "family_open_capsule_start_root_by_id",
+        "family_root_by_id"
+      ],
+      "value_writes": [],
+      "signed_params": []
+    },
+    {
+      "name": "fact_capsule_body_hash",
+      "visibility": "private",
+      "direct_calls": [
+        "concat",
+        "sha256"
+      ],
+      "direct_writes": [],
+      "transitive_writes": [],
+      "value_writes": [],
+      "signed_params": []
+    },
+    {
+      "name": "fact_capsule_meta_hash",
+      "visibility": "private",
+      "direct_calls": [
+        "concat",
+        "sha256"
+      ],
+      "direct_writes": [],
+      "transitive_writes": [],
+      "value_writes": [],
+      "signed_params": []
+    },
+    {
+      "name": "seal_family_capsule",
+      "visibility": "private",
+      "direct_calls": [
+        "concat",
+        "decimal_6",
+        "empty_family_capsules_root",
+        "fact_capsule_body_hash",
+        "fact_capsule_meta_hash",
+        "family_capsule_key",
+        "fold_family_capsules_root",
+        "is_empty_slot",
+        "len",
+        "require_family_registered",
+        "schema_id_for_family",
+        "substr"
+      ],
+      "direct_writes": [
+        "family_capsule_body_by_key",
+        "family_capsule_count_by_id",
+        "family_capsule_id_by_key",
+        "family_capsule_meta_by_key",
+        "family_capsule_root_after_by_key",
+        "family_capsules_root_by_id",
+        "family_latest_capsule_id_by_id",
+        "family_open_capsule_body_by_id",
+        "family_open_capsule_end_root_by_id",
+        "family_open_capsule_first_index_by_id",
+        "family_open_capsule_id_by_id",
+        "family_open_capsule_row_count_by_id",
+        "family_open_capsule_segment_by_id",
+        "family_open_capsule_start_root_by_id"
+      ],
+      "transitive_writes": [
+        "family_capsule_body_by_key",
+        "family_capsule_count_by_id",
+        "family_capsule_id_by_key",
+        "family_capsule_meta_by_key",
+        "family_capsule_root_after_by_key",
+        "family_capsules_root_by_id",
+        "family_latest_capsule_id_by_id",
+        "family_open_capsule_body_by_id",
+        "family_open_capsule_end_root_by_id",
+        "family_open_capsule_first_index_by_id",
+        "family_open_capsule_id_by_id",
+        "family_open_capsule_row_count_by_id",
+        "family_open_capsule_segment_by_id",
+        "family_open_capsule_start_root_by_id"
+      ],
+      "value_writes": [],
+      "signed_params": []
+    },
+    {
+      "name": "append_core_fact_row",
+      "visibility": "private",
+      "direct_calls": [
+        "assert_capsule_base_id",
+        "capsule_id_for",
+        "concat",
+        "fold_family_root",
+        "len",
+        "seal_family_capsule"
+      ],
+      "direct_writes": [
+        "family_latest_index_by_id",
+        "family_open_capsule_base_id_by_id",
+        "family_open_capsule_body_by_id",
+        "family_open_capsule_end_root_by_id",
+        "family_open_capsule_first_index_by_id",
+        "family_open_capsule_id_by_id",
+        "family_open_capsule_row_count_by_id",
+        "family_open_capsule_segment_by_id",
+        "family_open_capsule_start_root_by_id",
+        "family_root_by_id"
+      ],
+      "transitive_writes": [
+        "family_capsule_body_by_key",
+        "family_capsule_count_by_id",
+        "family_capsule_id_by_key",
+        "family_capsule_meta_by_key",
+        "family_capsule_root_after_by_key",
+        "family_capsules_root_by_id",
+        "family_latest_capsule_id_by_id",
+        "family_latest_index_by_id",
+        "family_open_capsule_base_id_by_id",
+        "family_open_capsule_body_by_id",
+        "family_open_capsule_end_root_by_id",
+        "family_open_capsule_first_index_by_id",
+        "family_open_capsule_id_by_id",
+        "family_open_capsule_row_count_by_id",
+        "family_open_capsule_segment_by_id",
+        "family_open_capsule_start_root_by_id",
+        "family_root_by_id"
+      ],
+      "value_writes": [],
+      "signed_params": [
+        "snapshot_index"
+      ]
+    },
+    {
+      "name": "append_fact_row",
+      "visibility": "private",
+      "direct_calls": [
+        "assert_capsule_base_id",
+        "assert_fact_row",
+        "capsule_id_for",
+        "concat",
+        "fold_family_root",
+        "require_family_registered",
+        "schema_id_for_family",
+        "seal_family_capsule"
+      ],
+      "direct_writes": [
+        "family_latest_index_by_id",
+        "family_open_capsule_base_id_by_id",
+        "family_open_capsule_body_by_id",
+        "family_open_capsule_end_root_by_id",
+        "family_open_capsule_first_index_by_id",
+        "family_open_capsule_id_by_id",
+        "family_open_capsule_row_count_by_id",
+        "family_open_capsule_segment_by_id",
+        "family_open_capsule_start_root_by_id",
+        "family_root_by_id"
+      ],
+      "transitive_writes": [
+        "family_capsule_body_by_key",
+        "family_capsule_count_by_id",
+        "family_capsule_id_by_key",
+        "family_capsule_meta_by_key",
+        "family_capsule_root_after_by_key",
+        "family_capsules_root_by_id",
+        "family_latest_capsule_id_by_id",
+        "family_latest_index_by_id",
+        "family_open_capsule_base_id_by_id",
+        "family_open_capsule_body_by_id",
+        "family_open_capsule_end_root_by_id",
+        "family_open_capsule_first_index_by_id",
+        "family_open_capsule_id_by_id",
+        "family_open_capsule_row_count_by_id",
+        "family_open_capsule_segment_by_id",
+        "family_open_capsule_start_root_by_id",
+        "family_root_by_id"
+      ],
+      "value_writes": [],
+      "signed_params": [
+        "snapshot_index"
+      ]
+    },
+    {
+      "name": "manifest",
+      "visibility": "public",
+      "direct_calls": [],
+      "direct_writes": [],
+      "transitive_writes": [],
+      "value_writes": [],
+      "signed_params": []
+    },
+    {
+      "name": "is_initialized",
+      "visibility": "public",
+      "direct_calls": [],
+      "direct_writes": [],
+      "transitive_writes": [],
+      "value_writes": [],
+      "signed_params": []
+    },
+    {
+      "name": "get_owner",
+      "visibility": "public",
+      "direct_calls": [],
+      "direct_writes": [],
+      "transitive_writes": [],
+      "value_writes": [],
+      "signed_params": []
+    },
+    {
+      "name": "get_operator",
+      "visibility": "public",
+      "direct_calls": [],
+      "direct_writes": [],
+      "transitive_writes": [],
+      "value_writes": [],
+      "signed_params": []
+    },
+    {
+      "name": "is_paused",
+      "visibility": "public",
+      "direct_calls": [],
+      "direct_writes": [],
+      "transitive_writes": [],
+      "value_writes": [],
+      "signed_params": []
+    },
+    {
+      "name": "get_successor_program",
+      "visibility": "public",
+      "direct_calls": [],
+      "direct_writes": [],
+      "transitive_writes": [],
+      "value_writes": [],
+      "signed_params": []
+    },
+    {
+      "name": "is_successor_set",
+      "visibility": "public",
+      "direct_calls": [],
+      "direct_writes": [],
+      "transitive_writes": [],
+      "value_writes": [],
+      "signed_params": []
+    },
+    {
+      "name": "get_era_program",
+      "visibility": "public",
+      "direct_calls": [],
+      "direct_writes": [],
+      "transitive_writes": [],
+      "value_writes": [],
+      "signed_params": []
+    },
+    {
+      "name": "get_era_network_id",
+      "visibility": "public",
+      "direct_calls": [],
+      "direct_writes": [],
+      "transitive_writes": [],
+      "value_writes": [],
+      "signed_params": []
+    },
+    {
+      "name": "get_predecessor_program",
+      "visibility": "public",
+      "direct_calls": [],
+      "direct_writes": [],
+      "transitive_writes": [],
+      "value_writes": [],
+      "signed_params": []
+    },
+    {
+      "name": "get_predecessor_final_root",
+      "visibility": "public",
+      "direct_calls": [],
+      "direct_writes": [],
+      "transitive_writes": [],
+      "value_writes": [],
+      "signed_params": []
+    },
+    {
+      "name": "get_predecessor_final_index",
+      "visibility": "public",
+      "direct_calls": [],
+      "direct_writes": [],
+      "transitive_writes": [],
+      "value_writes": [],
+      "signed_params": []
+    },
+    {
+      "name": "get_predecessor_anchor_hash",
+      "visibility": "public",
+      "direct_calls": [],
+      "direct_writes": [],
+      "transitive_writes": [],
+      "value_writes": [],
+      "signed_params": []
+    },
+    {
+      "name": "get_era_first_snapshot_index",
+      "visibility": "public",
+      "direct_calls": [],
+      "direct_writes": [],
+      "transitive_writes": [],
+      "value_writes": [],
+      "signed_params": []
+    },
+    {
+      "name": "get_snapshot_count",
+      "visibility": "public",
+      "direct_calls": [],
+      "direct_writes": [],
+      "transitive_writes": [],
+      "value_writes": [],
+      "signed_params": []
+    },
+    {
+      "name": "get_latest_snapshot_index",
+      "visibility": "public",
+      "direct_calls": [],
+      "direct_writes": [],
+      "transitive_writes": [],
+      "value_writes": [],
+      "signed_params": []
+    },
+    {
+      "name": "get_latest_snapshot_id",
+      "visibility": "public",
+      "direct_calls": [],
+      "direct_writes": [],
+      "transitive_writes": [],
+      "value_writes": [],
+      "signed_params": []
+    },
+    {
+      "name": "get_latest_observed_at",
+      "visibility": "public",
+      "direct_calls": [],
+      "direct_writes": [],
+      "transitive_writes": [],
+      "value_writes": [],
+      "signed_params": []
+    },
+    {
+      "name": "get_latest_epoch",
+      "visibility": "public",
+      "direct_calls": [],
+      "direct_writes": [],
+      "transitive_writes": [],
+      "value_writes": [],
+      "signed_params": []
+    },
+    {
+      "name": "get_latest_payload_hash",
+      "visibility": "public",
+      "direct_calls": [],
+      "direct_writes": [],
+      "transitive_writes": [],
+      "value_writes": [],
+      "signed_params": []
+    },
+    {
+      "name": "get_latest_evidence_manifest_hash",
+      "visibility": "public",
+      "direct_calls": [],
+      "direct_writes": [],
+      "transitive_writes": [],
+      "value_writes": [],
+      "signed_params": []
+    },
+    {
+      "name": "get_latest_source_refs_hash",
+      "visibility": "public",
+      "direct_calls": [],
+      "direct_writes": [],
+      "transitive_writes": [],
+      "value_writes": [],
+      "signed_params": []
+    },
+    {
+      "name": "get_latest_summary_hash",
+      "visibility": "public",
+      "direct_calls": [],
+      "direct_writes": [],
+      "transitive_writes": [],
+      "value_writes": [],
+      "signed_params": []
+    },
+    {
+      "name": "get_latest_history_row_hash",
+      "visibility": "public",
+      "direct_calls": [],
+      "direct_writes": [],
+      "transitive_writes": [],
+      "value_writes": [],
+      "signed_params": []
+    },
+    {
+      "name": "get_latest_snapshot",
+      "visibility": "public",
+      "direct_calls": [],
+      "direct_writes": [],
+      "transitive_writes": [],
+      "value_writes": [],
+      "signed_params": []
+    },
+    {
+      "name": "get_latest_evidence_manifest",
+      "visibility": "public",
+      "direct_calls": [],
+      "direct_writes": [],
+      "transitive_writes": [],
+      "value_writes": [],
+      "signed_params": []
+    },
+    {
+      "name": "get_latest_source_refs",
+      "visibility": "public",
+      "direct_calls": [],
+      "direct_writes": [],
+      "transitive_writes": [],
+      "value_writes": [],
+      "signed_params": []
+    },
+    {
+      "name": "get_latest_summary",
+      "visibility": "public",
+      "direct_calls": [],
+      "direct_writes": [],
+      "transitive_writes": [],
+      "value_writes": [],
+      "signed_params": []
+    },
+    {
+      "name": "get_latest_history_row",
+      "visibility": "public",
+      "direct_calls": [],
+      "direct_writes": [],
+      "transitive_writes": [],
+      "value_writes": [],
+      "signed_params": []
+    },
+    {
+      "name": "get_latest_submitter",
+      "visibility": "public",
+      "direct_calls": [],
+      "direct_writes": [],
+      "transitive_writes": [],
+      "value_writes": [],
+      "signed_params": []
+    },
+    {
+      "name": "get_summary_row_len",
+      "visibility": "public",
+      "direct_calls": [],
+      "direct_writes": [],
+      "transitive_writes": [],
+      "value_writes": [],
+      "signed_params": []
+    },
+    {
+      "name": "get_history_row_len",
+      "visibility": "public",
+      "direct_calls": [],
+      "direct_writes": [],
+      "transitive_writes": [],
+      "value_writes": [],
+      "signed_params": []
+    },
+    {
+      "name": "get_capsule_meta_len",
+      "visibility": "public",
+      "direct_calls": [],
+      "direct_writes": [],
+      "transitive_writes": [],
+      "value_writes": [],
+      "signed_params": []
+    },
+    {
+      "name": "get_capsule_row_limit",
+      "visibility": "public",
+      "direct_calls": [],
+      "direct_writes": [],
+      "transitive_writes": [],
+      "value_writes": [],
+      "signed_params": []
+    },
+    {
+      "name": "get_max_aux_fact_rows_per_snapshot",
+      "visibility": "public",
+      "direct_calls": [],
+      "direct_writes": [],
+      "transitive_writes": [],
+      "value_writes": [],
+      "signed_params": []
+    },
+    {
+      "name": "get_catalog_root",
+      "visibility": "public",
+      "direct_calls": [],
+      "direct_writes": [],
+      "transitive_writes": [],
+      "value_writes": [],
+      "signed_params": []
+    },
+    {
+      "name": "get_family_count",
+      "visibility": "public",
+      "direct_calls": [],
+      "direct_writes": [],
+      "transitive_writes": [],
+      "value_writes": [],
+      "signed_params": []
+    },
+    {
+      "name": "get_family_id_at",
+      "visibility": "public",
+      "direct_calls": [],
+      "direct_writes": [],
+      "transitive_writes": [],
+      "value_writes": [],
+      "signed_params": []
+    },
+    {
+      "name": "get_family_definition",
+      "visibility": "public",
+      "direct_calls": [
+        "require_family_registered"
+      ],
+      "direct_writes": [],
+      "transitive_writes": [],
+      "value_writes": [],
+      "signed_params": []
+    },
+    {
+      "name": "get_family_root",
+      "visibility": "public",
+      "direct_calls": [
+        "require_family_registered"
+      ],
+      "direct_writes": [],
+      "transitive_writes": [],
+      "value_writes": [],
+      "signed_params": []
+    },
+    {
+      "name": "get_family_capsules_root",
+      "visibility": "public",
+      "direct_calls": [
+        "empty_family_capsules_root",
+        "require_family_registered",
+        "schema_id_for_family"
+      ],
+      "direct_writes": [],
+      "transitive_writes": [],
+      "value_writes": [],
+      "signed_params": []
+    },
+    {
+      "name": "get_family_latest_index",
+      "visibility": "public",
+      "direct_calls": [
+        "require_family_registered"
+      ],
+      "direct_writes": [],
+      "transitive_writes": [],
+      "value_writes": [],
+      "signed_params": []
+    },
+    {
+      "name": "get_family_capsule_count",
+      "visibility": "public",
+      "direct_calls": [
+        "require_family_registered"
+      ],
+      "direct_writes": [],
+      "transitive_writes": [],
+      "value_writes": [],
+      "signed_params": []
+    },
+    {
+      "name": "get_family_latest_capsule_id",
+      "visibility": "public",
+      "direct_calls": [
+        "require_family_registered"
+      ],
+      "direct_writes": [],
+      "transitive_writes": [],
+      "value_writes": [],
+      "signed_params": []
+    },
+    {
+      "name": "get_family_capsule_id_at",
+      "visibility": "public",
+      "direct_calls": [
+        "family_capsule_ordinal_key",
+        "require_family_registered"
+      ],
+      "direct_writes": [],
+      "transitive_writes": [],
+      "value_writes": [],
+      "signed_params": [
+        "ordinal"
+      ]
+    },
+    {
+      "name": "get_family_open_capsule_id",
+      "visibility": "public",
+      "direct_calls": [
+        "require_family_registered"
+      ],
+      "direct_writes": [],
+      "transitive_writes": [],
+      "value_writes": [],
+      "signed_params": []
+    },
+    {
+      "name": "get_family_open_capsule_body",
+      "visibility": "public",
+      "direct_calls": [
+        "require_family_registered"
+      ],
+      "direct_writes": [],
+      "transitive_writes": [],
+      "value_writes": [],
+      "signed_params": []
+    },
+    {
+      "name": "get_family_open_capsule_row_count",
+      "visibility": "public",
+      "direct_calls": [
+        "require_family_registered"
+      ],
+      "direct_writes": [],
+      "transitive_writes": [],
+      "value_writes": [],
+      "signed_params": []
+    },
+    {
+      "name": "get_family_open_capsule_start_root",
+      "visibility": "public",
+      "direct_calls": [
+        "require_family_registered"
+      ],
+      "direct_writes": [],
+      "transitive_writes": [],
+      "value_writes": [],
+      "signed_params": []
+    },
+    {
+      "name": "get_family_open_capsule_end_root",
+      "visibility": "public",
+      "direct_calls": [
+        "require_family_registered"
+      ],
+      "direct_writes": [],
+      "transitive_writes": [],
+      "value_writes": [],
+      "signed_params": []
+    },
+    {
+      "name": "get_family_capsule_body",
+      "visibility": "public",
+      "direct_calls": [
+        "family_capsule_key",
+        "require_family_registered"
+      ],
+      "direct_writes": [],
+      "transitive_writes": [],
+      "value_writes": [],
+      "signed_params": []
+    },
+    {
+      "name": "get_family_capsule_meta",
+      "visibility": "public",
+      "direct_calls": [
+        "family_capsule_key",
+        "require_family_registered"
+      ],
+      "direct_writes": [],
+      "transitive_writes": [],
+      "value_writes": [],
+      "signed_params": []
+    },
+    {
+      "name": "get_family_capsule_root_after",
+      "visibility": "public",
+      "direct_calls": [
+        "family_capsule_key",
+        "require_family_registered"
+      ],
+      "direct_writes": [],
+      "transitive_writes": [],
+      "value_writes": [],
+      "signed_params": []
+    },
+    {
+      "name": "get_history_root",
+      "visibility": "public",
+      "direct_calls": [],
+      "direct_writes": [],
+      "transitive_writes": [],
+      "value_writes": [],
+      "signed_params": []
+    },
+    {
+      "name": "get_capsules_root",
+      "visibility": "public",
+      "direct_calls": [
+        "empty_family_capsules_root"
+      ],
+      "direct_writes": [],
+      "transitive_writes": [],
+      "value_writes": [],
+      "signed_params": []
+    },
+    {
+      "name": "get_open_capsule_body",
+      "visibility": "public",
+      "direct_calls": [],
+      "direct_writes": [],
+      "transitive_writes": [],
+      "value_writes": [],
+      "signed_params": []
+    },
+    {
+      "name": "get_open_capsule_row_count",
+      "visibility": "public",
+      "direct_calls": [],
+      "direct_writes": [],
+      "transitive_writes": [],
+      "value_writes": [],
+      "signed_params": []
+    },
+    {
+      "name": "get_open_capsule_end_root",
+      "visibility": "public",
+      "direct_calls": [],
+      "direct_writes": [],
+      "transitive_writes": [],
+      "value_writes": [],
+      "signed_params": []
+    },
+    {
+      "name": "get_capsule_count",
+      "visibility": "public",
+      "direct_calls": [],
+      "direct_writes": [],
+      "transitive_writes": [],
+      "value_writes": [],
+      "signed_params": []
+    },
+    {
+      "name": "get_latest_capsule_id",
+      "visibility": "public",
+      "direct_calls": [],
+      "direct_writes": [],
+      "transitive_writes": [],
+      "value_writes": [],
+      "signed_params": []
+    },
+    {
+      "name": "get_latest_capsule_root_after",
+      "visibility": "public",
+      "direct_calls": [
+        "family_capsule_key"
+      ],
+      "direct_writes": [],
+      "transitive_writes": [],
+      "value_writes": [],
+      "signed_params": []
+    },
+    {
+      "name": "get_history_capsule_body",
+      "visibility": "public",
+      "direct_calls": [
+        "family_capsule_key"
+      ],
+      "direct_writes": [],
+      "transitive_writes": [],
+      "value_writes": [],
+      "signed_params": []
+    },
+    {
+      "name": "get_history_capsule_meta",
+      "visibility": "public",
+      "direct_calls": [
+        "family_capsule_key"
+      ],
+      "direct_writes": [],
+      "transitive_writes": [],
+      "value_writes": [],
+      "signed_params": []
+    },
+    {
+      "name": "get_latest_bundle",
+      "visibility": "public",
+      "direct_calls": [
+        "concat",
+        "to_string"
+      ],
+      "direct_writes": [],
+      "transitive_writes": [],
+      "value_writes": [],
+      "signed_params": []
+    },
+    {
+      "name": "initialize_fact_ledger",
+      "visibility": "public",
+      "direct_calls": [
+        "assert_address",
+        "assert_family_definition",
+        "assert_hex64",
+        "assert_network_id",
+        "concat",
+        "register_family_internal",
+        "sha256",
+        "to_string"
+      ],
+      "direct_writes": [
+        "catalog_root",
+        "era_first_snapshot_index",
+        "era_network_id",
+        "era_program",
+        "family_count",
+        "initialized",
+        "latest_epoch",
+        "latest_evidence_manifest",
+        "latest_evidence_manifest_hash",
+        "latest_history_row",
+        "latest_history_row_hash",
+        "latest_observed_at",
+        "latest_payload",
+        "latest_payload_hash",
+        "latest_snapshot_id",
+        "latest_snapshot_index",
+        "latest_source_refs",
+        "latest_source_refs_hash",
+        "latest_submitter",
+        "latest_summary",
+        "latest_summary_hash",
+        "operator",
+        "owner",
+        "paused",
+        "predecessor_anchor_hash",
+        "predecessor_final_index",
+        "predecessor_final_root",
+        "predecessor_program",
+        "predecessor_set",
+        "snapshot_count",
+        "successor_program",
+        "successor_set"
+      ],
+      "transitive_writes": [
+        "catalog_root",
+        "era_first_snapshot_index",
+        "era_network_id",
+        "era_program",
+        "family_capsule_count_by_id",
+        "family_capsules_root_by_id",
+        "family_count",
+        "family_definition_by_id",
+        "family_id_by_ordinal",
+        "family_latest_capsule_id_by_id",
+        "family_latest_index_by_id",
+        "family_open_capsule_base_id_by_id",
+        "family_open_capsule_body_by_id",
+        "family_open_capsule_end_root_by_id",
+        "family_open_capsule_first_index_by_id",
+        "family_open_capsule_id_by_id",
+        "family_open_capsule_row_count_by_id",
+        "family_open_capsule_segment_by_id",
+        "family_open_capsule_start_root_by_id",
+        "family_root_by_id",
+        "initialized",
+        "latest_epoch",
+        "latest_evidence_manifest",
+        "latest_evidence_manifest_hash",
+        "latest_history_row",
+        "latest_history_row_hash",
+        "latest_observed_at",
+        "latest_payload",
+        "latest_payload_hash",
+        "latest_snapshot_id",
+        "latest_snapshot_index",
+        "latest_source_refs",
+        "latest_source_refs_hash",
+        "latest_submitter",
+        "latest_summary",
+        "latest_summary_hash",
+        "operator",
+        "owner",
+        "paused",
+        "predecessor_anchor_hash",
+        "predecessor_final_index",
+        "predecessor_final_root",
+        "predecessor_program",
+        "predecessor_set",
+        "snapshot_count",
+        "successor_program",
+        "successor_set"
+      ],
+      "value_writes": [],
+      "signed_params": [
+        "predecessor_final_index",
+        "era_first_snapshot_index"
+      ]
+    },
+    {
+      "name": "register_fact_family",
+      "visibility": "public",
+      "direct_calls": [
+        "only_owner",
+        "register_family_internal"
+      ],
+      "direct_writes": [],
+      "transitive_writes": [
+        "catalog_root",
+        "family_capsule_count_by_id",
+        "family_capsules_root_by_id",
+        "family_count",
+        "family_definition_by_id",
+        "family_id_by_ordinal",
+        "family_latest_capsule_id_by_id",
+        "family_latest_index_by_id",
+        "family_open_capsule_base_id_by_id",
+        "family_open_capsule_body_by_id",
+        "family_open_capsule_end_root_by_id",
+        "family_open_capsule_first_index_by_id",
+        "family_open_capsule_id_by_id",
+        "family_open_capsule_row_count_by_id",
+        "family_open_capsule_segment_by_id",
+        "family_open_capsule_start_root_by_id",
+        "family_root_by_id"
+      ],
+      "value_writes": [],
+      "signed_params": []
+    },
+    {
+      "name": "set_operator",
+      "visibility": "public",
+      "direct_calls": [
+        "assert_address",
+        "only_owner"
+      ],
+      "direct_writes": [
+        "operator"
+      ],
+      "transitive_writes": [
+        "operator"
+      ],
+      "value_writes": [],
+      "signed_params": []
+    },
+    {
+      "name": "set_paused",
+      "visibility": "public",
+      "direct_calls": [
+        "only_owner"
+      ],
+      "direct_writes": [
+        "paused"
+      ],
+      "transitive_writes": [
+        "paused"
+      ],
+      "value_writes": [],
+      "signed_params": []
+    },
+    {
+      "name": "set_successor_program",
+      "visibility": "public",
+      "direct_calls": [
+        "assert_address",
+        "only_owner"
+      ],
+      "direct_writes": [
+        "successor_program",
+        "successor_set"
+      ],
+      "transitive_writes": [
+        "successor_program",
+        "successor_set"
+      ],
+      "value_writes": [],
+      "signed_params": []
+    },
+    {
+      "name": "record_snapshot_fact_v1",
+      "visibility": "public",
+      "direct_calls": [
+        "append_core_fact_row",
+        "assert_capsule_base_id",
+        "assert_core_row_matches_summary",
+        "assert_fact_row",
+        "assert_observed_at",
+        "capsule_base_id_for_observed_at",
+        "concat",
+        "len",
+        "only_operator",
+        "row_hash",
+        "sha256",
+        "to_string"
+      ],
+      "direct_writes": [
+        "latest_epoch",
+        "latest_evidence_manifest",
+        "latest_evidence_manifest_hash",
+        "latest_history_row",
+        "latest_history_row_hash",
+        "latest_observed_at",
+        "latest_payload",
+        "latest_payload_hash",
+        "latest_snapshot_id",
+        "latest_snapshot_index",
+        "latest_source_refs",
+        "latest_source_refs_hash",
+        "latest_submitter",
+        "latest_summary",
+        "latest_summary_hash",
+        "snapshot_count"
+      ],
+      "transitive_writes": [
+        "family_capsule_body_by_key",
+        "family_capsule_count_by_id",
+        "family_capsule_id_by_key",
+        "family_capsule_meta_by_key",
+        "family_capsule_root_after_by_key",
+        "family_capsules_root_by_id",
+        "family_latest_capsule_id_by_id",
+        "family_latest_index_by_id",
+        "family_open_capsule_base_id_by_id",
+        "family_open_capsule_body_by_id",
+        "family_open_capsule_end_root_by_id",
+        "family_open_capsule_first_index_by_id",
+        "family_open_capsule_id_by_id",
+        "family_open_capsule_row_count_by_id",
+        "family_open_capsule_segment_by_id",
+        "family_open_capsule_start_root_by_id",
+        "family_root_by_id",
+        "latest_epoch",
+        "latest_evidence_manifest",
+        "latest_evidence_manifest_hash",
+        "latest_history_row",
+        "latest_history_row_hash",
+        "latest_observed_at",
+        "latest_payload",
+        "latest_payload_hash",
+        "latest_snapshot_id",
+        "latest_snapshot_index",
+        "latest_source_refs",
+        "latest_source_refs_hash",
+        "latest_submitter",
+        "latest_summary",
+        "latest_summary_hash",
+        "snapshot_count"
+      ],
+      "value_writes": [],
+      "signed_params": [
+        "epoch_id",
+        "snapshot_index"
+      ]
+    },
+    {
+      "name": "record_snapshot_fact_v2",
+      "visibility": "public",
+      "direct_calls": [
+        "append_core_fact_row",
+        "append_fact_row",
+        "assert_capsule_base_id",
+        "assert_core_row_matches_summary",
+        "assert_fact_row",
+        "assert_observed_at",
+        "aux_fact_family_id",
+        "capsule_base_id_for_observed_at",
+        "concat",
+        "is_empty_slot",
+        "len",
+        "only_operator",
+        "row_hash",
+        "sha256",
+        "to_string"
+      ],
+      "direct_writes": [
+        "latest_epoch",
+        "latest_evidence_manifest",
+        "latest_evidence_manifest_hash",
+        "latest_history_row",
+        "latest_history_row_hash",
+        "latest_observed_at",
+        "latest_payload",
+        "latest_payload_hash",
+        "latest_snapshot_id",
+        "latest_snapshot_index",
+        "latest_source_refs",
+        "latest_source_refs_hash",
+        "latest_submitter",
+        "latest_summary",
+        "latest_summary_hash",
+        "snapshot_count"
+      ],
+      "transitive_writes": [
+        "family_capsule_body_by_key",
+        "family_capsule_count_by_id",
+        "family_capsule_id_by_key",
+        "family_capsule_meta_by_key",
+        "family_capsule_root_after_by_key",
+        "family_capsules_root_by_id",
+        "family_latest_capsule_id_by_id",
+        "family_latest_index_by_id",
+        "family_open_capsule_base_id_by_id",
+        "family_open_capsule_body_by_id",
+        "family_open_capsule_end_root_by_id",
+        "family_open_capsule_first_index_by_id",
+        "family_open_capsule_id_by_id",
+        "family_open_capsule_row_count_by_id",
+        "family_open_capsule_segment_by_id",
+        "family_open_capsule_start_root_by_id",
+        "family_root_by_id",
+        "latest_epoch",
+        "latest_evidence_manifest",
+        "latest_evidence_manifest_hash",
+        "latest_history_row",
+        "latest_history_row_hash",
+        "latest_observed_at",
+        "latest_payload",
+        "latest_payload_hash",
+        "latest_snapshot_id",
+        "latest_snapshot_index",
+        "latest_source_refs",
+        "latest_source_refs_hash",
+        "latest_submitter",
+        "latest_summary",
+        "latest_summary_hash",
+        "snapshot_count"
+      ],
+      "value_writes": [],
+      "signed_params": [
+        "epoch_id",
+        "snapshot_index",
+        "aux_count"
+      ]
+    },
+    {
+      "name": "constructor",
+      "visibility": "public",
+      "direct_calls": [
+        "concat",
+        "sha256"
+      ],
+      "direct_writes": [
+        "catalog_root",
+        "family_count",
+        "initialized",
+        "latest_epoch",
+        "latest_evidence_manifest",
+        "latest_evidence_manifest_hash",
+        "latest_history_row",
+        "latest_history_row_hash",
+        "latest_observed_at",
+        "latest_payload",
+        "latest_payload_hash",
+        "latest_snapshot_id",
+        "latest_snapshot_index",
+        "latest_source_refs",
+        "latest_source_refs_hash",
+        "latest_summary",
+        "latest_summary_hash",
+        "snapshot_count"
+      ],
+      "transitive_writes": [
+        "catalog_root",
+        "family_count",
+        "initialized",
+        "latest_epoch",
+        "latest_evidence_manifest",
+        "latest_evidence_manifest_hash",
+        "latest_history_row",
+        "latest_history_row_hash",
+        "latest_observed_at",
+        "latest_payload",
+        "latest_payload_hash",
+        "latest_snapshot_id",
+        "latest_snapshot_index",
+        "latest_source_refs",
+        "latest_source_refs_hash",
+        "latest_summary",
+        "latest_summary_hash",
+        "snapshot_count"
+      ],
+      "value_writes": [],
+      "signed_params": []
+    }
+  ],
+  "invariants": [
+    {
+      "code": "supply_balance_conservation",
+      "kind": "derived",
+      "status": "not_applicable",
+      "expression": null,
+      "message": "program does not expose both balance and supply storage",
+      "fields": [],
+      "functions": []
+    }
+  ],
+  "findings": []
+}

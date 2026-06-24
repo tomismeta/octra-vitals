@@ -131,7 +131,24 @@ export interface RecordSnapshotCallFactV1 {
   };
 }
 
-export type RecordSnapshotCall = RecordSnapshotCallV0 | RecordSnapshotCallV1 | RecordSnapshotCallFactV1;
+export interface RecordSnapshotCallFactV2 extends Omit<RecordSnapshotCallFactV1, "schema" | "commit_mode" | "method" | "fact_ledger"> {
+  schema: "octra-vitals-record-snapshot-call-fact-v2";
+  commit_mode: "fact-v2";
+  method: "record_snapshot_fact_v2";
+  fact_ledger: RecordSnapshotCallFactV1["fact_ledger"] & {
+    aux_count: number;
+    max_aux_rows: number;
+  };
+  metric_facts: {
+    aux_count: number;
+    rows: string[];
+  };
+}
+
+export type RecordSnapshotCallFact = RecordSnapshotCallFactV1 | RecordSnapshotCallFactV2;
+
+export type RecordSnapshotCall = RecordSnapshotCallV0 | RecordSnapshotCallV1 | RecordSnapshotCallFact;
+export type RecordSnapshotVersion = "v0" | "v1" | "fact-v1" | "fact-v2";
 
 export interface BuildRecordSnapshotCallOptions {
   compactMaxMessageBytes?: number;
@@ -140,7 +157,7 @@ export interface BuildRecordSnapshotCallOptions {
   snapshotIndex?: number;
   stateSourceMode?: string;
   submitEnabled?: boolean;
-  recordVersion?: "v0" | "v1" | "fact-v1";
+  recordVersion?: RecordSnapshotVersion;
 }
 
 const root = resolve(new URL("../..", import.meta.url).pathname);
@@ -235,10 +252,10 @@ function buildSizeHeadroom(input: {
   };
 }
 
-function recordSnapshotVersion(options: BuildRecordSnapshotCallOptions): "v0" | "v1" | "fact-v1" {
+function recordSnapshotVersion(options: BuildRecordSnapshotCallOptions): RecordSnapshotVersion {
   const value = options.recordVersion || process.env.VITALS_RECORD_SNAPSHOT_VERSION || "v0";
-  if (value !== "v0" && value !== "v1" && value !== "fact-v1") {
-    throw new Error("VITALS_RECORD_SNAPSHOT_VERSION must be v0, v1, or fact-v1");
+  if (value !== "v0" && value !== "v1" && value !== "fact-v1" && value !== "fact-v2") {
+    throw new Error("VITALS_RECORD_SNAPSHOT_VERSION must be v0, v1, fact-v1, or fact-v2");
   }
   return value;
 }
@@ -352,12 +369,14 @@ export async function buildRecordSnapshotCall(
   const latestSummaryHash = summaryHash(summaryRow);
   const version = recordSnapshotVersion(options);
 
-  if (version === "v1" || version === "fact-v1") {
+  if (version === "v1" || version === "fact-v1" || version === "fact-v2") {
     const historyRowModel = historyV1RowFromSnapshot(snapshot, snapshotIndex);
     const historyRow = encodeHistoryV1Row(historyRowModel);
-    if (version === "fact-v1") {
+    if (version === "fact-v1" || version === "fact-v2") {
       const historyRowHash = factLedgerRowHashHex(FACT_LEDGER_CORE_FAMILY_ID, FACT_LEDGER_CORE_SCHEMA_ID, historyRow);
       const capsuleBaseId = factLedgerCapsuleBaseId(envelope.observed_at);
+      const auxRows = ["", "", "", ""];
+      const auxCount = 0;
       const params = [
         canonicalPayload,
         canonicalEvidenceManifest,
@@ -367,13 +386,14 @@ export async function buildRecordSnapshotCall(
         envelope.observed_at,
         capsuleBaseId,
         payload.octra.epoch,
-        snapshotIndex
+        snapshotIndex,
+        ...(version === "fact-v2" ? [auxCount, ...auxRows] : [])
       ];
       const compactMessageBytes = Buffer.byteLength(JSON.stringify(params));
       const compactMaxMessageBytes = options.compactMaxMessageBytes ??
         Number(process.env.VITALS_COMPACT_SNAPSHOT_MAX_MESSAGE_BYTES || 22_000);
       if (compactMessageBytes > compactMaxMessageBytes) {
-        throw new Error(`record_snapshot_fact_v1 call would be ${compactMessageBytes} bytes, above VITALS_COMPACT_SNAPSHOT_MAX_MESSAGE_BYTES=${compactMaxMessageBytes}`);
+        throw new Error(`record_snapshot_${version} call would be ${compactMessageBytes} bytes, above VITALS_COMPACT_SNAPSHOT_MAX_MESSAGE_BYTES=${compactMaxMessageBytes}`);
       }
       const sizeHeadroom = buildSizeHeadroom({
         canonicalPayload,
@@ -387,6 +407,57 @@ export async function buildRecordSnapshotCall(
       });
 
       const circleId = configuredProgrammedCircleId();
+      if (version === "fact-v2") {
+        return {
+          schema: "octra-vitals-record-snapshot-call-fact-v2",
+          commit_mode: "fact-v2",
+          generated_at: options.generatedAt || isoNow(),
+          program_address: options.programAddress || process.env.VITALS_STATE_PROGRAM_ADDRESS || circleId || "pending",
+          target_kind: stateTargetMode(),
+          ...(circleId ? { circle_id: circleId } : {}),
+          method: "record_snapshot_fact_v2",
+          snapshot_id: envelope.snapshot_id,
+          observed_at: envelope.observed_at,
+          params,
+          compact_message_bytes: compactMessageBytes,
+          size_headroom: sizeHeadroom,
+          snapshot_index: snapshotIndex,
+          fact_ledger: {
+            manifest: FACT_LEDGER_MANIFEST,
+            core_family_id: FACT_LEDGER_CORE_FAMILY_ID,
+            core_schema_id: FACT_LEDGER_CORE_SCHEMA_ID,
+            core_schema_version: FACT_LEDGER_CORE_SCHEMA_VERSION,
+            capsule_base_id: capsuleBaseId,
+            aux_count: auxCount,
+            max_aux_rows: auxRows.length
+          },
+          metric_facts: {
+            aux_count: auxCount,
+            rows: auxRows
+          },
+          summary: {
+            schema_version: SUMMARY_SCHEMA_VERSION,
+            row: summaryRow,
+            row_hash: latestSummaryHash
+          },
+          history: {
+            schema_version: FACT_LEDGER_CORE_SCHEMA_VERSION,
+            row: historyRow,
+            row_hash: historyRowHash
+          },
+          expected_hashes: {
+            payload_hash: envelope.payload_hash,
+            evidence_manifest_hash: envelope.evidence_manifest_hash,
+            source_refs_hash: refsHash,
+            summary_hash: latestSummaryHash,
+            history_row_hash: historyRowHash
+          },
+          readonly_check: {
+            method: "get_latest_history_row_hash",
+            expected_after_submit: historyRowHash
+          }
+        };
+      }
       return {
         schema: "octra-vitals-record-snapshot-call-fact-v1",
         commit_mode: "fact-v1",
@@ -578,12 +649,13 @@ async function main(): Promise<void> {
   const outPath = process.argv[3] || join(root, "build", "record_snapshot_call.json");
   const snapshot = JSON.parse(await readFile(inputPath, "utf8")) as SnapshotArtifact;
   const call = await buildRecordSnapshotCall(snapshot);
-  const epoch = call.commit_mode === "v0" ? call.params[2] : call.params[3];
+  const epoch = call.commit_mode === "v0" ? call.params[2] : call.commit_mode === "v1" ? call.params[3] : call.params[7];
+  const snapshotId = "snapshot_id" in call ? call.snapshot_id : call.params[0];
   await writeRecordSnapshotCall(call, outPath);
   console.log(JSON.stringify({
     out: outPath,
     commit_mode: call.commit_mode,
-    snapshot_id: call.params[0],
+    snapshot_id: snapshotId,
     snapshot_index: call.snapshot_index,
     epoch,
     call_count: 1,

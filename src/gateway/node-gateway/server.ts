@@ -222,7 +222,7 @@ async function loadBaseManifest() {
   const verification = programArtifacts.formal_verification || {};
   const circleCertificate = circleProgramArtifacts.formal_certificate || {};
   const circleVerification = circleProgramArtifacts.formal_verification || {};
-  const factLedgerProgram = circleProgramArtifactDir === "program-fact-ledger" || process.env.VITALS_RECORD_SNAPSHOT_VERSION === "fact-v1";
+  const factLedgerProgram = circleProgramArtifactDir === "program-fact-ledger" || process.env.VITALS_RECORD_SNAPSHOT_VERSION === "fact-v1" || process.env.VITALS_RECORD_SNAPSHOT_VERSION === "fact-v2";
   return {
     ...manifest,
     gateway_origin: chooseValue(process.env.VITALS_GATEWAY_ORIGIN, manifest.gateway_origin),
@@ -527,13 +527,14 @@ const requiredCircleProgramMethodsFactV1 = [
   "get_family_capsule_root_after",
   "get_capsules_root",
   "get_latest_bundle",
-  "record_snapshot_fact_v1"
+  "record_snapshot_fact_v1",
+  "record_snapshot_fact_v2"
 ];
 
 function programmedCircleArtifactDir(): string {
   const configured = process.env.VITALS_PROGRAMMED_CIRCLE_ARTIFACT_DIR;
   if (configured && !configured.includes("..") && !configured.includes("/") && !configured.includes("\\")) return configured;
-  if (process.env.VITALS_RECORD_SNAPSHOT_VERSION === "fact-v1") return "program-fact-ledger";
+  if (process.env.VITALS_RECORD_SNAPSHOT_VERSION === "fact-v1" || process.env.VITALS_RECORD_SNAPSHOT_VERSION === "fact-v2") return "program-fact-ledger";
   return process.env.VITALS_RECORD_SNAPSHOT_VERSION === "v1" ? "program-v1" : "program-circle";
 }
 

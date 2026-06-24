@@ -6,12 +6,18 @@ import {
   type HistoryV1ObservationRow
 } from "./aml-history-v1.js";
 
-export const FACT_LEDGER_MANIFEST = "octra-vitals-fact-ledger.v1";
+export const FACT_LEDGER_MANIFEST = "octra-vitals-fact-ledger.v2";
 export const FACT_LEDGER_VERSION = "00";
 export const FACT_LEDGER_CORE_FAMILY_ID = "0000";
 export const FACT_LEDGER_CORE_FAMILY_NAME = "core_accounting";
 export const FACT_LEDGER_CORE_SCHEMA_ID = "0000";
 export const FACT_LEDGER_CORE_SCHEMA_VERSION = "octra-vitals-core-accounting-v1";
+export const FACT_LEDGER_PACKED_METRIC_FAMILY_ID = "0100";
+export const FACT_LEDGER_PACKED_METRIC_FAMILY_NAME = "packed_scalar_metrics";
+export const FACT_LEDGER_PACKED_METRIC_SCHEMA_ID = "0100";
+export const FACT_LEDGER_PACKED_METRIC_SCHEMA_VERSION = "octra-vitals-packed-metrics-v1";
+export const FACT_LEDGER_PACKED_METRIC_MAX_SLOTS = 4;
+export const FACT_LEDGER_PACKED_METRIC_SLOT_LEN = 42;
 export const FACT_LEDGER_FAMILY_DEFINITION_LEN = 702;
 export const FACT_LEDGER_FAMILY_STATE_LEN = 338;
 export const FACT_LEDGER_CAPSULE_META_LEN = 577;
@@ -33,6 +39,8 @@ export type FactFamilyStatus = "active" | "reserved" | "retired";
 export type FactPrimaryKeyType = "snapshot_index" | "snapshot_entity" | "period";
 export type FactEntityIdType = "none" | "route_id" | "field_id";
 export type FactPeriodType = "none" | "hour" | "day" | "month" | "year";
+export type PackedMetricStatus = "captured" | "zero" | "not_captured_before_activation" | "source_unavailable" | "invalid" | "empty";
+export type PackedMetricSourceClass = "source" | "derived" | "operator" | "display" | "empty";
 
 export interface FactFamilyDefinition {
   version: string;
@@ -98,6 +106,24 @@ export interface FactCapsuleMeta {
   catalog_root_hex: string;
 }
 
+export interface PackedMetricSlot {
+  metric_id: string;
+  unit_id: string;
+  status: PackedMetricStatus;
+  source_class: PackedMetricSourceClass;
+  value_raw: string | number | bigint;
+}
+
+export interface PackedMetricFactRow {
+  row_version: string;
+  snapshot_index: number;
+  observed_at_unix: number;
+  family_id: string;
+  schema_id: string;
+  slots: PackedMetricSlot[];
+  payload_hash_hex: string;
+}
+
 const FAMILY_KIND_CODES: Record<FactFamilyKind, string> = {
   core: "00",
   source_auxiliary: "01",
@@ -160,6 +186,27 @@ const PERIOD_CODES: Record<FactPeriodType, string> = {
 
 const PERIOD_BY_CODE = Object.fromEntries(Object.entries(PERIOD_CODES).map(([key, value]) => [value, key])) as Record<string, FactPeriodType | undefined>;
 
+const PACKED_METRIC_STATUS_CODES: Record<PackedMetricStatus, string> = {
+  captured: "00",
+  zero: "01",
+  not_captured_before_activation: "02",
+  source_unavailable: "03",
+  invalid: "04",
+  empty: "99"
+};
+
+const PACKED_METRIC_STATUS_BY_CODE = Object.fromEntries(Object.entries(PACKED_METRIC_STATUS_CODES).map(([key, value]) => [value, key])) as Record<string, PackedMetricStatus | undefined>;
+
+const PACKED_METRIC_SOURCE_CLASS_CODES: Record<PackedMetricSourceClass, string> = {
+  source: "00",
+  derived: "01",
+  operator: "02",
+  display: "03",
+  empty: "99"
+};
+
+const PACKED_METRIC_SOURCE_CLASS_BY_CODE = Object.fromEntries(Object.entries(PACKED_METRIC_SOURCE_CLASS_CODES).map(([key, value]) => [value, key])) as Record<string, PackedMetricSourceClass | undefined>;
+
 function taggedHashHex(domain: string, value: string): string {
   return sha256Hex(`${domain}\n${value}`);
 }
@@ -204,6 +251,23 @@ function code4(value: string, label: string): string {
 function code2(value: string, label: string): string {
   if (!/^\d{2}$/.test(value)) throw new Error(`${label} must be 2 decimal digits`);
   return value;
+}
+
+function signedDigits(value: string | number | bigint, width: number, label: string): string {
+  const text = String(value);
+  if (!/^-?\d+$/.test(text)) throw new Error(`${label} must be signed decimal digits`);
+  const negative = text.startsWith("-");
+  const magnitude = negative ? text.slice(1) : text;
+  const normalizedMagnitude = magnitude.replace(/^0+(?=\d)/, "");
+  if (normalizedMagnitude.length > width - 1) throw new Error(`${label} exceeds ${width - 1} digits`);
+  return `${negative ? "-" : "+"}${normalizedMagnitude.padStart(width - 1, "0")}`;
+}
+
+function parseSignedDigits(value: string | undefined, width: number, label: string): string {
+  if (!value || !new RegExp(`^[+-]\\d{${width - 1}}$`).test(value)) throw new Error(`${label} must be signed ${width}-char decimal`);
+  const sign = value[0] === "-" ? "-" : "";
+  const magnitude = value.slice(1).replace(/^0+(?=\d)/, "");
+  return magnitude === "0" ? "0" : `${sign}${magnitude}`;
 }
 
 function encodeCode<T extends string>(map: Record<T, string>, value: T, label: string): string {
@@ -333,6 +397,34 @@ export function coreFactFamilyDefinition(firstSnapshotIndex = 1): FactFamilyDefi
     capsule_hash_domain_hash: sha256Hex(FACT_LEDGER_CAPSULE_BODY_HASH_DOMAIN),
     root_hash_domain_hash: sha256Hex(FACT_LEDGER_FAMILY_ROOT_DOMAIN),
     status: "active"
+  };
+}
+
+export function packedMetricFactFamilyDefinition(firstSnapshotIndex = 1): FactFamilyDefinition {
+  return {
+    version: FACT_LEDGER_VERSION,
+    family_id: FACT_LEDGER_PACKED_METRIC_FAMILY_ID,
+    family_name: FACT_LEDGER_PACKED_METRIC_FAMILY_NAME,
+    family_kind: "source_auxiliary",
+    family_cardinality: "one_per_snapshot",
+    schema_id: FACT_LEDGER_PACKED_METRIC_SCHEMA_ID,
+    schema_version: FACT_LEDGER_PACKED_METRIC_SCHEMA_VERSION,
+    row_len: HISTORY_V1_ROW_LEN,
+    primary_key_type: "snapshot_index",
+    entity_id_type: "field_id",
+    period_type: "none",
+    max_rows_per_snapshot: 1,
+    first_snapshot_index: firstSnapshotIndex,
+    source_family_ids_hash: sha256Hex(JSON.stringify([FACT_LEDGER_CORE_FAMILY_ID])),
+    schema_hash: sha256Hex(FACT_LEDGER_PACKED_METRIC_SCHEMA_VERSION),
+    row_codec_hash: sha256Hex("packed-scalar-metric-row-295-byte-compatible"),
+    field_manifest_hash: sha256Hex("slots[4]:metric_id,unit_id,status,source_class,value_raw,payload_hash"),
+    unit_scale_hash: sha256Hex("registry-bound"),
+    null_semantics_hash: sha256Hex("empty:not-captured-before-activation:source-unavailable:invalid"),
+    row_hash_domain_hash: sha256Hex(FACT_LEDGER_ROW_HASH_DOMAIN),
+    capsule_hash_domain_hash: sha256Hex(FACT_LEDGER_CAPSULE_BODY_HASH_DOMAIN),
+    root_hash_domain_hash: sha256Hex(FACT_LEDGER_FAMILY_ROOT_DOMAIN),
+    status: "reserved"
   };
 }
 
@@ -577,6 +669,82 @@ export function encodeCoreAccountingFactRow(row: HistoryV1ObservationRow): strin
 
 export function decodeCoreAccountingFactRow(encoded: string): HistoryV1ObservationRow {
   return decodeHistoryV1Row(encoded);
+}
+
+function emptyPackedMetricSlot(): string {
+  return `${FACT_LEDGER_EMPTY_FAMILY_ID}0000${PACKED_METRIC_STATUS_CODES.empty}${PACKED_METRIC_SOURCE_CLASS_CODES.empty}${signedDigits(0, 30, "empty_value_raw")}`;
+}
+
+function encodePackedMetricSlot(slot: PackedMetricSlot): string {
+  const encoded = [
+    code4(slot.metric_id, "metric_id"),
+    code4(slot.unit_id, "unit_id"),
+    encodeCode(PACKED_METRIC_STATUS_CODES, slot.status, "metric_status"),
+    encodeCode(PACKED_METRIC_SOURCE_CLASS_CODES, slot.source_class, "metric_source_class"),
+    signedDigits(slot.value_raw, 30, "value_raw")
+  ].join("");
+  if (encoded.length !== FACT_LEDGER_PACKED_METRIC_SLOT_LEN) {
+    throw new Error(`packed metric slot length ${encoded.length} did not match ${FACT_LEDGER_PACKED_METRIC_SLOT_LEN}`);
+  }
+  return encoded;
+}
+
+function decodePackedMetricSlot(encoded: string): PackedMetricSlot {
+  if (encoded.length !== FACT_LEDGER_PACKED_METRIC_SLOT_LEN) throw new Error("packed metric slot length mismatch");
+  return {
+    metric_id: code4(encoded.slice(0, 4), "metric_id"),
+    unit_id: code4(encoded.slice(4, 8), "unit_id"),
+    status: decodeCode(PACKED_METRIC_STATUS_BY_CODE, encoded.slice(8, 10), "metric_status"),
+    source_class: decodeCode(PACKED_METRIC_SOURCE_CLASS_BY_CODE, encoded.slice(10, 12), "metric_source_class"),
+    value_raw: parseSignedDigits(encoded.slice(12, 42), 30, "value_raw")
+  };
+}
+
+export function encodePackedMetricFactRow(row: PackedMetricFactRow): string {
+  if (row.row_version !== FACT_LEDGER_VERSION) throw new Error(`unsupported packed metric row version ${row.row_version}`);
+  if (row.slots.length > FACT_LEDGER_PACKED_METRIC_MAX_SLOTS) {
+    throw new Error(`packed metric row supports at most ${FACT_LEDGER_PACKED_METRIC_MAX_SLOTS} slots`);
+  }
+  const slotText = [
+    ...row.slots.map((slot) => encodePackedMetricSlot(slot)),
+    ...Array.from({ length: FACT_LEDGER_PACKED_METRIC_MAX_SLOTS - row.slots.length }, () => emptyPackedMetricSlot())
+  ].join("");
+  const encoded = [
+    row.row_version,
+    digits(row.snapshot_index, 10, "snapshot_index"),
+    digits(row.observed_at_unix, 12, "observed_at_unix"),
+    code4(row.family_id, "family_id"),
+    code4(row.schema_id, "schema_id"),
+    digits(row.slots.length, 2, "slot_count"),
+    slotText,
+    fixedText("", 21, "reserved"),
+    hex64(row.payload_hash_hex, "payload_hash_hex")
+  ].join("|");
+  if (encoded.length !== HISTORY_V1_ROW_LEN) {
+    throw new Error(`packed metric fact row length ${encoded.length} did not match ${HISTORY_V1_ROW_LEN}`);
+  }
+  return encoded;
+}
+
+export function decodePackedMetricFactRow(encoded: string): PackedMetricFactRow {
+  if (encoded.length !== HISTORY_V1_ROW_LEN) throw new Error(`packed metric fact row length ${encoded.length} did not match ${HISTORY_V1_ROW_LEN}`);
+  const slotCount = parseDigits(encoded.slice(37, 39), 2, "slot_count");
+  if (slotCount > FACT_LEDGER_PACKED_METRIC_MAX_SLOTS) throw new Error("slot_count exceeds packed metric slot capacity");
+  const slots: PackedMetricSlot[] = [];
+  const slotText = encoded.slice(40, 40 + FACT_LEDGER_PACKED_METRIC_SLOT_LEN * FACT_LEDGER_PACKED_METRIC_MAX_SLOTS);
+  for (let index = 0; index < slotCount; index += 1) {
+    const start = index * FACT_LEDGER_PACKED_METRIC_SLOT_LEN;
+    slots.push(decodePackedMetricSlot(slotText.slice(start, start + FACT_LEDGER_PACKED_METRIC_SLOT_LEN)));
+  }
+  return {
+    row_version: encoded.slice(0, 2),
+    snapshot_index: parseDigits(encoded.slice(3, 13), 10, "snapshot_index"),
+    observed_at_unix: parseDigits(encoded.slice(14, 26), 12, "observed_at_unix"),
+    family_id: code4(encoded.slice(27, 31), "family_id"),
+    schema_id: code4(encoded.slice(32, 36), "schema_id"),
+    slots,
+    payload_hash_hex: hex64(encoded.slice(231, 295), "payload_hash_hex")
+  };
 }
 
 export function makeFactCapsule(input: {

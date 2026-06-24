@@ -27,7 +27,7 @@ import {
   FACT_LEDGER_MANIFEST
 } from "../lib/aml-fact-ledger.js";
 import { parseSummaryWindow } from "../lib/summary-window.js";
-import type { RecordSnapshotCall, RecordSnapshotCallFactV1, RecordSnapshotCallV1 } from "./build-record-snapshot-call.js";
+import type { RecordSnapshotCall, RecordSnapshotCallFact, RecordSnapshotCallV1 } from "./build-record-snapshot-call.js";
 
 export interface SubmitSnapshotOptions {
   dataDir?: string | null;
@@ -178,12 +178,16 @@ export async function writeLatestReceipt(report: Record<string, any>, options: W
 }
 
 function snapshotIdOfCall(call: RecordSnapshotCall): string | null {
-  if (call.commit_mode === "fact-v1") return call.snapshot_id || null;
+  if (isFactLedgerCall(call)) return call.snapshot_id || null;
   return typeof call.params[0] === "string" ? call.params[0] : null;
 }
 
-function isV1LikeCall(call: RecordSnapshotCall): call is RecordSnapshotCallV1 | RecordSnapshotCallFactV1 {
-  return call.commit_mode === "v1" || call.commit_mode === "fact-v1";
+function isFactLedgerCall(call: RecordSnapshotCall): call is RecordSnapshotCallFact {
+  return call.commit_mode === "fact-v1" || call.commit_mode === "fact-v2";
+}
+
+function isV1LikeCall(call: RecordSnapshotCall): call is RecordSnapshotCallV1 | RecordSnapshotCallFact {
+  return call.commit_mode === "v1" || isFactLedgerCall(call);
 }
 
 function summarizeReport(report: unknown, outPath: string): unknown {
@@ -227,7 +231,7 @@ function enrichSizeHeadroom(call: RecordSnapshotCall, preSubmitState: Record<str
   const factState = preSubmitState?.fact_ledger && typeof preSubmitState.fact_ledger === "object"
     ? preSubmitState.fact_ledger as Record<string, any>
     : null;
-  const historyRowBytes = call.commit_mode === "fact-v1" ? Buffer.byteLength(call.history.row, "utf8") : null;
+  const historyRowBytes = isFactLedgerCall(call) ? Buffer.byteLength(call.history.row, "utf8") : null;
   const rowLimit = Number(base?.limits?.fact_capsule_row_limit || factState?.capsule_row_limit || 48);
   const openRowsBefore = factState ? Number(factState.open_capsule_row_count || 0) : null;
   const projectedRowsBeforeSeal = openRowsBefore !== null ? openRowsBefore + 1 : null;
@@ -281,7 +285,7 @@ function verifySnapshotReceipt(receipt: any, targetId: string, call: RecordSnaps
   const values = Array.isArray(snapshotEvent?.values) ? snapshotEvent.values : [];
   const snapshotId = snapshotIdOfCall(call);
   if (isV1LikeCall(call)) {
-    const factLedgerCall = call.commit_mode === "fact-v1";
+    const factLedgerCall = isFactLedgerCall(call);
     const checks = {
       contract_matches: summary.contract === targetId,
       method_matches: summary.method === call.method,
@@ -446,7 +450,7 @@ async function readAndVerifyProgramReadbackV1(programAddress: string, call: Reco
   });
 }
 
-async function readAndVerifyProgramReadbackFactV1(programAddress: string, call: RecordSnapshotCallFactV1): Promise<Record<string, unknown>> {
+async function readAndVerifyProgramReadbackFact(programAddress: string, call: RecordSnapshotCallFact): Promise<Record<string, unknown>> {
   const [
     latestPayloadHash,
     latestEvidenceHash,
@@ -526,7 +530,7 @@ async function readAndVerifyProgramReadbackFactV1(programAddress: string, call: 
 }
 
 async function readAndVerifyProgramReadback(programAddress: string, call: RecordSnapshotCall): Promise<Record<string, unknown>> {
-  if (call.commit_mode === "fact-v1") return readAndVerifyProgramReadbackFactV1(programAddress, call);
+  if (isFactLedgerCall(call)) return readAndVerifyProgramReadbackFact(programAddress, call);
   return call.commit_mode === "v1"
     ? readAndVerifyProgramReadbackV1(programAddress, call)
     : readAndVerifyProgramReadbackV0(programAddress, call);
@@ -742,7 +746,7 @@ function hexRootOrNull(value: unknown): string | null {
 }
 
 function verifyFactReadback(input: {
-  call: RecordSnapshotCallFactV1;
+  call: RecordSnapshotCallFact;
   latestPayloadHash: string;
   latestEvidenceHash: string;
   latestSourceRefsHash: string;
@@ -1006,7 +1010,7 @@ async function readAndVerifyCircleReadbackFromUrlV1(circleId: string, call: Reco
   });
 }
 
-async function readAndVerifyCircleReadbackFromUrlFactV1(circleId: string, call: RecordSnapshotCallFactV1, url: string): Promise<Record<string, unknown>> {
+async function readAndVerifyCircleReadbackFromUrlFact(circleId: string, call: RecordSnapshotCallFact, url: string): Promise<Record<string, unknown>> {
   const [
     latestPayloadHash,
     latestEvidenceHash,
@@ -1087,7 +1091,7 @@ async function readAndVerifyCircleReadbackFromUrlFactV1(circleId: string, call: 
 }
 
 async function readAndVerifyCircleReadbackFromUrl(circleId: string, call: RecordSnapshotCall, url: string): Promise<Record<string, unknown>> {
-  if (call.commit_mode === "fact-v1") return readAndVerifyCircleReadbackFromUrlFactV1(circleId, call, url);
+  if (isFactLedgerCall(call)) return readAndVerifyCircleReadbackFromUrlFact(circleId, call, url);
   return call.commit_mode === "v1"
     ? readAndVerifyCircleReadbackFromUrlV1(circleId, call, url)
     : readAndVerifyCircleReadbackFromUrlV0(circleId, call, url);
@@ -1150,10 +1154,10 @@ async function readSnapshotCountAtUrl(targetKind: StateTargetMode, targetId: str
 }
 
 async function assertFactLedgerSubmitPreflight(targetKind: StateTargetMode, targetId: string, call: RecordSnapshotCall): Promise<Record<string, unknown> | null> {
-  if (call.commit_mode !== "fact-v1") return null;
-  const expectedAck = `fact-v1:${targetKind}:${targetId}`;
+  if (!isFactLedgerCall(call)) return null;
+  const expectedAck = `${call.commit_mode}:${targetKind}:${targetId}`;
   if (process.env.VITALS_FACT_LEDGER_CUTOVER_ACK !== expectedAck) {
-    throw new Error(`fact-v1 submit requires VITALS_FACT_LEDGER_CUTOVER_ACK=${expectedAck}`);
+    throw new Error(`${call.commit_mode} submit requires VITALS_FACT_LEDGER_CUTOVER_ACK=${expectedAck}`);
   }
   const urls = octraProgramRpcUrls();
   const [primaryUrl, ...otherUrls] = urls;
@@ -1166,7 +1170,7 @@ async function assertFactLedgerSubmitPreflight(targetKind: StateTargetMode, targ
   }));
   for (const read of reads) {
     if (read.manifest !== FACT_LEDGER_MANIFEST) {
-      throw new Error(`fact-v1 target manifest mismatch from ${read.url}: expected ${FACT_LEDGER_MANIFEST}, got ${read.manifest}`);
+      throw new Error(`${call.commit_mode} target manifest mismatch from ${read.url}: expected ${FACT_LEDGER_MANIFEST}, got ${read.manifest}`);
     }
   }
   return {
@@ -1199,7 +1203,7 @@ async function assertPreSubmitState(targetKind: StateTargetMode, targetId: strin
     throw new Error(`pre-submit state advanced or drifted: expected snapshot_count ${expectedPrior}, got ${primary.count}`);
   }
   let factLedger: Record<string, unknown> | null = null;
-  if (call.commit_mode === "fact-v1" && targetKind === "circle_program") {
+  if (isFactLedgerCall(call) && targetKind === "circle_program") {
     const [openRows, openBody, openStartRoot, openEndRoot, capsuleCount, latestCapsuleId, capsuleRowLimit, familyCapsulesRoot] = await Promise.all([
       circleProgramViewAtUrl<number>(primary.url, targetId, "get_family_open_capsule_row_count", [FACT_LEDGER_CORE_FAMILY_ID]),
       circleProgramViewAtUrl<string>(primary.url, targetId, "get_family_open_capsule_body", [FACT_LEDGER_CORE_FAMILY_ID]),
@@ -1238,7 +1242,8 @@ export async function submitSnapshotCall(
     !(
       (call.schema === "octra-vitals-record-snapshot-call-v0" && call.method === "record_snapshot_v0") ||
       (call.schema === "octra-vitals-record-snapshot-call-v1" && call.method === "record_snapshot_v1") ||
-      (call.schema === "octra-vitals-record-snapshot-call-fact-v1" && call.method === "record_snapshot_fact_v1")
+      (call.schema === "octra-vitals-record-snapshot-call-fact-v1" && call.method === "record_snapshot_fact_v1") ||
+      (call.schema === "octra-vitals-record-snapshot-call-fact-v2" && call.method === "record_snapshot_fact_v2")
     ) ||
     !Array.isArray(call.params)
   ) {
@@ -1279,7 +1284,7 @@ export async function submitSnapshotCall(
         snapshot_index: call.snapshot_index || null,
         summary: call.summary || null,
         history: isV1LikeCall(call) ? call.history : null,
-        fact_ledger: call.commit_mode === "fact-v1" ? call.fact_ledger : null,
+        fact_ledger: isFactLedgerCall(call) ? call.fact_ledger : null,
         expected_hashes: call.expected_hashes
       },
       next_step: targetKind === "circle_program"

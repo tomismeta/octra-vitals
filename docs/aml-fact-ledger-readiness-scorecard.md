@@ -1,30 +1,33 @@
 # AML Fact Ledger — Devnet Readiness Scorecard
 
-Status: **devnet soak candidate live and verified**. Mainnet (`octra.live`) is untouched.
+Status: **fact-v2 mainnet-shaped candidate locally verified; fresh devnet cutover in progress**. Mainnet (`octra.live`) is untouched.
 Date: 2026-06-24
-Scope: the fact-family ledger running behind `devnet.octra.live`, updated in place on the devnet programmed Site Circle.
+Scope: the fact-family ledger running behind `devnet.octra.live`. The old fact-v1 devnet Circle remains a soak artifact; the mainnet-shaped rehearsal uses a fresh fact-v2 programmed Circle with AML and assets together.
 
 This scorecard records the gates we require before the fact-ledger model is considered production-ready. It is intentionally conservative: a local/formal pass is not treated as a live pass until the devnet Circle has run through the same path.
 
 ## Current Devnet Target
 
 - Network: `octra-devnet`.
-- Devnet Circle: `octDxjWHdLQX3RRmU9tdh16in35wPR9c8uRniBwEpHsG9K8`.
+- Previous devnet fact-v1 Circle: `octDxjWHdLQX3RRmU9tdh16in35wPR9c8uRniBwEpHsG9K8`.
+- Fresh devnet fact-v2 Circle: pending deployment.
 - Devnet wallet: documented separately in `docs/devnet-fact-ledger-wallets.md`; no private material is stored in the repo.
 - Mainnet: no deploy, no configuration change, no wallet access.
 
 ## Candidate Build
 
-The candidate fact-ledger program was built with `npm run native:verify` on 2026-06-24 and is live on the devnet programmed Site Circle via in-place update.
+The candidate fact-ledger program was built with `npm test` and `npm run fact-ledger-program:compile` on 2026-06-24. It is the first fact-v2 candidate intended to model the mainnet shape.
 
 | Artifact | Value |
 | --- | --- |
-| Source hash | `sha256:35fa1addba1133f77c14b9828db8d7295112f058de7d3295463a0db8a485dfb0` |
-| Bytecode hash | `sha256:7a2948dfcca3ded66d4e21fd72a5bc141195dcb971b04ee581bf1577c5804601` |
-| Verification hash | `sha256:f5e81d5a10fe00d19a19c28d2e694c0da3818cdb3f5f113698e38e12c57132d6` |
+| Manifest | `octra-vitals-fact-ledger.v2` |
+| Source hash | `sha256:ca56b577909e88eaedf28cde388bb4a4fc593ca8df4076064a2468d605066f6d` |
+| Bytecode hash | `sha256:aa30cedd75ab28ef2057a58312afac529d72753dee81768494e2abdba8fb28c2` |
+| Verification hash | `sha256:f212e13eaa7cab7b4dcacf3569957aa6dcec4722667cbd449ff2ffe41311117e` |
 | Formal result | `safe`, `verified`, 0 errors, 0 warnings |
-| Size | 19,787 bytes |
-| Instructions | 3,270 |
+| Size | 22,706 bytes |
+| Instructions | 3,873 |
+| Dormant aux overhead | `fact-v2` sample call is +14 bytes vs `fact-v1` (+0.21%) with `aux_count=0` |
 
 The generic fact-ledger substrate probe also verifies cleanly:
 
@@ -37,12 +40,13 @@ The generic fact-ledger substrate probe also verifies cleanly:
 
 ## Review-Hardening Changes In This Candidate
 
-Four changes close the follow-up audit findings before the next devnet soak:
+The fact-v2 candidate carries forward the prior hardening and adds the typed-metric substrate:
 
-1. **AML-owned capsule time binding.** `record_snapshot_fact_v1` now takes `observed_at`, validates the UTC timestamp, derives the deterministic `YYYY-MM-DDT00/12` capsule base in AML, and rejects mismatched caller-provided capsule bases.
+1. **AML-owned capsule time binding.** `record_snapshot_fact_v2` takes `observed_at`, validates the UTC timestamp, derives the deterministic `YYYY-MM-DDT00/12` capsule base in AML, and rejects mismatched caller-provided capsule bases.
 2. **Full core-row assertion.** The write path now calls both `assert_core_row_matches_summary` and `assert_fact_row`, binding the durable row to row version, snapshot index, schema id, and full payload hash.
 3. **Latest identity restored.** Fact-ledger writes now populate `latest_snapshot_id`, `latest_observed_at`, and `latest_submitter`, and emit those fields in `SnapshotRecorded`. Submit/readback tooling verifies them against the submitted call.
 4. **Immediate caller authorization.** Owner/operator checks now use `caller`, matching the prior programmed Circle AML programs and avoiding reliance on transitive `origin` semantics. `origin` is not used for authorization in this candidate; `latest_submitter` records the immediate caller context that successfully invoked the write.
+5. **Dormant typed metric surface.** `record_snapshot_fact_v2` accepts `aux_count` plus four optional fixed-width auxiliary fact rows. The launch path uses `aux_count=0`; auxiliary rows are appendable only for registered non-core families and must be sorted by family id.
 
 ## Growth-Headroom Changes In This Candidate
 

@@ -31,7 +31,7 @@ export function runtimeVitalsManifest(
   const programmedCircleProgram = choose(env.VITALS_PROGRAMMED_CIRCLE_PROGRAM, manifest.programmed_circle_program);
   const programmedCircleArtifactDir = choose(env.VITALS_PROGRAMMED_CIRCLE_ARTIFACT_DIR, manifest.programmed_circle_artifact_dir);
   const recordSnapshotVersion = choose(env.VITALS_RECORD_SNAPSHOT_VERSION, manifest.record_snapshot_version);
-  const factLedgerProgram = programmedCircleProgram === "fact-ledger" || recordSnapshotVersion === "fact-v1";
+  const factLedgerProgram = programmedCircleProgram === "fact-ledger" || recordSnapshotVersion === "fact-v1" || recordSnapshotVersion === "fact-v2";
   const siteCircleId = choose(options.siteCircleId, env.VITALS_SITE_CIRCLE_ID, manifest.site_circle_id);
   const programmedCircleId = choose(options.programmedCircleId, env.VITALS_PROGRAMMED_CIRCLE_ID, manifest.programmed_circle_id);
   const stateProgramAddress = stateTargetMode === "circle_program"

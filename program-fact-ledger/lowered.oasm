@@ -1,0 +1,3918 @@
+MLOAD r1, 999
+LDI r2, "constructor"
+NEQ r3, r1, r2
+JIF r3, 100
+LDI r1, false
+JIF r1, 10000
+LDI r2, "false"
+JMP 10001
+JDEST 10000
+LDI r2, "true"
+JDEST 10001
+SSTORE "initialized", r2
+LDI r1, 0
+SSTORE "snapshot_count", r1
+LDI r1, 0
+SSTORE "latest_snapshot_index", r1
+LDI r1, ""
+SSTORE "latest_snapshot_id", r1
+LDI r1, ""
+SSTORE "latest_observed_at", r1
+LDI r1, 0
+SSTORE "latest_epoch", r1
+LDI r1, ""
+SSTORE "latest_payload_hash", r1
+LDI r1, ""
+SSTORE "latest_evidence_manifest_hash", r1
+LDI r1, ""
+SSTORE "latest_source_refs_hash", r1
+LDI r1, ""
+SSTORE "latest_summary_hash", r1
+LDI r1, ""
+SSTORE "latest_history_row_hash", r1
+LDI r1, ""
+SSTORE "latest_payload", r1
+LDI r1, ""
+SSTORE "latest_evidence_manifest", r1
+LDI r1, ""
+SSTORE "latest_source_refs", r1
+LDI r1, ""
+SSTORE "latest_summary", r1
+LDI r1, ""
+SSTORE "latest_history_row", r1
+LDI r1, "octra-vitals:fact-catalog-root:v1"
+LDI r2, "
+"
+CONCAT r3, r1, r2
+SHA256 r4, r3
+SSTORE "catalog_root", r4
+LDI r1, 0
+SSTORE "family_count", r1
+STOP
+JDEST 100
+MLOAD r1, 1000
+LDI r2, "manifest"
+EQ r3, r1, r2
+JIF r3, 4100
+LDI r2, "is_initialized"
+EQ r3, r1, r2
+JIF r3, 4200
+LDI r2, "get_owner"
+EQ r3, r1, r2
+JIF r3, 4300
+LDI r2, "get_operator"
+EQ r3, r1, r2
+JIF r3, 4400
+LDI r2, "is_paused"
+EQ r3, r1, r2
+JIF r3, 4500
+LDI r2, "get_successor_program"
+EQ r3, r1, r2
+JIF r3, 4600
+LDI r2, "is_successor_set"
+EQ r3, r1, r2
+JIF r3, 4700
+LDI r2, "get_era_program"
+EQ r3, r1, r2
+JIF r3, 4800
+LDI r2, "get_era_network_id"
+EQ r3, r1, r2
+JIF r3, 4900
+LDI r2, "get_predecessor_program"
+EQ r3, r1, r2
+JIF r3, 5000
+LDI r2, "get_predecessor_final_root"
+EQ r3, r1, r2
+JIF r3, 5100
+LDI r2, "get_predecessor_final_index"
+EQ r3, r1, r2
+JIF r3, 5200
+LDI r2, "get_predecessor_anchor_hash"
+EQ r3, r1, r2
+JIF r3, 5300
+LDI r2, "get_era_first_snapshot_index"
+EQ r3, r1, r2
+JIF r3, 5400
+LDI r2, "get_snapshot_count"
+EQ r3, r1, r2
+JIF r3, 5500
+LDI r2, "get_latest_snapshot_index"
+EQ r3, r1, r2
+JIF r3, 5600
+LDI r2, "get_latest_snapshot_id"
+EQ r3, r1, r2
+JIF r3, 5700
+LDI r2, "get_latest_observed_at"
+EQ r3, r1, r2
+JIF r3, 5800
+LDI r2, "get_latest_epoch"
+EQ r3, r1, r2
+JIF r3, 5900
+LDI r2, "get_latest_payload_hash"
+EQ r3, r1, r2
+JIF r3, 6000
+LDI r2, "get_latest_evidence_manifest_hash"
+EQ r3, r1, r2
+JIF r3, 6100
+LDI r2, "get_latest_source_refs_hash"
+EQ r3, r1, r2
+JIF r3, 6200
+LDI r2, "get_latest_summary_hash"
+EQ r3, r1, r2
+JIF r3, 6300
+LDI r2, "get_latest_history_row_hash"
+EQ r3, r1, r2
+JIF r3, 6400
+LDI r2, "get_latest_snapshot"
+EQ r3, r1, r2
+JIF r3, 6500
+LDI r2, "get_latest_evidence_manifest"
+EQ r3, r1, r2
+JIF r3, 6600
+LDI r2, "get_latest_source_refs"
+EQ r3, r1, r2
+JIF r3, 6700
+LDI r2, "get_latest_summary"
+EQ r3, r1, r2
+JIF r3, 6800
+LDI r2, "get_latest_history_row"
+EQ r3, r1, r2
+JIF r3, 6900
+LDI r2, "get_latest_submitter"
+EQ r3, r1, r2
+JIF r3, 7000
+LDI r2, "get_summary_row_len"
+EQ r3, r1, r2
+JIF r3, 7100
+LDI r2, "get_history_row_len"
+EQ r3, r1, r2
+JIF r3, 7200
+LDI r2, "get_capsule_meta_len"
+EQ r3, r1, r2
+JIF r3, 7300
+LDI r2, "get_capsule_row_limit"
+EQ r3, r1, r2
+JIF r3, 7400
+LDI r2, "get_max_aux_fact_rows_per_snapshot"
+EQ r3, r1, r2
+JIF r3, 7500
+LDI r2, "get_catalog_root"
+EQ r3, r1, r2
+JIF r3, 7600
+LDI r2, "get_family_count"
+EQ r3, r1, r2
+JIF r3, 7700
+LDI r2, "get_family_id_at"
+EQ r3, r1, r2
+JIF r3, 7800
+LDI r2, "get_family_definition"
+EQ r3, r1, r2
+JIF r3, 7900
+LDI r2, "get_family_root"
+EQ r3, r1, r2
+JIF r3, 8000
+LDI r2, "get_family_capsules_root"
+EQ r3, r1, r2
+JIF r3, 8100
+LDI r2, "get_family_latest_index"
+EQ r3, r1, r2
+JIF r3, 8200
+LDI r2, "get_family_capsule_count"
+EQ r3, r1, r2
+JIF r3, 8300
+LDI r2, "get_family_latest_capsule_id"
+EQ r3, r1, r2
+JIF r3, 8400
+LDI r2, "get_family_capsule_id_at"
+EQ r3, r1, r2
+JIF r3, 8500
+LDI r2, "get_family_open_capsule_id"
+EQ r3, r1, r2
+JIF r3, 8600
+LDI r2, "get_family_open_capsule_body"
+EQ r3, r1, r2
+JIF r3, 8700
+LDI r2, "get_family_open_capsule_row_count"
+EQ r3, r1, r2
+JIF r3, 8800
+LDI r2, "get_family_open_capsule_start_root"
+EQ r3, r1, r2
+JIF r3, 8900
+LDI r2, "get_family_open_capsule_end_root"
+EQ r3, r1, r2
+JIF r3, 9000
+LDI r2, "get_family_capsule_body"
+EQ r3, r1, r2
+JIF r3, 9100
+LDI r2, "get_family_capsule_meta"
+EQ r3, r1, r2
+JIF r3, 9200
+LDI r2, "get_family_capsule_root_after"
+EQ r3, r1, r2
+JIF r3, 9300
+LDI r2, "get_history_root"
+EQ r3, r1, r2
+JIF r3, 9400
+LDI r2, "get_capsules_root"
+EQ r3, r1, r2
+JIF r3, 9500
+LDI r2, "get_open_capsule_body"
+EQ r3, r1, r2
+JIF r3, 9600
+LDI r2, "get_open_capsule_row_count"
+EQ r3, r1, r2
+JIF r3, 9700
+LDI r2, "get_open_capsule_end_root"
+EQ r3, r1, r2
+JIF r3, 9800
+LDI r2, "get_capsule_count"
+EQ r3, r1, r2
+JIF r3, 9900
+LDI r2, "get_latest_capsule_id"
+EQ r3, r1, r2
+JIF r3, 10000
+LDI r2, "get_latest_capsule_root_after"
+EQ r3, r1, r2
+JIF r3, 10100
+LDI r2, "get_history_capsule_body"
+EQ r3, r1, r2
+JIF r3, 10200
+LDI r2, "get_history_capsule_meta"
+EQ r3, r1, r2
+JIF r3, 10300
+LDI r2, "get_latest_bundle"
+EQ r3, r1, r2
+JIF r3, 10400
+LDI r2, "initialize_fact_ledger"
+EQ r3, r1, r2
+JIF r3, 10500
+LDI r2, "register_fact_family"
+EQ r3, r1, r2
+JIF r3, 10600
+LDI r2, "set_operator"
+EQ r3, r1, r2
+JIF r3, 10700
+LDI r2, "set_paused"
+EQ r3, r1, r2
+JIF r3, 10800
+LDI r2, "set_successor_program"
+EQ r3, r1, r2
+JIF r3, 10900
+LDI r2, "record_snapshot_fact_v1"
+EQ r3, r1, r2
+JIF r3, 11000
+LDI r2, "record_snapshot_fact_v2"
+EQ r3, r1, r2
+JIF r3, 11100
+REVERT
+JDEST 200
+SLOAD r1, "initialized"
+LDI r2, "true"
+EQ r1, r1, r2
+JIF r1, 10002
+LDI r3, "not initialized"
+EMIT "Require", r3
+REVERT
+JDEST 10002
+STOP
+JDEST 300
+CALL_INT r1, 200
+CALLER r1
+SLOAD r2, "owner"
+EQ r3, r1, r2
+JIF r3, 10003
+LDI r4, "not owner"
+EMIT "Require", r4
+REVERT
+JDEST 10003
+STOP
+JDEST 400
+CALL_INT r1, 200
+CALLER r1
+SLOAD r2, "owner"
+EQ r3, r1, r2
+JIF r3, 10004
+CALLER r5
+SLOAD r6, "operator"
+EQ r7, r5, r6
+MOV r4, r7
+JMP 10005
+JDEST 10004
+LDI r4, true
+JDEST 10005
+JIF r4, 10006
+LDI r8, "not operator"
+EMIT "Require", r8
+REVERT
+JDEST 10006
+STOP
+JDEST 500
+MLOAD r1, 1001
+LDI r2, "0"
+LT r3, r1, r2
+LDI r4, true
+NEQ r3, r3, r4
+JIF r3, 10007
+LDI r5, "digit low"
+EMIT "Require", r5
+REVERT
+JDEST 10007
+LDI r2, "9"
+GT r3, r1, r2
+LDI r4, true
+NEQ r3, r3, r4
+JIF r3, 10008
+LDI r5, "digit high"
+EMIT "Require", r5
+REVERT
+JDEST 10008
+STOP
+JDEST 600
+MLOAD r1, 1001
+LDI r2, 0
+LDI r3, 7
+SUBSTR r4, r1, r2, r3
+LDI r5, "sha256:"
+EQ r6, r4, r5
+JIF r6, 10009
+LDI r7, "hash prefix"
+EMIT "Require", r7
+REVERT
+JDEST 10009
+STRLEN r2, r1
+LDI r3, 71
+EQ r4, r2, r3
+JIF r4, 10010
+LDI r5, "hash length"
+EMIT "Require", r5
+REVERT
+JDEST 10010
+STOP
+JDEST 700
+MLOAD r1, 1001
+STRLEN r2, r1
+LDI r3, 64
+EQ r4, r2, r3
+JIF r4, 10011
+LDI r5, "hex64 length"
+EMIT "Require", r5
+REVERT
+JDEST 10011
+STOP
+JDEST 800
+MLOAD r1, 1001
+STRLEN r2, r1
+LDI r3, 4
+EQ r4, r2, r3
+JIF r4, 10012
+LDI r5, "code4 length"
+EMIT "Require", r5
+REVERT
+JDEST 10012
+LDI r2, 0
+LDI r3, 1
+SUBSTR r4, r1, r2, r3
+MSTORE 1001, r4
+CALL_INT r5, 500
+LDI r2, 1
+LDI r3, 1
+SUBSTR r4, r1, r2, r3
+MSTORE 1001, r4
+CALL_INT r5, 500
+LDI r2, 2
+LDI r3, 1
+SUBSTR r4, r1, r2, r3
+MSTORE 1001, r4
+CALL_INT r5, 500
+LDI r2, 3
+LDI r3, 1
+SUBSTR r4, r1, r2, r3
+MSTORE 1001, r4
+CALL_INT r5, 500
+STOP
+JDEST 900
+MLOAD r1, 1001
+STRLEN r2, r1
+LDI r3, 0
+GT r4, r2, r3
+JIF r4, 10013
+LDI r5, "network id required"
+EMIT "Require", r5
+REVERT
+JDEST 10013
+STRLEN r2, r1
+LDI r3, 32
+GT r4, r2, r3
+LDI r5, true
+NEQ r4, r4, r5
+JIF r4, 10014
+LDI r6, "network id too long"
+EMIT "Require", r6
+REVERT
+JDEST 10014
+STOP
+JDEST 1000
+MLOAD r1, 1001
+STRLEN r2, r1
+LDI r3, 16
+LT r4, r2, r3
+LDI r5, true
+NEQ r4, r4, r5
+JIF r4, 10015
+LDI r6, "snapshot id too short"
+EMIT "Require", r6
+REVERT
+JDEST 10015
+STRLEN r2, r1
+LDI r3, 64
+GT r4, r2, r3
+LDI r5, true
+NEQ r4, r4, r5
+JIF r4, 10016
+LDI r6, "snapshot id too long"
+EMIT "Require", r6
+REVERT
+JDEST 10016
+LDI r2, 0
+LDI r3, 7
+SUBSTR r4, r1, r2, r3
+LDI r5, "vitals."
+EQ r6, r4, r5
+JIF r6, 10017
+LDI r7, "snapshot id prefix"
+EMIT "Require", r7
+REVERT
+JDEST 10017
+STOP
+JDEST 1100
+MLOAD r1, 1001
+STRLEN r2, r1
+LDI r3, 20
+EQ r4, r2, r3
+JIF r4, 10018
+LDI r5, "observed_at length"
+EMIT "Require", r5
+REVERT
+JDEST 10018
+LDI r2, 0
+LDI r3, 1
+SUBSTR r4, r1, r2, r3
+MSTORE 1001, r4
+CALL_INT r5, 500
+LDI r2, 1
+LDI r3, 1
+SUBSTR r4, r1, r2, r3
+MSTORE 1001, r4
+CALL_INT r5, 500
+LDI r2, 2
+LDI r3, 1
+SUBSTR r4, r1, r2, r3
+MSTORE 1001, r4
+CALL_INT r5, 500
+LDI r2, 3
+LDI r3, 1
+SUBSTR r4, r1, r2, r3
+MSTORE 1001, r4
+CALL_INT r5, 500
+LDI r2, 4
+LDI r3, 1
+SUBSTR r4, r1, r2, r3
+LDI r5, "-"
+EQ r6, r4, r5
+JIF r6, 10019
+LDI r7, "observed_at year separator"
+EMIT "Require", r7
+REVERT
+JDEST 10019
+LDI r2, 5
+LDI r3, 1
+SUBSTR r4, r1, r2, r3
+MSTORE 1001, r4
+CALL_INT r5, 500
+LDI r2, 6
+LDI r3, 1
+SUBSTR r4, r1, r2, r3
+MSTORE 1001, r4
+CALL_INT r5, 500
+LDI r2, 7
+LDI r3, 1
+SUBSTR r4, r1, r2, r3
+LDI r5, "-"
+EQ r6, r4, r5
+JIF r6, 10020
+LDI r7, "observed_at month separator"
+EMIT "Require", r7
+REVERT
+JDEST 10020
+LDI r2, 8
+LDI r3, 1
+SUBSTR r4, r1, r2, r3
+MSTORE 1001, r4
+CALL_INT r5, 500
+LDI r2, 9
+LDI r3, 1
+SUBSTR r4, r1, r2, r3
+MSTORE 1001, r4
+CALL_INT r5, 500
+LDI r2, 10
+LDI r3, 1
+SUBSTR r4, r1, r2, r3
+LDI r5, "T"
+EQ r6, r4, r5
+JIF r6, 10021
+LDI r7, "observed_at time separator"
+EMIT "Require", r7
+REVERT
+JDEST 10021
+LDI r2, 11
+LDI r3, 1
+SUBSTR r4, r1, r2, r3
+MSTORE 1001, r4
+CALL_INT r5, 500
+LDI r2, 12
+LDI r3, 1
+SUBSTR r4, r1, r2, r3
+MSTORE 1001, r4
+CALL_INT r5, 500
+LDI r2, 13
+LDI r3, 1
+SUBSTR r4, r1, r2, r3
+LDI r5, ":"
+EQ r6, r4, r5
+JIF r6, 10022
+LDI r7, "observed_at hour separator"
+EMIT "Require", r7
+REVERT
+JDEST 10022
+LDI r2, 14
+LDI r3, 1
+SUBSTR r4, r1, r2, r3
+MSTORE 1001, r4
+CALL_INT r5, 500
+LDI r2, 15
+LDI r3, 1
+SUBSTR r4, r1, r2, r3
+MSTORE 1001, r4
+CALL_INT r5, 500
+LDI r2, 16
+LDI r3, 1
+SUBSTR r4, r1, r2, r3
+LDI r5, ":"
+EQ r6, r4, r5
+JIF r6, 10023
+LDI r7, "observed_at minute separator"
+EMIT "Require", r7
+REVERT
+JDEST 10023
+LDI r2, 17
+LDI r3, 1
+SUBSTR r4, r1, r2, r3
+MSTORE 1001, r4
+CALL_INT r5, 500
+LDI r2, 18
+LDI r3, 1
+SUBSTR r4, r1, r2, r3
+MSTORE 1001, r4
+CALL_INT r5, 500
+LDI r2, 19
+LDI r3, 1
+SUBSTR r4, r1, r2, r3
+LDI r5, "Z"
+EQ r6, r4, r5
+JIF r6, 10024
+LDI r7, "observed_at UTC suffix"
+EMIT "Require", r7
+REVERT
+JDEST 10024
+STOP
+JDEST 1200
+MLOAD r1, 1001
+MSTORE 1001, r1
+CALL_INT r2, 1100
+LDI r2, 11
+LDI r3, 2
+SUBSTR r4, r1, r2, r3
+MOV r2, r4
+LDI r3, "12"
+LT r4, r2, r3
+LDI r5, true
+NEQ r4, r4, r5
+JIF r4, 10025
+JMP 10026
+JDEST 10025
+LDI r3, 0
+LDI r4, 11
+SUBSTR r5, r1, r3, r4
+LDI r6, "12"
+CONCAT r7, r5, r6
+MOV r0, r7
+STOP
+JDEST 10026
+LDI r3, 0
+LDI r4, 11
+SUBSTR r5, r1, r3, r4
+LDI r6, "00"
+CONCAT r7, r5, r6
+MOV r0, r7
+STOP
+STOP
+JDEST 1300
+MLOAD r1, 1001
+STRLEN r2, r1
+LDI r3, 13
+EQ r4, r2, r3
+JIF r4, 10027
+LDI r5, "capsule base id length"
+EMIT "Require", r5
+REVERT
+JDEST 10027
+LDI r2, 0
+LDI r3, 1
+SUBSTR r4, r1, r2, r3
+MSTORE 1001, r4
+CALL_INT r5, 500
+LDI r2, 1
+LDI r3, 1
+SUBSTR r4, r1, r2, r3
+MSTORE 1001, r4
+CALL_INT r5, 500
+LDI r2, 2
+LDI r3, 1
+SUBSTR r4, r1, r2, r3
+MSTORE 1001, r4
+CALL_INT r5, 500
+LDI r2, 3
+LDI r3, 1
+SUBSTR r4, r1, r2, r3
+MSTORE 1001, r4
+CALL_INT r5, 500
+LDI r2, 4
+LDI r3, 1
+SUBSTR r4, r1, r2, r3
+LDI r5, "-"
+EQ r6, r4, r5
+JIF r6, 10028
+LDI r7, "capsule year separator"
+EMIT "Require", r7
+REVERT
+JDEST 10028
+LDI r2, 5
+LDI r3, 1
+SUBSTR r4, r1, r2, r3
+MSTORE 1001, r4
+CALL_INT r5, 500
+LDI r2, 6
+LDI r3, 1
+SUBSTR r4, r1, r2, r3
+MSTORE 1001, r4
+CALL_INT r5, 500
+LDI r2, 7
+LDI r3, 1
+SUBSTR r4, r1, r2, r3
+LDI r5, "-"
+EQ r6, r4, r5
+JIF r6, 10029
+LDI r7, "capsule month separator"
+EMIT "Require", r7
+REVERT
+JDEST 10029
+LDI r2, 8
+LDI r3, 1
+SUBSTR r4, r1, r2, r3
+MSTORE 1001, r4
+CALL_INT r5, 500
+LDI r2, 9
+LDI r3, 1
+SUBSTR r4, r1, r2, r3
+MSTORE 1001, r4
+CALL_INT r5, 500
+LDI r2, 10
+LDI r3, 1
+SUBSTR r4, r1, r2, r3
+LDI r5, "T"
+EQ r6, r4, r5
+JIF r6, 10030
+LDI r7, "capsule time separator"
+EMIT "Require", r7
+REVERT
+JDEST 10030
+LDI r2, 11
+LDI r3, 2
+SUBSTR r4, r1, r2, r3
+LDI r5, "00"
+EQ r6, r4, r5
+JIF r6, 10031
+LDI r8, 11
+LDI r9, 2
+SUBSTR r10, r1, r8, r9
+LDI r11, "12"
+EQ r12, r10, r11
+MOV r7, r12
+JMP 10032
+JDEST 10031
+LDI r7, true
+JDEST 10032
+JIF r7, 10033
+LDI r13, "capsule hour boundary"
+EMIT "Require", r13
+REVERT
+JDEST 10033
+STOP
+JDEST 1400
+MLOAD r1, 1001
+STRLEN r2, r1
+LDI r3, 18
+EQ r4, r2, r3
+JIF r4, 10034
+LDI r5, "capsule id length"
+EMIT "Require", r5
+REVERT
+JDEST 10034
+LDI r2, 0
+LDI r3, 13
+SUBSTR r4, r1, r2, r3
+MSTORE 1001, r4
+CALL_INT r5, 1300
+LDI r2, 13
+LDI r3, 1
+SUBSTR r4, r1, r2, r3
+LDI r5, "."
+EQ r6, r4, r5
+JIF r6, 10035
+LDI r7, "capsule segment separator"
+EMIT "Require", r7
+REVERT
+JDEST 10035
+LDI r2, 14
+LDI r3, 1
+SUBSTR r4, r1, r2, r3
+MSTORE 1001, r4
+CALL_INT r5, 500
+LDI r2, 15
+LDI r3, 1
+SUBSTR r4, r1, r2, r3
+MSTORE 1001, r4
+CALL_INT r5, 500
+LDI r2, 16
+LDI r3, 1
+SUBSTR r4, r1, r2, r3
+MSTORE 1001, r4
+CALL_INT r5, 500
+LDI r2, 17
+LDI r3, 1
+SUBSTR r4, r1, r2, r3
+MSTORE 1001, r4
+CALL_INT r5, 500
+STOP
+JDEST 1500
+MLOAD r1, 1001
+LDI r2, 0
+LT r3, r1, r2
+LDI r4, true
+NEQ r3, r3, r4
+JIF r3, 10036
+LDI r5, "decimal_4 negative"
+EMIT "Require", r5
+REVERT
+JDEST 10036
+LDI r2, 9999
+GT r3, r1, r2
+LDI r4, true
+NEQ r3, r3, r4
+JIF r3, 10037
+LDI r5, "decimal_4 too large"
+EMIT "Require", r5
+REVERT
+JDEST 10037
+LDI r2, ""
+CONCAT r2, r2, r1
+LDI r3, 10
+LT r4, r1, r3
+JIF r4, 10038
+JMP 10039
+JDEST 10038
+LDI r3, "000"
+CONCAT r4, r3, r2
+MOV r0, r4
+STOP
+JDEST 10039
+LDI r3, 100
+LT r4, r1, r3
+JIF r4, 10040
+JMP 10041
+JDEST 10040
+LDI r3, "00"
+CONCAT r4, r3, r2
+MOV r0, r4
+STOP
+JDEST 10041
+LDI r3, 1000
+LT r4, r1, r3
+JIF r4, 10042
+JMP 10043
+JDEST 10042
+LDI r3, "0"
+CONCAT r4, r3, r2
+MOV r0, r4
+STOP
+JDEST 10043
+MOV r0, r2
+STOP
+STOP
+JDEST 1600
+MLOAD r1, 1001
+LDI r2, 0
+LT r3, r1, r2
+LDI r4, true
+NEQ r3, r3, r4
+JIF r3, 10044
+LDI r5, "decimal_6 negative"
+EMIT "Require", r5
+REVERT
+JDEST 10044
+LDI r2, 999999
+GT r3, r1, r2
+LDI r4, true
+NEQ r3, r3, r4
+JIF r3, 10045
+LDI r5, "decimal_6 too large"
+EMIT "Require", r5
+REVERT
+JDEST 10045
+LDI r2, ""
+CONCAT r2, r2, r1
+LDI r3, 10
+LT r4, r1, r3
+JIF r4, 10046
+JMP 10047
+JDEST 10046
+LDI r3, "00000"
+CONCAT r4, r3, r2
+MOV r0, r4
+STOP
+JDEST 10047
+LDI r3, 100
+LT r4, r1, r3
+JIF r4, 10048
+JMP 10049
+JDEST 10048
+LDI r3, "0000"
+CONCAT r4, r3, r2
+MOV r0, r4
+STOP
+JDEST 10049
+LDI r3, 1000
+LT r4, r1, r3
+JIF r4, 10050
+JMP 10051
+JDEST 10050
+LDI r3, "000"
+CONCAT r4, r3, r2
+MOV r0, r4
+STOP
+JDEST 10051
+LDI r3, 10000
+LT r4, r1, r3
+JIF r4, 10052
+JMP 10053
+JDEST 10052
+LDI r3, "00"
+CONCAT r4, r3, r2
+MOV r0, r4
+STOP
+JDEST 10053
+LDI r3, 100000
+LT r4, r1, r3
+JIF r4, 10054
+JMP 10055
+JDEST 10054
+LDI r3, "0"
+CONCAT r4, r3, r2
+MOV r0, r4
+STOP
+JDEST 10055
+MOV r0, r2
+STOP
+STOP
+JDEST 1700
+MLOAD r1, 1001
+LDI r2, 0
+LT r3, r1, r2
+LDI r4, true
+NEQ r3, r3, r4
+JIF r3, 10056
+LDI r5, "decimal_8 negative"
+EMIT "Require", r5
+REVERT
+JDEST 10056
+LDI r2, 99999999
+GT r3, r1, r2
+LDI r4, true
+NEQ r3, r3, r4
+JIF r3, 10057
+LDI r5, "decimal_8 too large"
+EMIT "Require", r5
+REVERT
+JDEST 10057
+LDI r2, ""
+CONCAT r2, r2, r1
+LDI r3, 10
+LT r4, r1, r3
+JIF r4, 10058
+JMP 10059
+JDEST 10058
+LDI r3, "0000000"
+CONCAT r4, r3, r2
+MOV r0, r4
+STOP
+JDEST 10059
+LDI r3, 100
+LT r4, r1, r3
+JIF r4, 10060
+JMP 10061
+JDEST 10060
+LDI r3, "000000"
+CONCAT r4, r3, r2
+MOV r0, r4
+STOP
+JDEST 10061
+LDI r3, 1000
+LT r4, r1, r3
+JIF r4, 10062
+JMP 10063
+JDEST 10062
+LDI r3, "00000"
+CONCAT r4, r3, r2
+MOV r0, r4
+STOP
+JDEST 10063
+LDI r3, 10000
+LT r4, r1, r3
+JIF r4, 10064
+JMP 10065
+JDEST 10064
+LDI r3, "0000"
+CONCAT r4, r3, r2
+MOV r0, r4
+STOP
+JDEST 10065
+LDI r3, 100000
+LT r4, r1, r3
+JIF r4, 10066
+JMP 10067
+JDEST 10066
+LDI r3, "000"
+CONCAT r4, r3, r2
+MOV r0, r4
+STOP
+JDEST 10067
+LDI r3, 1000000
+LT r4, r1, r3
+JIF r4, 10068
+JMP 10069
+JDEST 10068
+LDI r3, "00"
+CONCAT r4, r3, r2
+MOV r0, r4
+STOP
+JDEST 10069
+LDI r3, 10000000
+LT r4, r1, r3
+JIF r4, 10070
+JMP 10071
+JDEST 10070
+LDI r3, "0"
+CONCAT r4, r3, r2
+MOV r0, r4
+STOP
+JDEST 10071
+MOV r0, r2
+STOP
+STOP
+JDEST 1800
+MLOAD r1, 1001
+LDI r2, 0
+LT r3, r1, r2
+LDI r4, true
+NEQ r3, r3, r4
+JIF r3, 10072
+LDI r5, "decimal_10 negative"
+EMIT "Require", r5
+REVERT
+JDEST 10072
+LDI r2, 9999999999
+GT r3, r1, r2
+LDI r4, true
+NEQ r3, r3, r4
+JIF r3, 10073
+LDI r5, "decimal_10 too large"
+EMIT "Require", r5
+REVERT
+JDEST 10073
+LDI r2, ""
+CONCAT r2, r2, r1
+LDI r3, 10
+LT r4, r1, r3
+JIF r4, 10074
+JMP 10075
+JDEST 10074
+LDI r3, "000000000"
+CONCAT r4, r3, r2
+MOV r0, r4
+STOP
+JDEST 10075
+LDI r3, 100
+LT r4, r1, r3
+JIF r4, 10076
+JMP 10077
+JDEST 10076
+LDI r3, "00000000"
+CONCAT r4, r3, r2
+MOV r0, r4
+STOP
+JDEST 10077
+LDI r3, 1000
+LT r4, r1, r3
+JIF r4, 10078
+JMP 10079
+JDEST 10078
+LDI r3, "0000000"
+CONCAT r4, r3, r2
+MOV r0, r4
+STOP
+JDEST 10079
+LDI r3, 10000
+LT r4, r1, r3
+JIF r4, 10080
+JMP 10081
+JDEST 10080
+LDI r3, "000000"
+CONCAT r4, r3, r2
+MOV r0, r4
+STOP
+JDEST 10081
+LDI r3, 100000
+LT r4, r1, r3
+JIF r4, 10082
+JMP 10083
+JDEST 10082
+LDI r3, "00000"
+CONCAT r4, r3, r2
+MOV r0, r4
+STOP
+JDEST 10083
+LDI r3, 1000000
+LT r4, r1, r3
+JIF r4, 10084
+JMP 10085
+JDEST 10084
+LDI r3, "0000"
+CONCAT r4, r3, r2
+MOV r0, r4
+STOP
+JDEST 10085
+LDI r3, 10000000
+LT r4, r1, r3
+JIF r4, 10086
+JMP 10087
+JDEST 10086
+LDI r3, "000"
+CONCAT r4, r3, r2
+MOV r0, r4
+STOP
+JDEST 10087
+LDI r3, 100000000
+LT r4, r1, r3
+JIF r4, 10088
+JMP 10089
+JDEST 10088
+LDI r3, "00"
+CONCAT r4, r3, r2
+MOV r0, r4
+STOP
+JDEST 10089
+LDI r3, 1000000000
+LT r4, r1, r3
+JIF r4, 10090
+JMP 10091
+JDEST 10090
+LDI r3, "0"
+CONCAT r4, r3, r2
+MOV r0, r4
+STOP
+JDEST 10091
+MOV r0, r2
+STOP
+STOP
+JDEST 1900
+MLOAD r1, 1001
+MLOAD r2, 1002
+LDI r3, "."
+CONCAT r4, r1, r3
+MSTORE 1001, r2
+CALL_INT r5, 1500
+CONCAT r6, r4, r5
+MOV r0, r6
+STOP
+STOP
+JDEST 2000
+MLOAD r1, 1001
+LDI r2, ""
+EQ r3, r1, r2
+JIF r3, 10092
+LDI r5, "0"
+EQ r6, r1, r5
+MOV r4, r6
+JMP 10093
+JDEST 10092
+LDI r4, true
+JDEST 10093
+MOV r0, r4
+STOP
+STOP
+JDEST 2100
+MLOAD r1, 1001
+MLOAD r2, 1002
+MSTORE 1001, r1
+CALL_INT r3, 800
+LDI r3, "|"
+CONCAT r4, r1, r3
+CONCAT r5, r4, r2
+MOV r0, r5
+STOP
+STOP
+JDEST 2200
+MLOAD r1, 1001
+MLOAD r2, 1002
+MSTORE 1001, r1
+CALL_INT r3, 800
+LDI r3, 0
+LT r4, r2, r3
+LDI r5, true
+NEQ r4, r4, r5
+JIF r4, 10094
+LDI r6, "ordinal negative"
+EMIT "Require", r6
+REVERT
+JDEST 10094
+LDI r3, "|"
+CONCAT r4, r1, r3
+MSTORE 1001, r2
+CALL_INT r5, 1700
+CONCAT r6, r4, r5
+MOV r0, r6
+STOP
+STOP
+JDEST 2300
+MLOAD r1, 1001
+MSTORE 1001, r1
+CALL_INT r2, 800
+LDI r2, "family_definition_by_id:"
+CONCAT r2, r2, r1
+SLOADK r3, r2
+MSTORE 1001, r3
+CALL_INT r4, 2000
+LDI r5, true
+NEQ r5, r4, r5
+MOV r0, r5
+STOP
+STOP
+JDEST 2400
+MLOAD r1, 1001
+MSTORE 1001, r1
+CALL_INT r2, 2300
+JIF r2, 10095
+LDI r3, "unknown family"
+EMIT "Require", r3
+REVERT
+JDEST 10095
+STOP
+JDEST 2500
+MLOAD r1, 1001
+MSTORE 1001, r1
+CALL_INT r2, 2400
+LDI r2, "family_definition_by_id:"
+CONCAT r2, r2, r1
+SLOADK r3, r2
+LDI r4, 47
+LDI r5, 4
+SUBSTR r6, r3, r4, r5
+MOV r0, r6
+STOP
+STOP
+JDEST 2600
+MLOAD r1, 1001
+MLOAD r2, 1002
+STRLEN r3, r1
+LDI r4, 702
+EQ r5, r3, r4
+JIF r5, 10096
+LDI r6, "family definition length"
+EMIT "Require", r6
+REVERT
+JDEST 10096
+LDI r3, 0
+LDI r4, 2
+SUBSTR r5, r1, r3, r4
+LDI r6, "00"
+EQ r7, r5, r6
+JIF r7, 10097
+LDI r8, "family definition version"
+EMIT "Require", r8
+REVERT
+JDEST 10097
+LDI r3, 2
+LDI r4, 1
+SUBSTR r5, r1, r3, r4
+LDI r6, "|"
+EQ r7, r5, r6
+JIF r7, 10098
+LDI r8, "family definition separator"
+EMIT "Require", r8
+REVERT
+JDEST 10098
+LDI r3, 3
+LDI r4, 4
+SUBSTR r5, r1, r3, r4
+EQ r6, r5, r2
+JIF r6, 10099
+LDI r7, "family definition id"
+EMIT "Require", r7
+REVERT
+JDEST 10099
+LDI r3, 44
+LDI r4, 2
+SUBSTR r5, r1, r3, r4
+LDI r6, "00"
+EQ r7, r5, r6
+JIF r7, 10100
+LDI r8, "only one_per_snapshot"
+EMIT "Require", r8
+REVERT
+JDEST 10100
+LDI r3, 85
+LDI r4, 4
+SUBSTR r5, r1, r3, r4
+LDI r6, "0295"
+EQ r7, r5, r6
+JIF r7, 10101
+LDI r8, "row len"
+EMIT "Require", r8
+REVERT
+JDEST 10101
+STRLEN r3, r1
+LDI r4, 2
+SUB r5, r3, r4
+LDI r6, 2
+SUBSTR r7, r1, r5, r6
+LDI r8, "00"
+EQ r9, r7, r8
+JIF r9, 10102
+LDI r10, "family active"
+EMIT "Require", r10
+REVERT
+JDEST 10102
+STOP
+JDEST 2700
+MLOAD r1, 1001
+MLOAD r2, 1002
+LDI r3, "octra-vitals:fact-catalog-root:v1"
+LDI r4, "
+"
+CONCAT r5, r3, r4
+CONCAT r6, r5, r2
+SHA256 r7, r6
+MOV r3, r7
+LDI r4, "octra-vitals:fact-catalog-root:v1"
+LDI r5, "
+"
+CONCAT r6, r4, r5
+CONCAT r7, r6, r1
+LDI r8, "
+"
+CONCAT r9, r8, r3
+CONCAT r10, r7, r9
+SHA256 r11, r10
+MOV r0, r11
+STOP
+STOP
+JDEST 2800
+MLOAD r1, 1001
+MLOAD r2, 1002
+MLOAD r3, 1003
+LDI r4, 3
+LDI r5, 10
+SUBSTR r6, r3, r4, r5
+LDI r7, "          "
+CONCAT r8, r6, r7
+MOV r4, r8
+LDI r5, "octra-vitals:fact-row:v1"
+LDI r6, "
+"
+CONCAT r7, r5, r6
+LDI r8, "octra-vitals-fact-ledger.v2"
+CONCAT r9, r7, r8
+MOV r5, r9
+LDI r6, "
+"
+CONCAT r7, r5, r6
+CONCAT r8, r7, r1
+MOV r6, r8
+LDI r7, "
+"
+CONCAT r8, r6, r7
+CONCAT r9, r8, r2
+MOV r7, r9
+LDI r8, "
+"
+CONCAT r9, r7, r8
+CONCAT r10, r9, r4
+MOV r8, r10
+LDI r9, "
+"
+CONCAT r10, r8, r9
+CONCAT r11, r10, r3
+MOV r9, r11
+SHA256 r10, r9
+MOV r0, r10
+STOP
+STOP
+JDEST 2900
+MLOAD r1, 1001
+MLOAD r2, 1002
+MLOAD r3, 1003
+MLOAD r4, 1004
+MSTORE 1001, r1
+MSTORE 1002, r2
+MSTORE 1003, r4
+CALL_INT r5, 2800
+LDI r6, "octra-vitals:fact-family-root:v1"
+LDI r7, "
+"
+CONCAT r8, r6, r7
+LDI r9, "octra-vitals-fact-ledger.v2"
+CONCAT r10, r8, r9
+MOV r6, r10
+LDI r7, "
+"
+CONCAT r8, r6, r7
+CONCAT r9, r8, r1
+MOV r7, r9
+LDI r8, "
+"
+CONCAT r9, r7, r8
+CONCAT r10, r9, r2
+MOV r8, r10
+LDI r9, "
+"
+CONCAT r10, r8, r9
+CONCAT r11, r10, r3
+MOV r9, r11
+LDI r10, "
+"
+CONCAT r11, r9, r10
+CONCAT r12, r11, r5
+MOV r10, r12
+SHA256 r11, r10
+MOV r0, r11
+STOP
+STOP
+JDEST 3000
+MLOAD r1, 1001
+MLOAD r2, 1002
+LDI r3, "octra-vitals:fact-family-capsules-root:v1"
+LDI r4, "
+"
+CONCAT r5, r3, r4
+LDI r6, "octra-vitals-fact-ledger.v2"
+CONCAT r7, r5, r6
+MOV r3, r7
+LDI r4, "
+"
+CONCAT r5, r3, r4
+CONCAT r6, r5, r1
+MOV r4, r6
+LDI r5, "
+"
+CONCAT r6, r4, r5
+CONCAT r7, r6, r2
+MOV r5, r7
+SHA256 r6, r5
+MOV r0, r6
+STOP
+STOP
+JDEST 3100
+MLOAD r1, 1001
+MLOAD r2, 1002
+MLOAD r3, 1003
+MLOAD r4, 1004
+MLOAD r5, 1005
+MLOAD r6, 1006
+LDI r7, "octra-vitals:fact-family-capsules-root:v1"
+LDI r8, "
+"
+CONCAT r9, r7, r8
+LDI r10, "octra-vitals-fact-ledger.v2"
+CONCAT r11, r9, r10
+MOV r7, r11
+LDI r8, "
+"
+CONCAT r9, r7, r8
+CONCAT r10, r9, r1
+MOV r8, r10
+LDI r9, "
+"
+CONCAT r10, r8, r9
+CONCAT r11, r10, r2
+MOV r9, r11
+LDI r10, "
+"
+CONCAT r11, r9, r10
+CONCAT r12, r11, r3
+MOV r10, r12
+LDI r11, "
+"
+CONCAT r12, r10, r11
+CONCAT r13, r12, r4
+MOV r11, r13
+LDI r12, "
+"
+CONCAT r13, r11, r12
+CONCAT r14, r13, r5
+MOV r12, r14
+LDI r13, "
+"
+CONCAT r14, r12, r13
+CONCAT r15, r14, r6
+MOV r13, r15
+SHA256 r14, r13
+MOV r0, r14
+STOP
+STOP
+JDEST 3200
+MLOAD r1, 1001
+MLOAD r2, 1002
+MLOAD r3, 1003
+MLOAD r4, 1004
+MLOAD r5, 1005
+STRLEN r6, r5
+LDI r7, 295
+EQ r8, r6, r7
+JIF r8, 10103
+LDI r9, "row length"
+EMIT "Require", r9
+REVERT
+JDEST 10103
+LDI r6, 0
+LDI r7, 2
+SUBSTR r8, r5, r6, r7
+LDI r9, "00"
+EQ r10, r8, r9
+JIF r10, 10104
+LDI r11, "row version"
+EMIT "Require", r11
+REVERT
+JDEST 10104
+LDI r6, 3
+LDI r7, 10
+SUBSTR r8, r5, r6, r7
+MSTORE 1001, r3
+CALL_INT r9, 1800
+EQ r10, r8, r9
+JIF r10, 10105
+LDI r11, "row snapshot index"
+EMIT "Require", r11
+REVERT
+JDEST 10105
+LDI r6, 231
+LDI r7, 64
+SUBSTR r8, r5, r6, r7
+LDI r9, 7
+LDI r10, 64
+SUBSTR r11, r4, r9, r10
+EQ r12, r8, r11
+JIF r12, 10106
+LDI r13, "row payload hash"
+EMIT "Require", r13
+REVERT
+JDEST 10106
+LDI r6, "family_definition_by_id:"
+CONCAT r6, r6, r1
+SLOADK r7, r6
+LDI r8, 47
+LDI r9, 4
+SUBSTR r10, r7, r8, r9
+EQ r11, r2, r10
+JIF r11, 10107
+LDI r12, "row schema"
+EMIT "Require", r12
+REVERT
+JDEST 10107
+STOP
+JDEST 3300
+MLOAD r1, 1001
+MLOAD r2, 1002
+MLOAD r3, 1003
+STRLEN r4, r3
+LDI r5, 295
+EQ r6, r4, r5
+JIF r6, 10108
+LDI r7, "aux row length"
+EMIT "Require", r7
+REVERT
+JDEST 10108
+LDI r4, 0
+LDI r5, 2
+SUBSTR r6, r3, r4, r5
+LDI r7, "00"
+EQ r8, r6, r7
+JIF r8, 10109
+LDI r9, "aux row version"
+EMIT "Require", r9
+REVERT
+JDEST 10109
+LDI r4, 3
+LDI r5, 10
+SUBSTR r6, r3, r4, r5
+MSTORE 1001, r1
+CALL_INT r7, 1800
+EQ r8, r6, r7
+JIF r8, 10110
+LDI r9, "aux row snapshot index"
+EMIT "Require", r9
+REVERT
+JDEST 10110
+LDI r4, 231
+LDI r5, 64
+SUBSTR r6, r3, r4, r5
+LDI r7, 7
+LDI r8, 64
+SUBSTR r9, r2, r7, r8
+EQ r10, r6, r9
+JIF r10, 10111
+LDI r11, "aux row payload hash"
+EMIT "Require", r11
+REVERT
+JDEST 10111
+LDI r4, 27
+LDI r5, 4
+SUBSTR r6, r3, r4, r5
+MOV r4, r6
+LDI r5, 32
+LDI r6, 4
+SUBSTR r7, r3, r5, r6
+MOV r5, r7
+MSTORE 1001, r4
+CALL_INT r6, 800
+MSTORE 1001, r5
+CALL_INT r6, 800
+LDI r6, "0000"
+NEQ r7, r4, r6
+JIF r7, 10112
+LDI r8, "aux row core family"
+EMIT "Require", r8
+REVERT
+JDEST 10112
+MSTORE 1001, r4
+CALL_INT r6, 2400
+MSTORE 1001, r4
+CALL_INT r6, 2500
+EQ r7, r5, r6
+JIF r7, 10113
+LDI r8, "aux row schema"
+EMIT "Require", r8
+REVERT
+JDEST 10113
+MOV r0, r4
+STOP
+STOP
+JDEST 3400
+MLOAD r1, 1001
+MLOAD r2, 1002
+LDI r3, 0
+LDI r4, 2
+SUBSTR r5, r2, r3, r4
+LDI r6, 0
+LDI r7, 2
+SUBSTR r8, r1, r6, r7
+EQ r9, r5, r8
+JIF r9, 10114
+LDI r10, "core summary version"
+EMIT "Require", r10
+REVERT
+JDEST 10114
+LDI r3, 3
+LDI r4, 10
+SUBSTR r5, r2, r3, r4
+LDI r6, 3
+LDI r7, 10
+SUBSTR r8, r1, r6, r7
+EQ r9, r5, r8
+JIF r9, 10115
+LDI r10, "core summary index"
+EMIT "Require", r10
+REVERT
+JDEST 10115
+LDI r3, 14
+LDI r4, 12
+SUBSTR r5, r2, r3, r4
+LDI r6, 14
+LDI r7, 12
+SUBSTR r8, r1, r6, r7
+EQ r9, r5, r8
+JIF r9, 10116
+LDI r10, "core summary observed"
+EMIT "Require", r10
+REVERT
+JDEST 10116
+LDI r3, 27
+LDI r4, 12
+SUBSTR r5, r2, r3, r4
+LDI r6, 27
+LDI r7, 12
+SUBSTR r8, r1, r6, r7
+EQ r9, r5, r8
+JIF r9, 10117
+LDI r10, "core summary epoch"
+EMIT "Require", r10
+REVERT
+JDEST 10117
+LDI r3, 40
+LDI r4, 12
+SUBSTR r5, r2, r3, r4
+LDI r6, 40
+LDI r7, 12
+SUBSTR r8, r1, r6, r7
+EQ r9, r5, r8
+JIF r9, 10118
+LDI r10, "core summary external block"
+EMIT "Require", r10
+REVERT
+JDEST 10118
+LDI r3, 74
+LDI r4, 20
+SUBSTR r5, r2, r3, r4
+LDI r6, 53
+LDI r7, 20
+SUBSTR r8, r1, r6, r7
+EQ r9, r5, r8
+JIF r9, 10119
+LDI r10, "core summary issued"
+EMIT "Require", r10
+REVERT
+JDEST 10119
+LDI r3, 95
+LDI r4, 20
+SUBSTR r5, r2, r3, r4
+LDI r6, 74
+LDI r7, 20
+SUBSTR r8, r1, r6, r7
+EQ r9, r5, r8
+JIF r9, 10120
+LDI r10, "core summary burned"
+EMIT "Require", r10
+REVERT
+JDEST 10120
+LDI r3, 116
+LDI r4, 20
+SUBSTR r5, r2, r3, r4
+LDI r6, 95
+LDI r7, 20
+SUBSTR r8, r1, r6, r7
+EQ r9, r5, r8
+JIF r9, 10121
+LDI r10, "core summary encrypted"
+EMIT "Require", r10
+REVERT
+JDEST 10121
+LDI r3, 137
+LDI r4, 20
+SUBSTR r5, r2, r3, r4
+LDI r6, 116
+LDI r7, 20
+SUBSTR r8, r1, r6, r7
+EQ r9, r5, r8
+JIF r9, 10122
+LDI r10, "core summary locked"
+EMIT "Require", r10
+REVERT
+JDEST 10122
+LDI r3, 158
+LDI r4, 20
+SUBSTR r5, r2, r3, r4
+LDI r6, 137
+LDI r7, 20
+SUBSTR r8, r1, r6, r7
+EQ r9, r5, r8
+JIF r9, 10123
+LDI r10, "core summary wrapped"
+EMIT "Require", r10
+REVERT
+JDEST 10123
+LDI r3, 179
+LDI r4, 20
+SUBSTR r5, r2, r3, r4
+LDI r6, 158
+LDI r7, 20
+SUBSTR r8, r1, r6, r7
+EQ r9, r5, r8
+JIF r9, 10124
+LDI r10, "core summary unclaimed"
+EMIT "Require", r10
+REVERT
+JDEST 10124
+LDI r3, 226
+LDI r4, 4
+SUBSTR r5, r2, r3, r4
+LDI r6, 179
+LDI r7, 4
+SUBSTR r8, r1, r6, r7
+EQ r9, r5, r8
+JIF r9, 10125
+LDI r10, "core summary route count"
+EMIT "Require", r10
+REVERT
+JDEST 10125
+LDI r3, 231
+LDI r4, 24
+SUBSTR r5, r2, r3, r4
+LDI r6, 184
+LDI r7, 24
+SUBSTR r8, r1, r6, r7
+EQ r9, r5, r8
+JIF r9, 10126
+LDI r10, "core summary payload prefix"
+EMIT "Require", r10
+REVERT
+JDEST 10126
+STOP
+JDEST 3500
+MLOAD r1, 1001
+MLOAD r2, 1002
+MLOAD r3, 1003
+MSTORE 1001, r1
+CALL_INT r4, 800
+MSTORE 1001, r3
+CALL_INT r4, 700
+MSTORE 1001, r2
+MSTORE 1002, r1
+CALL_INT r4, 2600
+MSTORE 1001, r1
+CALL_INT r4, 2300
+LDI r5, true
+NEQ r5, r4, r5
+JIF r5, 10127
+LDI r6, "family already registered"
+EMIT "Require", r6
+REVERT
+JDEST 10127
+SLOAD r4, "family_count"
+LDI r5, 0
+ADD r4, r5, r4
+LDI r6, 9999
+LT r7, r4, r6
+JIF r7, 10128
+LDI r8, "too many families"
+EMIT "Require", r8
+REVERT
+JDEST 10128
+SLOAD r4, "family_count"
+LDI r5, 0
+ADD r4, r5, r4
+MSTORE 1001, r4
+CALL_INT r6, 1500
+MOV r4, r6
+LDI r5, "family_id_by_ordinal:"
+CONCAT r5, r5, r4
+SSTOREK r5, r1
+LDI r5, "family_definition_by_id:"
+CONCAT r5, r5, r1
+SSTOREK r5, r2
+LDI r5, "family_root_by_id:"
+CONCAT r5, r5, r1
+SSTOREK r5, r3
+LDI r5, "family_capsules_root_by_id:"
+CONCAT r5, r5, r1
+MSTORE 1001, r1
+CALL_INT r6, 2500
+MSTORE 1001, r1
+MSTORE 1002, r6
+CALL_INT r7, 3000
+SSTOREK r5, r7
+LDI r5, "family_latest_index_by_id:"
+CONCAT r5, r5, r1
+SLOAD r6, "predecessor_final_index"
+LDI r7, 0
+ADD r6, r7, r6
+SSTOREK r5, r6
+LDI r5, "family_capsule_count_by_id:"
+CONCAT r5, r5, r1
+LDI r6, 0
+SSTOREK r5, r6
+LDI r5, "family_latest_capsule_id_by_id:"
+CONCAT r5, r5, r1
+LDI r6, ""
+SSTOREK r5, r6
+LDI r5, "family_open_capsule_base_id_by_id:"
+CONCAT r5, r5, r1
+LDI r6, ""
+SSTOREK r5, r6
+LDI r5, "family_open_capsule_segment_by_id:"
+CONCAT r5, r5, r1
+LDI r6, 0
+SSTOREK r5, r6
+LDI r5, "family_open_capsule_id_by_id:"
+CONCAT r5, r5, r1
+LDI r6, ""
+SSTOREK r5, r6
+LDI r5, "family_open_capsule_body_by_id:"
+CONCAT r5, r5, r1
+LDI r6, ""
+SSTOREK r5, r6
+LDI r5, "family_open_capsule_row_count_by_id:"
+CONCAT r5, r5, r1
+LDI r6, 0
+SSTOREK r5, r6
+LDI r5, "family_open_capsule_first_index_by_id:"
+CONCAT r5, r5, r1
+LDI r6, 0
+SSTOREK r5, r6
+LDI r5, "family_open_capsule_start_root_by_id:"
+CONCAT r5, r5, r1
+SSTOREK r5, r3
+LDI r5, "family_open_capsule_end_root_by_id:"
+CONCAT r5, r5, r1
+SSTOREK r5, r3
+SLOAD r5, "catalog_root"
+MSTORE 1001, r5
+MSTORE 1002, r2
+CALL_INT r6, 2700
+SSTORE "catalog_root", r6
+SLOAD r5, "family_count"
+LDI r6, 0
+ADD r5, r6, r5
+LDI r7, 1
+ADD r8, r5, r7
+SSTORE "family_count", r8
+MSTORE 1001, r1
+CALL_INT r5, 2500
+LDI r6, 295
+EMIT "FamilyRegistered", r1, r5, r6
+STOP
+JDEST 3600
+MLOAD r1, 1001
+MLOAD r2, 1002
+MLOAD r3, 1003
+LDI r4, "octra-vitals:fact-capsule-body:v1"
+LDI r5, "
+"
+CONCAT r6, r4, r5
+LDI r7, "octra-vitals-fact-ledger.v2"
+CONCAT r8, r6, r7
+MOV r4, r8
+LDI r5, "
+"
+CONCAT r6, r4, r5
+CONCAT r7, r6, r1
+MOV r5, r7
+LDI r6, "
+"
+CONCAT r7, r5, r6
+CONCAT r8, r7, r2
+MOV r6, r8
+LDI r7, "
+"
+CONCAT r8, r6, r7
+CONCAT r9, r8, r3
+MOV r7, r9
+SHA256 r8, r7
+MOV r0, r8
+STOP
+STOP
+JDEST 3700
+MLOAD r1, 1001
+LDI r2, "octra-vitals:fact-capsule-meta:v1"
+LDI r3, "
+"
+CONCAT r4, r2, r3
+CONCAT r5, r4, r1
+SHA256 r6, r5
+MOV r0, r6
+STOP
+STOP
+JDEST 3800
+MLOAD r1, 1001
+MSTORE 1001, r1
+CALL_INT r2, 2400
+LDI r2, "family_open_capsule_row_count_by_id:"
+CONCAT r2, r2, r1
+SLOADK r3, r2
+LDI r4, 0
+ADD r3, r4, r3
+MOV r2, r3
+LDI r3, 0
+GT r4, r2, r3
+JIF r4, 10129
+LDI r5, "capsule empty"
+EMIT "Require", r5
+REVERT
+JDEST 10129
+LDI r3, 48
+GT r4, r2, r3
+LDI r5, true
+NEQ r4, r4, r5
+JIF r4, 10130
+LDI r6, "capsule overfull"
+EMIT "Require", r6
+REVERT
+JDEST 10130
+LDI r3, "family_open_capsule_id_by_id:"
+CONCAT r3, r3, r1
+SLOADK r4, r3
+MOV r3, r4
+MSTORE 1001, r1
+MSTORE 1002, r3
+CALL_INT r4, 2100
+LDI r5, "family_capsule_body_by_key:"
+CONCAT r5, r5, r4
+SLOADK r6, r5
+MSTORE 1001, r6
+CALL_INT r7, 2000
+JIF r7, 10131
+LDI r8, "capsule body already sealed"
+EMIT "Require", r8
+REVERT
+JDEST 10131
+LDI r5, "family_capsule_meta_by_key:"
+CONCAT r5, r5, r4
+SLOADK r6, r5
+MSTORE 1001, r6
+CALL_INT r7, 2000
+JIF r7, 10132
+LDI r8, "capsule meta already sealed"
+EMIT "Require", r8
+REVERT
+JDEST 10132
+LDI r5, "family_capsule_root_after_by_key:"
+CONCAT r5, r5, r4
+SLOADK r6, r5
+MSTORE 1001, r6
+CALL_INT r7, 2000
+JIF r7, 10133
+LDI r8, "capsule root already sealed"
+EMIT "Require", r8
+REVERT
+JDEST 10133
+MSTORE 1001, r1
+CALL_INT r5, 2500
+LDI r6, "family_open_capsule_body_by_id:"
+CONCAT r6, r6, r1
+SLOADK r7, r6
+MOV r6, r7
+MSTORE 1001, r1
+MSTORE 1002, r5
+MSTORE 1003, r6
+CALL_INT r7, 3600
+LDI r8, "family_open_capsule_end_root_by_id:"
+CONCAT r8, r8, r1
+SLOADK r9, r8
+MOV r8, r9
+LDI r9, "family_capsules_root_by_id:"
+CONCAT r9, r9, r1
+SLOADK r10, r9
+MOV r9, r10
+LDI r10, ""
+EQ r11, r9, r10
+JIF r11, 10134
+JMP 10135
+JDEST 10134
+MSTORE 1001, r1
+MSTORE 1002, r5
+CALL_INT r10, 3000
+MOV r9, r10
+JDEST 10135
+LDI r10, "0"
+EQ r11, r9, r10
+JIF r11, 10136
+JMP 10137
+JDEST 10136
+MSTORE 1001, r1
+MSTORE 1002, r5
+CALL_INT r10, 3000
+MOV r9, r10
+JDEST 10137
+MSTORE 1001, r1
+MSTORE 1002, r5
+MSTORE 1003, r9
+MSTORE 1004, r3
+MSTORE 1005, r7
+MSTORE 1006, r8
+CALL_INT r10, 3100
+LDI r11, 1
+SUB r12, r2, r11
+LDI r13, 295
+MUL r14, r12, r13
+MOV r11, r14
+LDI r12, "family_capsule_count_by_id:"
+CONCAT r12, r12, r1
+SLOADK r13, r12
+LDI r14, 0
+ADD r13, r14, r13
+MOV r12, r13
+LDI r13, "00"
+LDI r14, "|"
+CONCAT r15, r13, r14
+CONCAT r16, r15, r1
+LDI r17, "|"
+CONCAT r18, r16, r17
+CONCAT r19, r18, r5
+MOV r13, r19
+LDI r14, "|00|1|"
+CONCAT r15, r13, r14
+CONCAT r16, r15, r3
+LDI r17, "      "
+CONCAT r18, r16, r17
+MOV r14, r18
+LDI r15, "|"
+CONCAT r16, r14, r15
+LDI r17, 3
+LDI r18, 10
+SUBSTR r19, r6, r17, r18
+LDI r20, "          "
+CONCAT r21, r19, r20
+CONCAT r22, r16, r21
+MOV r15, r22
+LDI r16, "|"
+CONCAT r17, r15, r16
+LDI r18, 3
+ADD r19, r11, r18
+LDI r20, 10
+SUBSTR r21, r6, r19, r20
+LDI r22, "          "
+CONCAT r23, r21, r22
+CONCAT r24, r17, r23
+MOV r16, r24
+LDI r17, "|"
+CONCAT r18, r16, r17
+MSTORE 1001, r2
+CALL_INT r19, 1600
+CONCAT r20, r18, r19
+MOV r17, r20
+LDI r18, "|0295|"
+CONCAT r19, r17, r18
+LDI r20, 14
+LDI r21, 12
+SUBSTR r22, r6, r20, r21
+CONCAT r23, r19, r22
+MOV r18, r23
+LDI r19, "|"
+CONCAT r20, r18, r19
+LDI r21, 14
+ADD r22, r11, r21
+LDI r23, 12
+SUBSTR r24, r6, r22, r23
+CONCAT r25, r20, r24
+MOV r19, r25
+LDI r20, "|"
+CONCAT r21, r19, r20
+CONCAT r22, r21, r7
+MOV r20, r22
+LDI r21, "|"
+CONCAT r22, r20, r21
+LDI r23, "family_open_capsule_start_root_by_id:"
+CONCAT r23, r23, r1
+SLOADK r24, r23
+CONCAT r25, r22, r24
+MOV r21, r25
+LDI r22, "|"
+CONCAT r23, r21, r22
+CONCAT r24, r23, r8
+MOV r22, r24
+LDI r23, "|"
+CONCAT r24, r22, r23
+LDI r25, "0000000000000000000000000000000000000000000000000000000000000000"
+CONCAT r26, r24, r25
+MOV r23, r26
+LDI r24, "|"
+CONCAT r25, r23, r24
+CONCAT r26, r25, r9
+MOV r24, r26
+LDI r25, "|"
+CONCAT r26, r24, r25
+CONCAT r27, r26, r10
+MOV r25, r27
+LDI r26, "|"
+CONCAT r27, r25, r26
+SLOAD r28, "catalog_root"
+CONCAT r29, r27, r28
+MOV r26, r29
+STRLEN r27, r26
+LDI r28, 577
+EQ r29, r27, r28
+JIF r29, 10138
+LDI r30, "capsule meta length"
+EMIT "Require", r30
+REVERT
+JDEST 10138
+MSTORE 1001, r26
+CALL_INT r27, 3700
+LDI r28, "family_capsule_body_by_key:"
+CONCAT r28, r28, r4
+SSTOREK r28, r6
+LDI r28, "family_capsule_meta_by_key:"
+CONCAT r28, r28, r4
+SSTOREK r28, r26
+LDI r28, "family_capsule_root_after_by_key:"
+CONCAT r28, r28, r4
+SSTOREK r28, r8
+LDI r28, "family_capsules_root_by_id:"
+CONCAT r28, r28, r1
+SSTOREK r28, r10
+MSTORE 1001, r1
+MSTORE 1002, r12
+CALL_INT r28, 2200
+LDI r29, "family_capsule_id_by_key:"
+CONCAT r29, r29, r28
+SSTOREK r29, r3
+LDI r28, "family_capsule_count_by_id:"
+CONCAT r28, r28, r1
+LDI r29, 1
+ADD r30, r12, r29
+SSTOREK r28, r30
+LDI r28, "family_latest_capsule_id_by_id:"
+CONCAT r28, r28, r1
+SSTOREK r28, r3
+EMIT "FamilyCapsuleSealed", r1, r3, r2, r7, r27, r8
+LDI r28, "family_open_capsule_segment_by_id:"
+CONCAT r28, r28, r1
+SLOADK r29, r28
+LDI r30, 0
+ADD r29, r30, r29
+LDI r31, 9999
+LT r32, r29, r31
+JIF r32, 10139
+LDI r33, "capsule segment overfull"
+EMIT "Require", r33
+REVERT
+JDEST 10139
+LDI r28, "family_open_capsule_segment_by_id:"
+CONCAT r28, r28, r1
+LDI r29, "family_open_capsule_segment_by_id:"
+CONCAT r29, r29, r1
+SLOADK r30, r29
+LDI r31, 0
+ADD r30, r31, r30
+LDI r32, 1
+ADD r33, r30, r32
+SSTOREK r28, r33
+LDI r28, "family_open_capsule_id_by_id:"
+CONCAT r28, r28, r1
+LDI r29, ""
+SSTOREK r28, r29
+LDI r28, "family_open_capsule_body_by_id:"
+CONCAT r28, r28, r1
+LDI r29, ""
+SSTOREK r28, r29
+LDI r28, "family_open_capsule_row_count_by_id:"
+CONCAT r28, r28, r1
+LDI r29, 0
+SSTOREK r28, r29
+LDI r28, "family_open_capsule_first_index_by_id:"
+CONCAT r28, r28, r1
+LDI r29, 0
+SSTOREK r28, r29
+LDI r28, "family_open_capsule_start_root_by_id:"
+CONCAT r28, r28, r1
+SSTOREK r28, r8
+LDI r28, "family_open_capsule_end_root_by_id:"
+CONCAT r28, r28, r1
+SSTOREK r28, r8
+STOP
+JDEST 3900
+MLOAD r1, 1001
+MLOAD r2, 1002
+MLOAD r3, 1003
+MLOAD r4, 1004
+LDI r5, "0000"
+LDI r6, "0000"
+MSTORE 1001, r1
+CALL_INT r7, 1300
+STRLEN r7, r4
+LDI r8, 295
+EQ r9, r7, r8
+JIF r9, 10140
+LDI r10, "row length"
+EMIT "Require", r10
+REVERT
+JDEST 10140
+LDI r7, "family_open_capsule_row_count_by_id:"
+CONCAT r7, r7, r5
+SLOADK r8, r7
+LDI r9, 0
+ADD r8, r9, r8
+LDI r10, 0
+GT r11, r8, r10
+LDI r12, true
+NEQ r12, r11, r12
+JIF r12, 10141
+LDI r13, "family_open_capsule_base_id_by_id:"
+CONCAT r13, r13, r5
+SLOADK r14, r13
+NEQ r15, r14, r1
+MOV r12, r15
+JMP 10142
+JDEST 10141
+LDI r12, false
+JDEST 10142
+JIF r12, 10143
+JMP 10144
+JDEST 10143
+MSTORE 1001, r5
+CALL_INT r7, 3800
+JDEST 10144
+LDI r7, "family_open_capsule_row_count_by_id:"
+CONCAT r7, r7, r5
+SLOADK r8, r7
+LDI r9, 0
+ADD r8, r9, r8
+LDI r10, 0
+EQ r11, r8, r10
+JIF r11, 10145
+JMP 10146
+JDEST 10145
+LDI r7, "family_open_capsule_base_id_by_id:"
+CONCAT r7, r7, r5
+SLOADK r8, r7
+NEQ r9, r8, r1
+JIF r9, 10147
+JMP 10148
+JDEST 10147
+LDI r7, "family_open_capsule_base_id_by_id:"
+CONCAT r7, r7, r5
+SSTOREK r7, r1
+LDI r7, "family_open_capsule_segment_by_id:"
+CONCAT r7, r7, r5
+LDI r8, 0
+SSTOREK r7, r8
+JDEST 10148
+LDI r7, "family_open_capsule_id_by_id:"
+CONCAT r7, r7, r5
+LDI r8, "family_open_capsule_segment_by_id:"
+CONCAT r8, r8, r5
+SLOADK r9, r8
+LDI r10, 0
+ADD r9, r10, r9
+MSTORE 1001, r1
+MSTORE 1002, r9
+CALL_INT r11, 1900
+SSTOREK r7, r11
+LDI r7, "family_open_capsule_first_index_by_id:"
+CONCAT r7, r7, r5
+SSTOREK r7, r2
+LDI r7, "family_open_capsule_start_root_by_id:"
+CONCAT r7, r7, r5
+LDI r8, "family_open_capsule_end_root_by_id:"
+CONCAT r8, r8, r5
+SLOADK r9, r8
+SSTOREK r7, r9
+JDEST 10146
+LDI r7, "family_open_capsule_id_by_id:"
+CONCAT r7, r7, r5
+SLOADK r8, r7
+MOV r7, r8
+LDI r8, "family_open_capsule_end_root_by_id:"
+CONCAT r8, r8, r5
+SLOADK r9, r8
+MSTORE 1001, r5
+MSTORE 1002, r6
+MSTORE 1003, r9
+MSTORE 1004, r4
+CALL_INT r10, 2900
+MOV r8, r10
+LDI r9, "family_latest_index_by_id:"
+CONCAT r9, r9, r5
+SSTOREK r9, r2
+LDI r9, "family_root_by_id:"
+CONCAT r9, r9, r5
+SSTOREK r9, r8
+LDI r9, "family_open_capsule_body_by_id:"
+CONCAT r9, r9, r5
+LDI r10, "family_open_capsule_body_by_id:"
+CONCAT r10, r10, r5
+SLOADK r11, r10
+CONCAT r12, r11, r4
+SSTOREK r9, r12
+LDI r9, "family_open_capsule_row_count_by_id:"
+CONCAT r9, r9, r5
+LDI r10, "family_open_capsule_row_count_by_id:"
+CONCAT r10, r10, r5
+SLOADK r11, r10
+LDI r12, 0
+ADD r11, r12, r11
+LDI r13, 1
+ADD r14, r11, r13
+SSTOREK r9, r14
+LDI r9, "family_open_capsule_end_root_by_id:"
+CONCAT r9, r9, r5
+SSTOREK r9, r8
+LDI r9, "family_open_capsule_row_count_by_id:"
+CONCAT r9, r9, r5
+SLOADK r10, r9
+LDI r11, 0
+ADD r10, r11, r10
+LDI r12, 48
+EQ r13, r10, r12
+JIF r13, 10149
+JMP 10150
+JDEST 10149
+MSTORE 1001, r5
+CALL_INT r9, 3800
+JDEST 10150
+MOV r0, r7
+STOP
+STOP
+JDEST 4000
+MLOAD r1, 1001
+MLOAD r2, 1002
+MLOAD r3, 1003
+MLOAD r4, 1004
+MLOAD r5, 1005
+MSTORE 1001, r1
+CALL_INT r6, 2400
+MSTORE 1001, r1
+CALL_INT r6, 2500
+MSTORE 1001, r2
+CALL_INT r7, 1300
+MSTORE 1001, r1
+MSTORE 1002, r6
+MSTORE 1003, r3
+MSTORE 1004, r4
+MSTORE 1005, r5
+CALL_INT r7, 3200
+LDI r7, "family_open_capsule_row_count_by_id:"
+CONCAT r7, r7, r1
+SLOADK r8, r7
+LDI r9, 0
+ADD r8, r9, r8
+LDI r10, 0
+GT r11, r8, r10
+LDI r12, true
+NEQ r12, r11, r12
+JIF r12, 10151
+LDI r13, "family_open_capsule_base_id_by_id:"
+CONCAT r13, r13, r1
+SLOADK r14, r13
+NEQ r15, r14, r2
+MOV r12, r15
+JMP 10152
+JDEST 10151
+LDI r12, false
+JDEST 10152
+JIF r12, 10153
+JMP 10154
+JDEST 10153
+MSTORE 1001, r1
+CALL_INT r7, 3800
+JDEST 10154
+LDI r7, "family_open_capsule_row_count_by_id:"
+CONCAT r7, r7, r1
+SLOADK r8, r7
+LDI r9, 0
+ADD r8, r9, r8
+LDI r10, 0
+EQ r11, r8, r10
+JIF r11, 10155
+JMP 10156
+JDEST 10155
+LDI r7, "family_open_capsule_base_id_by_id:"
+CONCAT r7, r7, r1
+SLOADK r8, r7
+NEQ r9, r8, r2
+JIF r9, 10157
+JMP 10158
+JDEST 10157
+LDI r7, "family_open_capsule_base_id_by_id:"
+CONCAT r7, r7, r1
+SSTOREK r7, r2
+LDI r7, "family_open_capsule_segment_by_id:"
+CONCAT r7, r7, r1
+LDI r8, 0
+SSTOREK r7, r8
+JDEST 10158
+LDI r7, "family_open_capsule_id_by_id:"
+CONCAT r7, r7, r1
+LDI r8, "family_open_capsule_segment_by_id:"
+CONCAT r8, r8, r1
+SLOADK r9, r8
+LDI r10, 0
+ADD r9, r10, r9
+MSTORE 1001, r2
+MSTORE 1002, r9
+CALL_INT r11, 1900
+SSTOREK r7, r11
+LDI r7, "family_open_capsule_first_index_by_id:"
+CONCAT r7, r7, r1
+SSTOREK r7, r3
+LDI r7, "family_open_capsule_start_root_by_id:"
+CONCAT r7, r7, r1
+LDI r8, "family_open_capsule_end_root_by_id:"
+CONCAT r8, r8, r1
+SLOADK r9, r8
+SSTOREK r7, r9
+JDEST 10156
+LDI r7, "family_open_capsule_id_by_id:"
+CONCAT r7, r7, r1
+SLOADK r8, r7
+MOV r7, r8
+LDI r8, "family_open_capsule_end_root_by_id:"
+CONCAT r8, r8, r1
+SLOADK r9, r8
+MSTORE 1001, r1
+MSTORE 1002, r6
+MSTORE 1003, r9
+MSTORE 1004, r5
+CALL_INT r10, 2900
+MOV r8, r10
+LDI r9, "family_latest_index_by_id:"
+CONCAT r9, r9, r1
+SSTOREK r9, r3
+LDI r9, "family_root_by_id:"
+CONCAT r9, r9, r1
+SSTOREK r9, r8
+LDI r9, "family_open_capsule_body_by_id:"
+CONCAT r9, r9, r1
+LDI r10, "family_open_capsule_body_by_id:"
+CONCAT r10, r10, r1
+SLOADK r11, r10
+CONCAT r12, r11, r5
+SSTOREK r9, r12
+LDI r9, "family_open_capsule_row_count_by_id:"
+CONCAT r9, r9, r1
+LDI r10, "family_open_capsule_row_count_by_id:"
+CONCAT r10, r10, r1
+SLOADK r11, r10
+LDI r12, 0
+ADD r11, r12, r11
+LDI r13, 1
+ADD r14, r11, r13
+SSTOREK r9, r14
+LDI r9, "family_open_capsule_end_root_by_id:"
+CONCAT r9, r9, r1
+SSTOREK r9, r8
+LDI r9, "family_open_capsule_row_count_by_id:"
+CONCAT r9, r9, r1
+SLOADK r10, r9
+LDI r11, 0
+ADD r10, r11, r10
+LDI r12, 48
+EQ r13, r10, r12
+JIF r13, 10159
+JMP 10160
+JDEST 10159
+MSTORE 1001, r1
+CALL_INT r9, 3800
+JDEST 10160
+MOV r0, r7
+STOP
+STOP
+JDEST 4100
+LDI r1, "octra-vitals-fact-ledger.v2"
+MOV r0, r1
+STOP
+STOP
+JDEST 4200
+SLOAD r1, "initialized"
+LDI r2, "true"
+EQ r1, r1, r2
+MOV r0, r1
+STOP
+STOP
+JDEST 4300
+SLOAD r1, "owner"
+MOV r0, r1
+STOP
+STOP
+JDEST 4400
+SLOAD r1, "operator"
+MOV r0, r1
+STOP
+STOP
+JDEST 4500
+SLOAD r1, "paused"
+LDI r2, "true"
+EQ r1, r1, r2
+MOV r0, r1
+STOP
+STOP
+JDEST 4600
+SLOAD r1, "successor_program"
+MOV r0, r1
+STOP
+STOP
+JDEST 4700
+SLOAD r1, "successor_set"
+LDI r2, "true"
+EQ r1, r1, r2
+MOV r0, r1
+STOP
+STOP
+JDEST 4800
+SLOAD r1, "era_program"
+MOV r0, r1
+STOP
+STOP
+JDEST 4900
+SLOAD r1, "era_network_id"
+MOV r0, r1
+STOP
+STOP
+JDEST 5000
+SLOAD r1, "predecessor_program"
+MOV r0, r1
+STOP
+STOP
+JDEST 5100
+SLOAD r1, "predecessor_final_root"
+MOV r0, r1
+STOP
+STOP
+JDEST 5200
+SLOAD r1, "predecessor_final_index"
+LDI r2, 0
+ADD r1, r2, r1
+MOV r0, r1
+STOP
+STOP
+JDEST 5300
+SLOAD r1, "predecessor_anchor_hash"
+MOV r0, r1
+STOP
+STOP
+JDEST 5400
+SLOAD r1, "era_first_snapshot_index"
+LDI r2, 0
+ADD r1, r2, r1
+MOV r0, r1
+STOP
+STOP
+JDEST 5500
+SLOAD r1, "snapshot_count"
+LDI r2, 0
+ADD r1, r2, r1
+MOV r0, r1
+STOP
+STOP
+JDEST 5600
+SLOAD r1, "latest_snapshot_index"
+LDI r2, 0
+ADD r1, r2, r1
+MOV r0, r1
+STOP
+STOP
+JDEST 5700
+SLOAD r1, "latest_snapshot_id"
+MOV r0, r1
+STOP
+STOP
+JDEST 5800
+SLOAD r1, "latest_observed_at"
+MOV r0, r1
+STOP
+STOP
+JDEST 5900
+SLOAD r1, "latest_epoch"
+LDI r2, 0
+ADD r1, r2, r1
+MOV r0, r1
+STOP
+STOP
+JDEST 6000
+SLOAD r1, "latest_payload_hash"
+MOV r0, r1
+STOP
+STOP
+JDEST 6100
+SLOAD r1, "latest_evidence_manifest_hash"
+MOV r0, r1
+STOP
+STOP
+JDEST 6200
+SLOAD r1, "latest_source_refs_hash"
+MOV r0, r1
+STOP
+STOP
+JDEST 6300
+SLOAD r1, "latest_summary_hash"
+MOV r0, r1
+STOP
+STOP
+JDEST 6400
+SLOAD r1, "latest_history_row_hash"
+MOV r0, r1
+STOP
+STOP
+JDEST 6500
+SLOAD r1, "latest_payload"
+MOV r0, r1
+STOP
+STOP
+JDEST 6600
+SLOAD r1, "latest_evidence_manifest"
+MOV r0, r1
+STOP
+STOP
+JDEST 6700
+SLOAD r1, "latest_source_refs"
+MOV r0, r1
+STOP
+STOP
+JDEST 6800
+SLOAD r1, "latest_summary"
+MOV r0, r1
+STOP
+STOP
+JDEST 6900
+SLOAD r1, "latest_history_row"
+MOV r0, r1
+STOP
+STOP
+JDEST 7000
+SLOAD r1, "latest_submitter"
+MOV r0, r1
+STOP
+STOP
+JDEST 7100
+LDI r1, 208
+MOV r0, r1
+STOP
+STOP
+JDEST 7200
+LDI r1, 295
+MOV r0, r1
+STOP
+STOP
+JDEST 7300
+LDI r1, 577
+MOV r0, r1
+STOP
+STOP
+JDEST 7400
+LDI r1, 48
+MOV r0, r1
+STOP
+STOP
+JDEST 7500
+LDI r1, 4
+MOV r0, r1
+STOP
+STOP
+JDEST 7600
+SLOAD r1, "catalog_root"
+MOV r0, r1
+STOP
+STOP
+JDEST 7700
+SLOAD r1, "family_count"
+LDI r2, 0
+ADD r1, r2, r1
+MOV r0, r1
+STOP
+STOP
+JDEST 7800
+MLOAD r1, 1001
+LDI r2, "family_id_by_ordinal:"
+CONCAT r2, r2, r1
+SLOADK r3, r2
+MOV r0, r3
+STOP
+STOP
+JDEST 7900
+MLOAD r1, 1001
+MSTORE 1001, r1
+CALL_INT r2, 2400
+LDI r2, "family_definition_by_id:"
+CONCAT r2, r2, r1
+SLOADK r3, r2
+MOV r0, r3
+STOP
+STOP
+JDEST 8000
+MLOAD r1, 1001
+MSTORE 1001, r1
+CALL_INT r2, 2400
+LDI r2, "family_root_by_id:"
+CONCAT r2, r2, r1
+SLOADK r3, r2
+MOV r0, r3
+STOP
+STOP
+JDEST 8100
+MLOAD r1, 1001
+MSTORE 1001, r1
+CALL_INT r2, 2400
+LDI r2, "family_capsules_root_by_id:"
+CONCAT r2, r2, r1
+SLOADK r3, r2
+MOV r2, r3
+LDI r3, ""
+EQ r4, r2, r3
+JIF r4, 10161
+JMP 10162
+JDEST 10161
+MSTORE 1001, r1
+CALL_INT r3, 2500
+MSTORE 1001, r1
+MSTORE 1002, r3
+CALL_INT r4, 3000
+MOV r0, r4
+STOP
+JDEST 10162
+LDI r3, "0"
+EQ r4, r2, r3
+JIF r4, 10163
+JMP 10164
+JDEST 10163
+MSTORE 1001, r1
+CALL_INT r3, 2500
+MSTORE 1001, r1
+MSTORE 1002, r3
+CALL_INT r4, 3000
+MOV r0, r4
+STOP
+JDEST 10164
+MOV r0, r2
+STOP
+STOP
+JDEST 8200
+MLOAD r1, 1001
+MSTORE 1001, r1
+CALL_INT r2, 2400
+LDI r2, "family_latest_index_by_id:"
+CONCAT r2, r2, r1
+SLOADK r3, r2
+LDI r4, 0
+ADD r3, r4, r3
+MOV r0, r3
+STOP
+STOP
+JDEST 8300
+MLOAD r1, 1001
+MSTORE 1001, r1
+CALL_INT r2, 2400
+LDI r2, "family_capsule_count_by_id:"
+CONCAT r2, r2, r1
+SLOADK r3, r2
+LDI r4, 0
+ADD r3, r4, r3
+MOV r0, r3
+STOP
+STOP
+JDEST 8400
+MLOAD r1, 1001
+MSTORE 1001, r1
+CALL_INT r2, 2400
+LDI r2, "family_latest_capsule_id_by_id:"
+CONCAT r2, r2, r1
+SLOADK r3, r2
+MOV r0, r3
+STOP
+STOP
+JDEST 8500
+MLOAD r1, 1001
+MLOAD r2, 1002
+MSTORE 1001, r1
+CALL_INT r3, 2400
+MSTORE 1001, r1
+MSTORE 1002, r2
+CALL_INT r3, 2200
+LDI r4, "family_capsule_id_by_key:"
+CONCAT r4, r4, r3
+SLOADK r5, r4
+MOV r0, r5
+STOP
+STOP
+JDEST 8600
+MLOAD r1, 1001
+MSTORE 1001, r1
+CALL_INT r2, 2400
+LDI r2, "family_open_capsule_id_by_id:"
+CONCAT r2, r2, r1
+SLOADK r3, r2
+MOV r0, r3
+STOP
+STOP
+JDEST 8700
+MLOAD r1, 1001
+MSTORE 1001, r1
+CALL_INT r2, 2400
+LDI r2, "family_open_capsule_body_by_id:"
+CONCAT r2, r2, r1
+SLOADK r3, r2
+MOV r0, r3
+STOP
+STOP
+JDEST 8800
+MLOAD r1, 1001
+MSTORE 1001, r1
+CALL_INT r2, 2400
+LDI r2, "family_open_capsule_row_count_by_id:"
+CONCAT r2, r2, r1
+SLOADK r3, r2
+LDI r4, 0
+ADD r3, r4, r3
+MOV r0, r3
+STOP
+STOP
+JDEST 8900
+MLOAD r1, 1001
+MSTORE 1001, r1
+CALL_INT r2, 2400
+LDI r2, "family_open_capsule_start_root_by_id:"
+CONCAT r2, r2, r1
+SLOADK r3, r2
+MOV r0, r3
+STOP
+STOP
+JDEST 9000
+MLOAD r1, 1001
+MSTORE 1001, r1
+CALL_INT r2, 2400
+LDI r2, "family_open_capsule_end_root_by_id:"
+CONCAT r2, r2, r1
+SLOADK r3, r2
+MOV r0, r3
+STOP
+STOP
+JDEST 9100
+MLOAD r1, 1001
+MLOAD r2, 1002
+MSTORE 1001, r1
+CALL_INT r3, 2400
+MSTORE 1001, r1
+MSTORE 1002, r2
+CALL_INT r3, 2100
+LDI r4, "family_capsule_body_by_key:"
+CONCAT r4, r4, r3
+SLOADK r5, r4
+MOV r0, r5
+STOP
+STOP
+JDEST 9200
+MLOAD r1, 1001
+MLOAD r2, 1002
+MSTORE 1001, r1
+CALL_INT r3, 2400
+MSTORE 1001, r1
+MSTORE 1002, r2
+CALL_INT r3, 2100
+LDI r4, "family_capsule_meta_by_key:"
+CONCAT r4, r4, r3
+SLOADK r5, r4
+MOV r0, r5
+STOP
+STOP
+JDEST 9300
+MLOAD r1, 1001
+MLOAD r2, 1002
+MSTORE 1001, r1
+CALL_INT r3, 2400
+MSTORE 1001, r1
+MSTORE 1002, r2
+CALL_INT r3, 2100
+LDI r4, "family_capsule_root_after_by_key:"
+CONCAT r4, r4, r3
+SLOADK r5, r4
+MOV r0, r5
+STOP
+STOP
+JDEST 9400
+LDI r1, "0000"
+LDI r2, "family_root_by_id:"
+CONCAT r2, r2, r1
+SLOADK r3, r2
+MOV r0, r3
+STOP
+STOP
+JDEST 9500
+LDI r1, "0000"
+LDI r2, "family_capsules_root_by_id:"
+CONCAT r2, r2, r1
+SLOADK r3, r2
+MOV r1, r3
+LDI r2, ""
+EQ r3, r1, r2
+JIF r3, 10165
+JMP 10166
+JDEST 10165
+LDI r2, "0000"
+LDI r3, "0000"
+MSTORE 1001, r2
+MSTORE 1002, r3
+CALL_INT r4, 3000
+MOV r0, r4
+STOP
+JDEST 10166
+LDI r2, "0"
+EQ r3, r1, r2
+JIF r3, 10167
+JMP 10168
+JDEST 10167
+LDI r2, "0000"
+LDI r3, "0000"
+MSTORE 1001, r2
+MSTORE 1002, r3
+CALL_INT r4, 3000
+MOV r0, r4
+STOP
+JDEST 10168
+MOV r0, r1
+STOP
+STOP
+JDEST 9600
+LDI r1, "0000"
+LDI r2, "family_open_capsule_body_by_id:"
+CONCAT r2, r2, r1
+SLOADK r3, r2
+MOV r0, r3
+STOP
+STOP
+JDEST 9700
+LDI r1, "0000"
+LDI r2, "family_open_capsule_row_count_by_id:"
+CONCAT r2, r2, r1
+SLOADK r3, r2
+LDI r4, 0
+ADD r3, r4, r3
+MOV r0, r3
+STOP
+STOP
+JDEST 9800
+LDI r1, "0000"
+LDI r2, "family_open_capsule_end_root_by_id:"
+CONCAT r2, r2, r1
+SLOADK r3, r2
+MOV r0, r3
+STOP
+STOP
+JDEST 9900
+LDI r1, "0000"
+LDI r2, "family_capsule_count_by_id:"
+CONCAT r2, r2, r1
+SLOADK r3, r2
+LDI r4, 0
+ADD r3, r4, r3
+MOV r0, r3
+STOP
+STOP
+JDEST 10000
+LDI r1, "0000"
+LDI r2, "family_latest_capsule_id_by_id:"
+CONCAT r2, r2, r1
+SLOADK r3, r2
+MOV r0, r3
+STOP
+STOP
+JDEST 10100
+LDI r1, "0000"
+LDI r2, "family_latest_capsule_id_by_id:"
+CONCAT r2, r2, r1
+SLOADK r3, r2
+MOV r1, r3
+LDI r2, ""
+EQ r3, r1, r2
+JIF r3, 10169
+JMP 10170
+JDEST 10169
+LDI r2, ""
+MOV r0, r2
+STOP
+JDEST 10170
+LDI r2, "0000"
+MSTORE 1001, r2
+MSTORE 1002, r1
+CALL_INT r3, 2100
+LDI r4, "family_capsule_root_after_by_key:"
+CONCAT r4, r4, r3
+SLOADK r5, r4
+MOV r0, r5
+STOP
+STOP
+JDEST 10200
+MLOAD r1, 1001
+LDI r2, "0000"
+MSTORE 1001, r2
+MSTORE 1002, r1
+CALL_INT r3, 2100
+LDI r4, "family_capsule_body_by_key:"
+CONCAT r4, r4, r3
+SLOADK r5, r4
+MOV r0, r5
+STOP
+STOP
+JDEST 10300
+MLOAD r1, 1001
+LDI r2, "0000"
+MSTORE 1001, r2
+MSTORE 1002, r1
+CALL_INT r3, 2100
+LDI r4, "family_capsule_meta_by_key:"
+CONCAT r4, r4, r3
+SLOADK r5, r4
+MOV r0, r5
+STOP
+STOP
+JDEST 10400
+SLOAD r1, "latest_snapshot_index"
+LDI r2, 0
+ADD r1, r2, r1
+LDI r3, ""
+CONCAT r3, r3, r1
+LDI r4, "|"
+CONCAT r5, r3, r4
+SLOAD r6, "latest_snapshot_id"
+CONCAT r7, r5, r6
+LDI r8, "|"
+CONCAT r9, r7, r8
+SLOAD r10, "latest_payload_hash"
+CONCAT r11, r9, r10
+LDI r12, "|"
+CONCAT r13, r11, r12
+SLOAD r14, "latest_history_row_hash"
+CONCAT r15, r13, r14
+LDI r16, "|"
+CONCAT r17, r15, r16
+LDI r18, "0000"
+LDI r19, "family_root_by_id:"
+CONCAT r19, r19, r18
+SLOADK r20, r19
+CONCAT r21, r17, r20
+LDI r22, "|"
+CONCAT r23, r21, r22
+SLOAD r24, "catalog_root"
+CONCAT r25, r23, r24
+MOV r0, r25
+STOP
+STOP
+JDEST 10500
+MLOAD r1, 1001
+MLOAD r2, 1002
+MLOAD r3, 1003
+MLOAD r4, 1004
+MLOAD r5, 1005
+MLOAD r6, 1006
+MLOAD r7, 1007
+MLOAD r8, 1008
+SLOAD r9, "initialized"
+LDI r10, "true"
+EQ r9, r9, r10
+LDI r11, true
+NEQ r11, r9, r11
+JIF r11, 10171
+LDI r12, "already initialized"
+EMIT "Require", r12
+REVERT
+JDEST 10171
+ASSERT_ADDR r1
+LDI r9, true
+ASSERT_ADDR r2
+LDI r9, true
+ASSERT_ADDR r7
+LDI r9, true
+MSTORE 1001, r6
+CALL_INT r9, 900
+MSTORE 1001, r3
+CALL_INT r9, 700
+LDI r9, 0
+LT r10, r4, r9
+LDI r11, true
+NEQ r10, r10, r11
+JIF r10, 10172
+LDI r12, "predecessor final index"
+EMIT "Require", r12
+REVERT
+JDEST 10172
+LDI r9, 1
+ADD r10, r4, r9
+EQ r11, r5, r10
+JIF r11, 10173
+LDI r12, "era first index"
+EMIT "Require", r12
+REVERT
+JDEST 10173
+LDI r9, "0000"
+MSTORE 1001, r8
+MSTORE 1002, r9
+CALL_INT r10, 2600
+LDI r9, true
+JIF r9, 10174
+LDI r10, "false"
+JMP 10175
+JDEST 10174
+LDI r10, "true"
+JDEST 10175
+SSTORE "initialized", r10
+CALLER r9
+SSTORE "owner", r9
+SSTORE "operator", r1
+SSTORE "successor_program", r7
+LDI r9, false
+JIF r9, 10176
+LDI r10, "false"
+JMP 10177
+JDEST 10176
+LDI r10, "true"
+JDEST 10177
+SSTORE "successor_set", r10
+SSTORE "era_program", r7
+SSTORE "era_network_id", r6
+SSTORE "predecessor_program", r2
+LDI r9, true
+JIF r9, 10178
+LDI r10, "false"
+JMP 10179
+JDEST 10178
+LDI r10, "true"
+JDEST 10179
+SSTORE "predecessor_set", r10
+SSTORE "predecessor_final_root", r3
+SSTORE "predecessor_final_index", r4
+LDI r9, "octra-vitals:fact-ledger-era-anchor:v1"
+LDI r10, "
+"
+CONCAT r11, r9, r10
+CONCAT r12, r11, r6
+MOV r9, r12
+LDI r10, "
+"
+CONCAT r11, r9, r10
+LDI r12, ""
+CONCAT r12, r12, r2
+CONCAT r13, r11, r12
+MOV r10, r13
+LDI r11, "
+"
+CONCAT r12, r10, r11
+CONCAT r13, r12, r3
+MOV r11, r13
+LDI r12, "
+"
+CONCAT r13, r11, r12
+LDI r14, ""
+CONCAT r14, r14, r4
+CONCAT r15, r13, r14
+MOV r12, r15
+LDI r13, "
+"
+CONCAT r14, r12, r13
+LDI r15, ""
+CONCAT r15, r15, r7
+CONCAT r16, r14, r15
+MOV r13, r16
+LDI r14, "
+"
+CONCAT r15, r13, r14
+LDI r16, ""
+CONCAT r16, r16, r5
+CONCAT r17, r15, r16
+MOV r14, r17
+LDI r15, "
+"
+CONCAT r16, r14, r15
+LDI r17, "0000"
+CONCAT r18, r16, r17
+MOV r15, r18
+SHA256 r16, r15
+SSTORE "predecessor_anchor_hash", r16
+SSTORE "era_first_snapshot_index", r5
+LDI r16, false
+JIF r16, 10180
+LDI r17, "false"
+JMP 10181
+JDEST 10180
+LDI r17, "true"
+JDEST 10181
+SSTORE "paused", r17
+SSTORE "snapshot_count", r4
+SSTORE "latest_snapshot_index", r4
+LDI r16, ""
+SSTORE "latest_snapshot_id", r16
+LDI r16, ""
+SSTORE "latest_observed_at", r16
+LDI r16, 0
+SSTORE "latest_epoch", r16
+LDI r16, ""
+SSTORE "latest_payload_hash", r16
+LDI r16, ""
+SSTORE "latest_evidence_manifest_hash", r16
+LDI r16, ""
+SSTORE "latest_source_refs_hash", r16
+LDI r16, ""
+SSTORE "latest_summary_hash", r16
+LDI r16, ""
+SSTORE "latest_history_row_hash", r16
+LDI r16, ""
+SSTORE "latest_payload", r16
+LDI r16, ""
+SSTORE "latest_evidence_manifest", r16
+LDI r16, ""
+SSTORE "latest_source_refs", r16
+LDI r16, ""
+SSTORE "latest_summary", r16
+LDI r16, ""
+SSTORE "latest_history_row", r16
+LDI r16, ""
+SSTORE "latest_submitter", r16
+LDI r16, "octra-vitals:fact-catalog-root:v1"
+LDI r17, "
+"
+CONCAT r18, r16, r17
+SHA256 r19, r18
+SSTORE "catalog_root", r19
+LDI r16, 0
+SSTORE "family_count", r16
+LDI r16, "0000"
+LDI r17, "008f25bcfca4b6697b53109e77f176f25d0475cc32097bf5925086ba0ffebdb3"
+MSTORE 1001, r16
+MSTORE 1002, r8
+MSTORE 1003, r17
+CALL_INT r18, 3500
+EMIT "Initialized", r1
+EMIT "PredecessorProgramSet", r2
+LDI r16, true
+MOV r0, r16
+STOP
+STOP
+JDEST 10600
+MLOAD r1, 1001
+MLOAD r2, 1002
+MLOAD r3, 1003
+CALL_INT r4, 300
+LDI r4, "0000"
+NEQ r5, r1, r4
+JIF r5, 10182
+LDI r6, "core already registered"
+EMIT "Require", r6
+REVERT
+JDEST 10182
+MSTORE 1001, r1
+MSTORE 1002, r2
+MSTORE 1003, r3
+CALL_INT r4, 3500
+LDI r4, true
+MOV r0, r4
+STOP
+STOP
+JDEST 10700
+MLOAD r1, 1001
+CALL_INT r2, 300
+ASSERT_ADDR r1
+LDI r2, true
+SSTORE "operator", r1
+EMIT "OperatorUpdated", r1
+LDI r2, true
+MOV r0, r2
+STOP
+STOP
+JDEST 10800
+MLOAD r1, 1001
+CALL_INT r2, 300
+JIF r1, 10183
+LDI r2, "false"
+JMP 10184
+JDEST 10183
+LDI r2, "true"
+JDEST 10184
+SSTORE "paused", r2
+EMIT "Paused", r1
+LDI r2, true
+MOV r0, r2
+STOP
+STOP
+JDEST 10900
+MLOAD r1, 1001
+CALL_INT r2, 300
+ASSERT_ADDR r1
+LDI r2, true
+SLOAD r2, "successor_set"
+LDI r3, "true"
+EQ r2, r2, r3
+LDI r4, true
+NEQ r4, r2, r4
+JIF r4, 10185
+LDI r5, "successor already set"
+EMIT "Require", r5
+REVERT
+JDEST 10185
+SSTORE "successor_program", r1
+LDI r2, true
+JIF r2, 10186
+LDI r3, "false"
+JMP 10187
+JDEST 10186
+LDI r3, "true"
+JDEST 10187
+SSTORE "successor_set", r3
+EMIT "SuccessorProgramSet", r1
+LDI r2, true
+MOV r0, r2
+STOP
+STOP
+JDEST 11000
+MLOAD r1, 1001
+MLOAD r2, 1002
+MLOAD r3, 1003
+MLOAD r4, 1004
+MLOAD r5, 1005
+MLOAD r6, 1006
+MLOAD r7, 1007
+MLOAD r8, 1008
+MLOAD r9, 1009
+CALL_INT r10, 400
+SLOAD r10, "paused"
+LDI r11, "true"
+EQ r10, r10, r11
+LDI r12, true
+NEQ r12, r10, r12
+JIF r12, 10188
+LDI r13, "paused"
+EMIT "Require", r13
+REVERT
+JDEST 10188
+MSTORE 1001, r6
+CALL_INT r10, 1100
+MSTORE 1001, r7
+CALL_INT r10, 1300
+MSTORE 1001, r6
+CALL_INT r10, 1200
+EQ r11, r7, r10
+JIF r11, 10189
+LDI r12, "capsule observed_at mismatch"
+EMIT "Require", r12
+REVERT
+JDEST 10189
+SLOAD r10, "snapshot_count"
+LDI r11, 0
+ADD r10, r11, r10
+LDI r12, 1
+ADD r13, r10, r12
+EQ r14, r9, r13
+JIF r14, 10190
+LDI r15, "snapshot index"
+EMIT "Require", r15
+REVERT
+JDEST 10190
+SLOAD r10, "era_first_snapshot_index"
+LDI r11, 0
+ADD r10, r11, r10
+LT r12, r9, r10
+LDI r13, true
+NEQ r12, r12, r13
+JIF r12, 10191
+LDI r14, "snapshot before era"
+EMIT "Require", r14
+REVERT
+JDEST 10191
+SLOAD r10, "latest_epoch"
+LDI r11, 0
+ADD r10, r11, r10
+GT r12, r8, r10
+JIF r12, 10192
+SLOAD r14, "latest_epoch"
+LDI r15, 0
+ADD r14, r15, r14
+LDI r16, 0
+EQ r17, r14, r16
+MOV r13, r17
+JMP 10193
+JDEST 10192
+LDI r13, true
+JDEST 10193
+JIF r13, 10194
+LDI r18, "snapshot moved backward"
+EMIT "Require", r18
+REVERT
+JDEST 10194
+STRLEN r10, r1
+LDI r11, 0
+GT r12, r10, r11
+JIF r12, 10195
+LDI r13, "payload required"
+EMIT "Require", r13
+REVERT
+JDEST 10195
+STRLEN r10, r2
+LDI r11, 0
+GT r12, r10, r11
+JIF r12, 10196
+LDI r13, "evidence required"
+EMIT "Require", r13
+REVERT
+JDEST 10196
+STRLEN r10, r3
+LDI r11, 0
+GT r12, r10, r11
+JIF r12, 10197
+LDI r13, "source refs required"
+EMIT "Require", r13
+REVERT
+JDEST 10197
+STRLEN r10, r4
+LDI r11, 208
+EQ r12, r10, r11
+JIF r12, 10198
+LDI r13, "summary row length"
+EMIT "Require", r13
+REVERT
+JDEST 10198
+STRLEN r10, r1
+LDI r11, 12000
+GT r12, r10, r11
+LDI r13, true
+NEQ r12, r12, r13
+JIF r12, 10199
+LDI r14, "payload too large"
+EMIT "Require", r14
+REVERT
+JDEST 10199
+STRLEN r10, r2
+LDI r11, 8000
+GT r12, r10, r11
+LDI r13, true
+NEQ r12, r12, r13
+JIF r12, 10200
+LDI r14, "evidence too large"
+EMIT "Require", r14
+REVERT
+JDEST 10200
+STRLEN r10, r3
+LDI r11, 4096
+GT r12, r10, r11
+LDI r13, true
+NEQ r12, r12, r13
+JIF r12, 10201
+LDI r14, "source refs too large"
+EMIT "Require", r14
+REVERT
+JDEST 10201
+LDI r10, "sha256:"
+LDI r11, "octra-vitals:snapshot:v0"
+LDI r12, "
+"
+CONCAT r13, r11, r12
+CONCAT r14, r13, r1
+SHA256 r15, r14
+CONCAT r16, r10, r15
+MOV r10, r16
+LDI r11, "sha256:"
+LDI r12, "octra-vitals:evidence:v0"
+LDI r13, "
+"
+CONCAT r14, r12, r13
+CONCAT r15, r14, r2
+SHA256 r16, r15
+CONCAT r17, r11, r16
+MOV r11, r17
+LDI r12, "sha256:"
+LDI r13, "octra-vitals:source-refs:v0"
+LDI r14, "
+"
+CONCAT r15, r13, r14
+CONCAT r16, r15, r3
+SHA256 r17, r16
+CONCAT r18, r12, r17
+MOV r12, r18
+LDI r13, "sha256:"
+LDI r14, "octra-vitals:summary:v0"
+LDI r15, "
+"
+CONCAT r16, r14, r15
+CONCAT r17, r16, r4
+SHA256 r18, r17
+CONCAT r19, r13, r18
+MOV r13, r19
+MSTORE 1001, r4
+MSTORE 1002, r5
+CALL_INT r14, 3400
+LDI r14, "0000"
+LDI r15, "0000"
+MSTORE 1001, r14
+MSTORE 1002, r15
+MSTORE 1003, r9
+MSTORE 1004, r10
+MSTORE 1005, r5
+CALL_INT r16, 3200
+MSTORE 1001, r7
+MSTORE 1002, r9
+MSTORE 1003, r10
+MSTORE 1004, r5
+CALL_INT r14, 3900
+LDI r15, "0000"
+LDI r16, "0000"
+MSTORE 1001, r15
+MSTORE 1002, r16
+MSTORE 1003, r5
+CALL_INT r17, 2800
+MOV r15, r17
+LDI r16, "vitals."
+CONCAT r17, r16, r6
+MOV r16, r17
+CALLER r17
+LDI r18, ""
+CONCAT r18, r18, r17
+MOV r17, r18
+SSTORE "snapshot_count", r9
+SSTORE "latest_snapshot_index", r9
+SSTORE "latest_snapshot_id", r16
+SSTORE "latest_observed_at", r6
+SSTORE "latest_epoch", r8
+SSTORE "latest_payload_hash", r10
+SSTORE "latest_evidence_manifest_hash", r11
+SSTORE "latest_source_refs_hash", r12
+SSTORE "latest_summary_hash", r13
+SSTORE "latest_history_row_hash", r15
+SSTORE "latest_payload", r1
+SSTORE "latest_evidence_manifest", r2
+SSTORE "latest_source_refs", r3
+SSTORE "latest_summary", r4
+SSTORE "latest_history_row", r5
+SSTORE "latest_submitter", r17
+EMIT "SnapshotRecorded", r16, r9, r8, r10, r15, r6, r14, r17
+LDI r18, true
+MOV r0, r18
+STOP
+STOP
+JDEST 11100
+MLOAD r1, 1001
+MLOAD r2, 1002
+MLOAD r3, 1003
+MLOAD r4, 1004
+MLOAD r5, 1005
+MLOAD r6, 1006
+MLOAD r7, 1007
+MLOAD r8, 1008
+MLOAD r9, 1009
+MLOAD r10, 1010
+MLOAD r11, 1011
+MLOAD r12, 1012
+MLOAD r13, 1013
+MLOAD r14, 1014
+CALL_INT r15, 400
+SLOAD r15, "paused"
+LDI r16, "true"
+EQ r15, r15, r16
+LDI r17, true
+NEQ r17, r15, r17
+JIF r17, 10202
+LDI r18, "paused"
+EMIT "Require", r18
+REVERT
+JDEST 10202
+MSTORE 1001, r6
+CALL_INT r15, 1100
+MSTORE 1001, r7
+CALL_INT r15, 1300
+MSTORE 1001, r6
+CALL_INT r15, 1200
+EQ r16, r7, r15
+JIF r16, 10203
+LDI r17, "capsule observed_at mismatch"
+EMIT "Require", r17
+REVERT
+JDEST 10203
+SLOAD r15, "snapshot_count"
+LDI r16, 0
+ADD r15, r16, r15
+LDI r17, 1
+ADD r18, r15, r17
+EQ r19, r9, r18
+JIF r19, 10204
+LDI r20, "snapshot index"
+EMIT "Require", r20
+REVERT
+JDEST 10204
+SLOAD r15, "era_first_snapshot_index"
+LDI r16, 0
+ADD r15, r16, r15
+LT r17, r9, r15
+LDI r18, true
+NEQ r17, r17, r18
+JIF r17, 10205
+LDI r19, "snapshot before era"
+EMIT "Require", r19
+REVERT
+JDEST 10205
+SLOAD r15, "latest_epoch"
+LDI r16, 0
+ADD r15, r16, r15
+GT r17, r8, r15
+JIF r17, 10206
+SLOAD r19, "latest_epoch"
+LDI r20, 0
+ADD r19, r20, r19
+LDI r21, 0
+EQ r22, r19, r21
+MOV r18, r22
+JMP 10207
+JDEST 10206
+LDI r18, true
+JDEST 10207
+JIF r18, 10208
+LDI r23, "snapshot moved backward"
+EMIT "Require", r23
+REVERT
+JDEST 10208
+LDI r15, 0
+LT r16, r10, r15
+LDI r17, true
+NEQ r16, r16, r17
+JIF r16, 10209
+LDI r18, "aux count negative"
+EMIT "Require", r18
+REVERT
+JDEST 10209
+LDI r15, 4
+GT r16, r10, r15
+LDI r17, true
+NEQ r16, r16, r17
+JIF r16, 10210
+LDI r18, "aux count too large"
+EMIT "Require", r18
+REVERT
+JDEST 10210
+STRLEN r15, r1
+LDI r16, 0
+GT r17, r15, r16
+JIF r17, 10211
+LDI r18, "payload required"
+EMIT "Require", r18
+REVERT
+JDEST 10211
+STRLEN r15, r2
+LDI r16, 0
+GT r17, r15, r16
+JIF r17, 10212
+LDI r18, "evidence required"
+EMIT "Require", r18
+REVERT
+JDEST 10212
+STRLEN r15, r3
+LDI r16, 0
+GT r17, r15, r16
+JIF r17, 10213
+LDI r18, "source refs required"
+EMIT "Require", r18
+REVERT
+JDEST 10213
+STRLEN r15, r4
+LDI r16, 208
+EQ r17, r15, r16
+JIF r17, 10214
+LDI r18, "summary row length"
+EMIT "Require", r18
+REVERT
+JDEST 10214
+STRLEN r15, r1
+LDI r16, 12000
+GT r17, r15, r16
+LDI r18, true
+NEQ r17, r17, r18
+JIF r17, 10215
+LDI r19, "payload too large"
+EMIT "Require", r19
+REVERT
+JDEST 10215
+STRLEN r15, r2
+LDI r16, 8000
+GT r17, r15, r16
+LDI r18, true
+NEQ r17, r17, r18
+JIF r17, 10216
+LDI r19, "evidence too large"
+EMIT "Require", r19
+REVERT
+JDEST 10216
+STRLEN r15, r3
+LDI r16, 4096
+GT r17, r15, r16
+LDI r18, true
+NEQ r17, r17, r18
+JIF r17, 10217
+LDI r19, "source refs too large"
+EMIT "Require", r19
+REVERT
+JDEST 10217
+LDI r15, "sha256:"
+LDI r16, "octra-vitals:snapshot:v0"
+LDI r17, "
+"
+CONCAT r18, r16, r17
+CONCAT r19, r18, r1
+SHA256 r20, r19
+CONCAT r21, r15, r20
+MOV r15, r21
+LDI r16, "sha256:"
+LDI r17, "octra-vitals:evidence:v0"
+LDI r18, "
+"
+CONCAT r19, r17, r18
+CONCAT r20, r19, r2
+SHA256 r21, r20
+CONCAT r22, r16, r21
+MOV r16, r22
+LDI r17, "sha256:"
+LDI r18, "octra-vitals:source-refs:v0"
+LDI r19, "
+"
+CONCAT r20, r18, r19
+CONCAT r21, r20, r3
+SHA256 r22, r21
+CONCAT r23, r17, r22
+MOV r17, r23
+LDI r18, "sha256:"
+LDI r19, "octra-vitals:summary:v0"
+LDI r20, "
+"
+CONCAT r21, r19, r20
+CONCAT r22, r21, r4
+SHA256 r23, r22
+CONCAT r24, r18, r23
+MOV r18, r24
+MSTORE 1001, r4
+MSTORE 1002, r5
+CALL_INT r19, 3400
+LDI r19, "0000"
+LDI r20, "0000"
+MSTORE 1001, r19
+MSTORE 1002, r20
+MSTORE 1003, r9
+MSTORE 1004, r15
+MSTORE 1005, r5
+CALL_INT r21, 3200
+MSTORE 1001, r7
+MSTORE 1002, r9
+MSTORE 1003, r15
+MSTORE 1004, r5
+CALL_INT r19, 3900
+LDI r20, "0000"
+LDI r21, 1
+LT r22, r10, r21
+LDI r23, true
+NEQ r22, r22, r23
+JIF r22, 10218
+MSTORE 1001, r11
+CALL_INT r21, 2000
+JIF r21, 10220
+LDI r22, "aux row 0 empty"
+EMIT "Require", r22
+REVERT
+JDEST 10220
+JMP 10219
+JDEST 10218
+MSTORE 1001, r9
+MSTORE 1002, r15
+MSTORE 1003, r11
+CALL_INT r21, 3300
+GT r22, r21, r20
+JIF r22, 10221
+LDI r23, "aux family order 0"
+EMIT "Require", r23
+REVERT
+JDEST 10221
+MSTORE 1001, r21
+MSTORE 1002, r7
+MSTORE 1003, r9
+MSTORE 1004, r15
+MSTORE 1005, r11
+CALL_INT r22, 4000
+MOV r20, r21
+JDEST 10219
+LDI r22, 2
+LT r23, r10, r22
+LDI r24, true
+NEQ r23, r23, r24
+JIF r23, 10222
+MSTORE 1001, r12
+CALL_INT r22, 2000
+JIF r22, 10224
+LDI r23, "aux row 1 empty"
+EMIT "Require", r23
+REVERT
+JDEST 10224
+JMP 10223
+JDEST 10222
+MSTORE 1001, r9
+MSTORE 1002, r15
+MSTORE 1003, r12
+CALL_INT r22, 3300
+GT r23, r22, r20
+JIF r23, 10225
+LDI r24, "aux family order 1"
+EMIT "Require", r24
+REVERT
+JDEST 10225
+MSTORE 1001, r22
+MSTORE 1002, r7
+MSTORE 1003, r9
+MSTORE 1004, r15
+MSTORE 1005, r12
+CALL_INT r23, 4000
+MOV r20, r22
+JDEST 10223
+LDI r23, 3
+LT r24, r10, r23
+LDI r25, true
+NEQ r24, r24, r25
+JIF r24, 10226
+MSTORE 1001, r13
+CALL_INT r23, 2000
+JIF r23, 10228
+LDI r24, "aux row 2 empty"
+EMIT "Require", r24
+REVERT
+JDEST 10228
+JMP 10227
+JDEST 10226
+MSTORE 1001, r9
+MSTORE 1002, r15
+MSTORE 1003, r13
+CALL_INT r23, 3300
+GT r24, r23, r20
+JIF r24, 10229
+LDI r25, "aux family order 2"
+EMIT "Require", r25
+REVERT
+JDEST 10229
+MSTORE 1001, r23
+MSTORE 1002, r7
+MSTORE 1003, r9
+MSTORE 1004, r15
+MSTORE 1005, r13
+CALL_INT r24, 4000
+MOV r20, r23
+JDEST 10227
+LDI r24, 4
+LT r25, r10, r24
+LDI r26, true
+NEQ r25, r25, r26
+JIF r25, 10230
+MSTORE 1001, r14
+CALL_INT r24, 2000
+JIF r24, 10232
+LDI r25, "aux row 3 empty"
+EMIT "Require", r25
+REVERT
+JDEST 10232
+JMP 10231
+JDEST 10230
+MSTORE 1001, r9
+MSTORE 1002, r15
+MSTORE 1003, r14
+CALL_INT r24, 3300
+GT r25, r24, r20
+JIF r25, 10233
+LDI r26, "aux family order 3"
+EMIT "Require", r26
+REVERT
+JDEST 10233
+MSTORE 1001, r24
+MSTORE 1002, r7
+MSTORE 1003, r9
+MSTORE 1004, r15
+MSTORE 1005, r14
+CALL_INT r25, 4000
+JDEST 10231
+LDI r25, "0000"
+LDI r26, "0000"
+MSTORE 1001, r25
+MSTORE 1002, r26
+MSTORE 1003, r5
+CALL_INT r27, 2800
+MOV r25, r27
+LDI r26, "vitals."
+CONCAT r27, r26, r6
+MOV r26, r27
+CALLER r27
+LDI r28, ""
+CONCAT r28, r28, r27
+MOV r27, r28
+SSTORE "snapshot_count", r9
+SSTORE "latest_snapshot_index", r9
+SSTORE "latest_snapshot_id", r26
+SSTORE "latest_observed_at", r6
+SSTORE "latest_epoch", r8
+SSTORE "latest_payload_hash", r15
+SSTORE "latest_evidence_manifest_hash", r16
+SSTORE "latest_source_refs_hash", r17
+SSTORE "latest_summary_hash", r18
+SSTORE "latest_history_row_hash", r25
+SSTORE "latest_payload", r1
+SSTORE "latest_evidence_manifest", r2
+SSTORE "latest_source_refs", r3
+SSTORE "latest_summary", r4
+SSTORE "latest_history_row", r5
+SSTORE "latest_submitter", r27
+EMIT "SnapshotRecorded", r26, r9, r8, r15, r25, r6, r19, r27
+LDI r28, true
+MOV r0, r28
+STOP
+STOP

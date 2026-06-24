@@ -10,10 +10,11 @@ contract VitalsFactLedgerState {
   const PAYLOAD_SCHEMA_VERSION = "octra-vitals-snapshot-v0"
   const SUMMARY_SCHEMA_VERSION = "octra-vitals-summary-row-v0"
   const CORE_SCHEMA_VERSION = "octra-vitals-core-accounting-v1"
-  const FACT_LEDGER_MANIFEST = "octra-vitals-fact-ledger.v1"
+  const FACT_LEDGER_MANIFEST = "octra-vitals-fact-ledger.v2"
   const FACT_LEDGER_VERSION = "00"
   const CORE_FAMILY_ID = "0000"
   const CORE_SCHEMA_ID = "0000"
+  const MAX_AUX_FACT_ROWS_PER_SNAPSHOT = 4
   const MAX_PAYLOAD_BYTES = 12000
   const MAX_MANIFEST_BYTES = 8000
   const MAX_SOURCE_REFS_BYTES = 4096
@@ -418,6 +419,21 @@ contract VitalsFactLedgerState {
     require(schema_id == substr(self.family_definition_by_id[family_id], 47, 4), "row schema")
   }
 
+  private fn aux_fact_family_id(snapshot_index: int, payload_hash: string, row: string): string {
+    require(len(row) == FACT_ROW_BYTES, "aux row length")
+    require(substr(row, 0, 2) == FACT_LEDGER_VERSION, "aux row version")
+    require(substr(row, 3, 10) == decimal_10(snapshot_index), "aux row snapshot index")
+    require(substr(row, 231, 64) == substr(payload_hash, 7, 64), "aux row payload hash")
+    let family_id = substr(row, 27, 4)
+    let schema_id = substr(row, 32, 4)
+    assert_code4(family_id)
+    assert_code4(schema_id)
+    require(family_id != CORE_FAMILY_ID, "aux row core family")
+    require_family_registered(family_id)
+    require(schema_id == schema_id_for_family(family_id), "aux row schema")
+    return family_id
+  }
+
   private fn assert_core_row_matches_summary(summary_row: string, core_row: string) {
     require(substr(core_row, 0, 2) == substr(summary_row, 0, 2), "core summary version")
     require(substr(core_row, 3, 10) == substr(summary_row, 3, 10), "core summary index")
@@ -539,6 +555,36 @@ contract VitalsFactLedgerState {
     let schema_id = CORE_SCHEMA_ID
     assert_capsule_base_id(capsule_base_id)
     require(len(row) == FACT_ROW_BYTES, "row length")
+    if self.family_open_capsule_row_count_by_id[family_id] > 0 && self.family_open_capsule_base_id_by_id[family_id] != capsule_base_id {
+      seal_family_capsule(family_id)
+    }
+    if self.family_open_capsule_row_count_by_id[family_id] == 0 {
+      if self.family_open_capsule_base_id_by_id[family_id] != capsule_base_id {
+        self.family_open_capsule_base_id_by_id[family_id] = capsule_base_id
+        self.family_open_capsule_segment_by_id[family_id] = 0
+      }
+      self.family_open_capsule_id_by_id[family_id] = capsule_id_for(capsule_base_id, self.family_open_capsule_segment_by_id[family_id])
+      self.family_open_capsule_first_index_by_id[family_id] = snapshot_index
+      self.family_open_capsule_start_root_by_id[family_id] = self.family_open_capsule_end_root_by_id[family_id]
+    }
+    let active_capsule_id = self.family_open_capsule_id_by_id[family_id]
+    let next_root = fold_family_root(family_id, schema_id, self.family_open_capsule_end_root_by_id[family_id], row)
+    self.family_latest_index_by_id[family_id] = snapshot_index
+    self.family_root_by_id[family_id] = next_root
+    self.family_open_capsule_body_by_id[family_id] = concat(self.family_open_capsule_body_by_id[family_id], row)
+    self.family_open_capsule_row_count_by_id[family_id] = self.family_open_capsule_row_count_by_id[family_id] + 1
+    self.family_open_capsule_end_root_by_id[family_id] = next_root
+    if self.family_open_capsule_row_count_by_id[family_id] == FACT_CAPSULE_ROW_LIMIT {
+      seal_family_capsule(family_id)
+    }
+    return active_capsule_id
+  }
+
+  private fn append_fact_row(family_id: string, capsule_base_id: string, snapshot_index: int, payload_hash: string, row: string): string {
+    require_family_registered(family_id)
+    let schema_id = schema_id_for_family(family_id)
+    assert_capsule_base_id(capsule_base_id)
+    assert_fact_row(family_id, schema_id, snapshot_index, payload_hash, row)
     if self.family_open_capsule_row_count_by_id[family_id] > 0 && self.family_open_capsule_base_id_by_id[family_id] != capsule_base_id {
       seal_family_capsule(family_id)
     }
@@ -698,6 +744,10 @@ contract VitalsFactLedgerState {
 
   public view fn get_capsule_row_limit(): int {
     return FACT_CAPSULE_ROW_LIMIT
+  }
+
+  public view fn get_max_aux_fact_rows_per_snapshot(): int {
+    return MAX_AUX_FACT_ROWS_PER_SNAPSHOT
   }
 
   public view fn get_catalog_root(): string {
@@ -961,6 +1011,88 @@ contract VitalsFactLedgerState {
     assert_fact_row(CORE_FAMILY_ID, CORE_SCHEMA_ID, snapshot_index, payload_hash, core_history_row)
 
     let active_capsule_id = append_core_fact_row(capsule_base_id, snapshot_index, payload_hash, core_history_row)
+    let core_row_hash = row_hash(CORE_FAMILY_ID, CORE_SCHEMA_ID, core_history_row)
+    let snapshot_id = concat("vitals.", observed_at)
+    let submitter = to_string(caller)
+
+    self.snapshot_count = snapshot_index
+    self.latest_snapshot_index = snapshot_index
+    self.latest_snapshot_id = snapshot_id
+    self.latest_observed_at = observed_at
+    self.latest_epoch = epoch_id
+    self.latest_payload_hash = payload_hash
+    self.latest_evidence_manifest_hash = evidence_manifest_hash
+    self.latest_source_refs_hash = source_refs_hash
+    self.latest_summary_hash = summary_hash
+    self.latest_history_row_hash = core_row_hash
+    self.latest_payload = canonical_payload
+    self.latest_evidence_manifest = canonical_evidence_manifest
+    self.latest_source_refs = canonical_source_refs
+    self.latest_summary = summary_row
+    self.latest_history_row = core_history_row
+    self.latest_submitter = submitter
+    emit SnapshotRecorded(snapshot_id, snapshot_index, epoch_id, payload_hash, core_row_hash, observed_at, active_capsule_id, submitter)
+    return true
+  }
+
+  public fn record_snapshot_fact_v2(canonical_payload: string, canonical_evidence_manifest: string, canonical_source_refs: string, summary_row: string, core_history_row: string, observed_at: string, capsule_base_id: string, epoch_id: int, snapshot_index: int, aux_count: int, aux_row_0: string, aux_row_1: string, aux_row_2: string, aux_row_3: string): bool {
+    only_operator()
+    require(!self.paused, "paused")
+    assert_observed_at(observed_at)
+    assert_capsule_base_id(capsule_base_id)
+    require(capsule_base_id == capsule_base_id_for_observed_at(observed_at), "capsule observed_at mismatch")
+    require(snapshot_index == self.snapshot_count + 1, "snapshot index")
+    require(snapshot_index >= self.era_first_snapshot_index, "snapshot before era")
+    require(epoch_id > self.latest_epoch || self.latest_epoch == 0, "snapshot moved backward")
+    require(aux_count >= 0, "aux count negative")
+    require(aux_count <= MAX_AUX_FACT_ROWS_PER_SNAPSHOT, "aux count too large")
+    require(len(canonical_payload) > 0, "payload required")
+    require(len(canonical_evidence_manifest) > 0, "evidence required")
+    require(len(canonical_source_refs) > 0, "source refs required")
+    require(len(summary_row) == SUMMARY_ROW_BYTES, "summary row length")
+    require(len(canonical_payload) <= MAX_PAYLOAD_BYTES, "payload too large")
+    require(len(canonical_evidence_manifest) <= MAX_MANIFEST_BYTES, "evidence too large")
+    require(len(canonical_source_refs) <= MAX_SOURCE_REFS_BYTES, "source refs too large")
+    let payload_hash = concat("sha256:", sha256(concat(concat(SNAPSHOT_HASH_DOMAIN, "\n"), canonical_payload)))
+    let evidence_manifest_hash = concat("sha256:", sha256(concat(concat(EVIDENCE_HASH_DOMAIN, "\n"), canonical_evidence_manifest)))
+    let source_refs_hash = concat("sha256:", sha256(concat(concat(SOURCE_REFS_HASH_DOMAIN, "\n"), canonical_source_refs)))
+    let summary_hash = concat("sha256:", sha256(concat(concat(SUMMARY_HASH_DOMAIN, "\n"), summary_row)))
+    assert_core_row_matches_summary(summary_row, core_history_row)
+    assert_fact_row(CORE_FAMILY_ID, CORE_SCHEMA_ID, snapshot_index, payload_hash, core_history_row)
+
+    let active_capsule_id = append_core_fact_row(capsule_base_id, snapshot_index, payload_hash, core_history_row)
+    let last_aux_family_id = CORE_FAMILY_ID
+    if aux_count >= 1 {
+      let aux_family_0 = aux_fact_family_id(snapshot_index, payload_hash, aux_row_0)
+      require(aux_family_0 > last_aux_family_id, "aux family order 0")
+      append_fact_row(aux_family_0, capsule_base_id, snapshot_index, payload_hash, aux_row_0)
+      last_aux_family_id = aux_family_0
+    } else {
+      require(is_empty_slot(aux_row_0), "aux row 0 empty")
+    }
+    if aux_count >= 2 {
+      let aux_family_1 = aux_fact_family_id(snapshot_index, payload_hash, aux_row_1)
+      require(aux_family_1 > last_aux_family_id, "aux family order 1")
+      append_fact_row(aux_family_1, capsule_base_id, snapshot_index, payload_hash, aux_row_1)
+      last_aux_family_id = aux_family_1
+    } else {
+      require(is_empty_slot(aux_row_1), "aux row 1 empty")
+    }
+    if aux_count >= 3 {
+      let aux_family_2 = aux_fact_family_id(snapshot_index, payload_hash, aux_row_2)
+      require(aux_family_2 > last_aux_family_id, "aux family order 2")
+      append_fact_row(aux_family_2, capsule_base_id, snapshot_index, payload_hash, aux_row_2)
+      last_aux_family_id = aux_family_2
+    } else {
+      require(is_empty_slot(aux_row_2), "aux row 2 empty")
+    }
+    if aux_count >= 4 {
+      let aux_family_3 = aux_fact_family_id(snapshot_index, payload_hash, aux_row_3)
+      require(aux_family_3 > last_aux_family_id, "aux family order 3")
+      append_fact_row(aux_family_3, capsule_base_id, snapshot_index, payload_hash, aux_row_3)
+    } else {
+      require(is_empty_slot(aux_row_3), "aux row 3 empty")
+    }
     let core_row_hash = row_hash(CORE_FAMILY_ID, CORE_SCHEMA_ID, core_history_row)
     let snapshot_id = concat("vitals.", observed_at)
     let submitter = to_string(caller)

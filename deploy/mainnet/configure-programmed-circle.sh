@@ -96,7 +96,7 @@ set_env "${updater_env}" VITALS_SUBMIT "${SUBMIT_DEFAULT}" 600 root
 if [ "${program_kind}" = "fact-ledger" ]; then
   set_env "${updater_env}" VITALS_PROGRAMMED_CIRCLE_PROGRAM fact-ledger 600 root
   set_env "${updater_env}" VITALS_PROGRAMMED_CIRCLE_ARTIFACT_DIR "${artifact_dir:-program-fact-ledger}" 600 root
-  set_env "${updater_env}" VITALS_RECORD_SNAPSHOT_VERSION "${record_version:-fact-v1}" 600 root
+  set_env "${updater_env}" VITALS_RECORD_SNAPSHOT_VERSION "${record_version:-fact-v2}" 600 root
   set_env "${updater_env}" VITALS_FACT_LEDGER_CUTOVER_ACK "${fact_ack}" 600 root
   set_env "${updater_env}" VITALS_FACT_LEDGER_NETWORK_ID "${fact_network}" 600 root
   set_env "${updater_env}" VITALS_FACT_LEDGER_PROGRAMMED_CIRCLE_SOURCE_HASH "${fact_source_hash}" 600 root
@@ -148,7 +148,7 @@ if [ "${program_kind}" = "fact-ledger" ]; then
   cat >> "${tmp_gateway}" <<EOF
 VITALS_PROGRAMMED_CIRCLE_PROGRAM=fact-ledger
 VITALS_PROGRAMMED_CIRCLE_ARTIFACT_DIR=${artifact_dir:-program-fact-ledger}
-VITALS_RECORD_SNAPSHOT_VERSION=${record_version:-fact-v1}
+VITALS_RECORD_SNAPSHOT_VERSION=${record_version:-fact-v2}
 VITALS_FACT_LEDGER_NETWORK_ID=${fact_network}
 VITALS_FACT_LEDGER_PROGRAMMED_CIRCLE_SOURCE_HASH=${fact_source_hash}
 VITALS_FACT_LEDGER_PROGRAMMED_CIRCLE_BYTECODE_HASH=${fact_bytecode_hash}
