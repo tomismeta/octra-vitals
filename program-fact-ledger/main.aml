@@ -482,6 +482,9 @@ contract VitalsFactLedgerState {
     if family_root_before == "" {
       family_root_before = empty_family_capsules_root(family_id, schema_id)
     }
+    if family_root_before == "0" {
+      family_root_before = empty_family_capsules_root(family_id, schema_id)
+    }
     let family_root_after = fold_family_capsules_root(family_id, schema_id, family_root_before, capsule_id, body_hash, root_after)
     let last_row_offset = (row_count - 1) * FACT_ROW_BYTES
     let capsule_count = self.family_capsule_count_by_id[family_id]
@@ -714,6 +717,9 @@ contract VitalsFactLedgerState {
     if root_value == "" {
       return empty_family_capsules_root(family_id, schema_id_for_family(family_id))
     }
+    if root_value == "0" {
+      return empty_family_capsules_root(family_id, schema_id_for_family(family_id))
+    }
     return root_value
   }
 
@@ -784,6 +790,9 @@ contract VitalsFactLedgerState {
   public view fn get_capsules_root(): string {
     let root_value = self.family_capsules_root_by_id[CORE_FAMILY_ID]
     if root_value == "" {
+      return empty_family_capsules_root(CORE_FAMILY_ID, CORE_SCHEMA_ID)
+    }
+    if root_value == "0" {
       return empty_family_capsules_root(CORE_FAMILY_ID, CORE_SCHEMA_ID)
     }
     return root_value
