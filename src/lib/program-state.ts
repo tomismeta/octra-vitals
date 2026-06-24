@@ -135,6 +135,7 @@ function factLedgerProbeReadsEnabled(): boolean {
 }
 
 function isFactLedgerManifest(manifest: string): boolean {
+  if (manifest === "octra-vitals-fact-ledger.v2") return true;
   if (manifest === "octra-vitals-fact-ledger.v1") return true;
   return manifest === "octra-vitals-fact-ledger-probe.v1" && factLedgerProbeReadsEnabled();
 }

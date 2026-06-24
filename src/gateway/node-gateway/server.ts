@@ -3,6 +3,7 @@ import http from "node:http";
 import { mkdir, readFile, stat, writeFile } from "node:fs/promises";
 import { extname, join, resolve } from "node:path";
 import { buildLiveSnapshot, publicSnapshotArtifact, writeSnapshotArtifacts } from "../../lib/snapshot.js";
+import { FACT_LEDGER_MANIFEST } from "../../lib/aml-fact-ledger.js";
 import { canonicalJson, responseHash, sha256Hex, sha256Tagged } from "../../lib/canonical-json.js";
 import { verifyCircleAssetIntegrity } from "../../lib/circle-asset-integrity.js";
 import { circleProgramViewAtUrl, configuredProgrammedCircleId, stateTargetMode, type StateTargetMode } from "../../lib/circle-program.js";
@@ -588,7 +589,7 @@ async function loadCircleProgramVerification(manifest: Record<string, any>): Pro
   const checkedAt = new Date().toISOString().replace(/\.\d{3}Z$/, "Z");
   const artifactDir = programmedCircleArtifactDir();
   const expectedAmlManifest = artifactDir === "program-fact-ledger"
-    ? "octra-vitals-fact-ledger.v1"
+    ? FACT_LEDGER_MANIFEST
     : artifactDir === "program-v1" ? "vitals-circle-state.v1" : "vitals-circle-state.v0";
   const requiredMethods = artifactDir === "program-fact-ledger"
     ? requiredCircleProgramMethodsFactV1
