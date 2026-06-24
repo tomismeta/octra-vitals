@@ -489,7 +489,7 @@ contract VitalsFactLedgerState {
     let last_row_offset = (row_count - 1) * FACT_ROW_BYTES
     let capsule_count = self.family_capsule_count_by_id[family_id]
     let meta_family = concat(concat(concat(concat(FACT_LEDGER_VERSION, "|"), family_id), "|"), schema_id)
-    let meta_capsule = concat(concat(concat(meta_family, "|00|1|"), capsule_id), "    ")
+    let meta_capsule = concat(concat(concat(meta_family, "|00|1|"), capsule_id), "      ")
     let meta_b = concat(concat(meta_capsule, "|"), concat(substr(body, 3, 10), "          "))
     let meta_c = concat(concat(meta_b, "|"), concat(substr(body, last_row_offset + 3, 10), "          "))
     let meta_d = concat(concat(meta_c, "|"), decimal_6(row_count))
