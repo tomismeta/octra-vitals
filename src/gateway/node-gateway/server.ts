@@ -10,6 +10,7 @@ import { configuredProgramAddress, readCircleProgramSummaryHistory, readLatestCi
 import { circleInfoAtUrl, circleProgramInfoAtUrl, contractCall, contractReceipt, contractSource, octraProgramRpcUrls, octraRpc, vmContract } from "../../lib/octra-rpc.js";
 import { configuredTrafficRecorder } from "../../lib/traffic.js";
 import { runtimeVitalsManifest, stableJson } from "../../lib/vitals-manifest.js";
+import { HISTORY_API_SCHEMA, LEGACY_HISTORY_SCHEMA, emptyHistoryProof, filterHistorySnapshots, historyApiCoverage, parseHistoryApiRequest } from "../../lib/history-api.js";
 import type { ProgramHistoryWindow } from "../../lib/summary-window.js";
 import type { ProgramArtifacts, SnapshotArtifact } from "../../lib/types.js";
 
@@ -215,11 +216,13 @@ function isFresh(snapshot: SnapshotArtifact): boolean {
 async function loadBaseManifest() {
   const manifest = JSON.parse(await readFile(join(appDir, "vitals.manifest.json"), "utf8"));
   const programArtifacts = await loadProgramArtifacts();
-  const circleProgramArtifacts = await loadProgramArtifacts("program-circle", "octra-vitals-program-circle-artifacts-v0");
+  const circleProgramArtifactDir = programmedCircleArtifactDir();
+  const circleProgramArtifacts = await loadProgramArtifacts(circleProgramArtifactDir, "octra-vitals-program-circle-artifacts-v0");
   const certificate = programArtifacts.formal_certificate || {};
   const verification = programArtifacts.formal_verification || {};
   const circleCertificate = circleProgramArtifacts.formal_certificate || {};
   const circleVerification = circleProgramArtifacts.formal_verification || {};
+  const factLedgerProgram = circleProgramArtifactDir === "program-fact-ledger" || process.env.VITALS_RECORD_SNAPSHOT_VERSION === "fact-v1";
   return {
     ...manifest,
     gateway_origin: chooseValue(process.env.VITALS_GATEWAY_ORIGIN, manifest.gateway_origin),
@@ -235,9 +238,27 @@ async function loadBaseManifest() {
     state_program_verification_verified: Boolean(verification.verified),
     state_program_compiler: certificate.compiler || null,
     state_program_compiler_version: certificate.compiler_version || null,
-    programmed_circle_source_hash: chooseValue(process.env.VITALS_PROGRAMMED_CIRCLE_SOURCE_HASH, manifest.programmed_circle_source_hash, prefixHash(circleCertificate.source_hash)),
-    programmed_circle_bytecode_hash: chooseValue(process.env.VITALS_PROGRAMMED_CIRCLE_BYTECODE_HASH, manifest.programmed_circle_bytecode_hash, prefixHash(circleCertificate.bytecode_hash)),
-    programmed_circle_verification_hash: chooseValue(process.env.VITALS_PROGRAMMED_CIRCLE_VERIFICATION_HASH, manifest.programmed_circle_verification_hash, prefixHash(circleCertificate.verification_hash)),
+    programmed_circle_program: chooseValue(process.env.VITALS_PROGRAMMED_CIRCLE_PROGRAM, manifest.programmed_circle_program),
+    programmed_circle_artifact_dir: circleProgramArtifactDir,
+    record_snapshot_version: chooseValue(process.env.VITALS_RECORD_SNAPSHOT_VERSION, manifest.record_snapshot_version),
+    programmed_circle_source_hash: chooseValue(
+      factLedgerProgram ? process.env.VITALS_FACT_LEDGER_PROGRAMMED_CIRCLE_SOURCE_HASH : null,
+      process.env.VITALS_PROGRAMMED_CIRCLE_SOURCE_HASH,
+      manifest.programmed_circle_source_hash,
+      prefixHash(circleCertificate.source_hash)
+    ),
+    programmed_circle_bytecode_hash: chooseValue(
+      factLedgerProgram ? process.env.VITALS_FACT_LEDGER_PROGRAMMED_CIRCLE_BYTECODE_HASH : null,
+      process.env.VITALS_PROGRAMMED_CIRCLE_BYTECODE_HASH,
+      manifest.programmed_circle_bytecode_hash,
+      prefixHash(circleCertificate.bytecode_hash)
+    ),
+    programmed_circle_verification_hash: chooseValue(
+      factLedgerProgram ? process.env.VITALS_FACT_LEDGER_PROGRAMMED_CIRCLE_VERIFICATION_HASH : null,
+      process.env.VITALS_PROGRAMMED_CIRCLE_VERIFICATION_HASH,
+      manifest.programmed_circle_verification_hash,
+      prefixHash(circleCertificate.verification_hash)
+    ),
     programmed_circle_verification_safety: chooseValue(process.env.VITALS_PROGRAMMED_CIRCLE_VERIFICATION_SAFETY, manifest.programmed_circle_verification_safety, circleVerification.safety),
     programmed_circle_verification_verified: circleVerification.verified === true,
     programmed_circle_compiler: circleCertificate.compiler || null,
@@ -456,9 +477,61 @@ const requiredCircleProgramMethodsV1 = [
   "record_snapshot_v1"
 ];
 
+const requiredCircleProgramMethodsFactV1 = [
+  "manifest",
+  "is_initialized",
+  "get_owner",
+  "get_operator",
+  "is_paused",
+  "get_successor_program",
+  "is_successor_set",
+  "get_era_program",
+  "get_era_network_id",
+  "get_predecessor_program",
+  "get_predecessor_final_root",
+  "get_predecessor_final_index",
+  "get_predecessor_anchor_hash",
+  "get_era_first_snapshot_index",
+  "get_snapshot_count",
+  "get_latest_snapshot_index",
+  "get_latest_snapshot_id",
+  "get_latest_observed_at",
+  "get_latest_epoch",
+  "get_latest_payload_hash",
+  "get_latest_evidence_manifest_hash",
+  "get_latest_source_refs_hash",
+  "get_latest_summary_hash",
+  "get_latest_history_row_hash",
+  "get_latest_snapshot",
+  "get_latest_evidence_manifest",
+  "get_latest_source_refs",
+  "get_latest_summary",
+  "get_latest_history_row",
+  "get_catalog_root",
+  "get_family_count",
+  "get_family_id_at",
+  "get_family_definition",
+  "get_family_root",
+  "get_family_latest_index",
+  "get_family_capsule_count",
+  "get_family_latest_capsule_id",
+  "get_family_capsule_id_at",
+  "get_family_open_capsule_id",
+  "get_family_open_capsule_body",
+  "get_family_open_capsule_row_count",
+  "get_family_open_capsule_start_root",
+  "get_family_open_capsule_end_root",
+  "get_family_capsule_body",
+  "get_family_capsule_meta",
+  "get_family_capsule_root_after",
+  "get_latest_bundle",
+  "record_snapshot_fact_v1"
+];
+
 function programmedCircleArtifactDir(): string {
   const configured = process.env.VITALS_PROGRAMMED_CIRCLE_ARTIFACT_DIR;
   if (configured && !configured.includes("..") && !configured.includes("/") && !configured.includes("\\")) return configured;
+  if (process.env.VITALS_RECORD_SNAPSHOT_VERSION === "fact-v1") return "program-fact-ledger";
   return process.env.VITALS_RECORD_SNAPSHOT_VERSION === "v1" ? "program-v1" : "program-circle";
 }
 
@@ -511,28 +584,39 @@ async function loadCircleProgramVerification(manifest: Record<string, any>): Pro
 
   const checkedAt = new Date().toISOString().replace(/\.\d{3}Z$/, "Z");
   const artifactDir = programmedCircleArtifactDir();
-  const expectedAmlManifest = artifactDir === "program-v1" ? "vitals-circle-state.v1" : "vitals-circle-state.v0";
-  const requiredMethods = artifactDir === "program-v1" ? requiredCircleProgramMethodsV1 : requiredCircleProgramMethods;
+  const expectedAmlManifest = artifactDir === "program-fact-ledger"
+    ? "octra-vitals-fact-ledger.v1"
+    : artifactDir === "program-v1" ? "vitals-circle-state.v1" : "vitals-circle-state.v0";
+  const requiredMethods = artifactDir === "program-fact-ledger"
+    ? requiredCircleProgramMethodsFactV1
+    : artifactDir === "program-v1" ? requiredCircleProgramMethodsV1 : requiredCircleProgramMethods;
   const sourceResult = await readFile(join(root, artifactDir, "main.aml"), "utf8").then(
     (source) => ({ source, source_hash: `sha256:${sha256Hex(source)}` }),
     () => null
   );
   const localArtifacts = await loadProgramArtifacts(artifactDir, "octra-vitals-program-circle-artifacts-v0");
-  const localVerification = localArtifacts.formal_verification || {};
-  const localCertificate = localArtifacts.formal_certificate || {};
+  const compileArtifact = await readJsonIfExists<Record<string, any>>(join(root, "build", artifactDir, "compile.json"));
+  const localVerification = localArtifacts.formal_verification || compileArtifact?.verification || {};
+  const localCertificate = localArtifacts.formal_certificate || compileArtifact?.certificate || {};
   const deployReport = await loadProgrammedCircleDeployReport();
   const compatibleDeployReport = artifactDir === "program-v1" && deployReport?.schema !== "octra-vitals-program-v1-devnet-deploy-v0"
     ? null
     : deployReport;
-  const expectedBytecodeHash = artifactDir === "program-v1"
-    ? normalizeHash(process.env.VITALS_PROGRAMMED_CIRCLE_V1_BYTECODE_HASH || localCertificate.bytecode_hash || compatibleDeployReport?.bytecode_hash || process.env.VITALS_PROGRAMMED_CIRCLE_BYTECODE_HASH || manifest.programmed_circle_bytecode_hash)
-    : normalizeHash(process.env.VITALS_PROGRAMMED_CIRCLE_BYTECODE_HASH || manifest.programmed_circle_bytecode_hash || deployReport?.bytecode_hash || localCertificate.bytecode_hash);
-  const expectedSourceHash = artifactDir === "program-v1"
-    ? normalizeHash(process.env.VITALS_PROGRAMMED_CIRCLE_V1_SOURCE_HASH || sourceResult?.source_hash || localCertificate.source_hash || compatibleDeployReport?.source_hash || process.env.VITALS_PROGRAMMED_CIRCLE_SOURCE_HASH || manifest.programmed_circle_source_hash)
-    : normalizeHash(process.env.VITALS_PROGRAMMED_CIRCLE_SOURCE_HASH || manifest.programmed_circle_source_hash || deployReport?.source_hash || sourceResult?.source_hash || localCertificate.source_hash);
-  const expectedVerificationHash = artifactDir === "program-v1"
-    ? normalizeHash(process.env.VITALS_PROGRAMMED_CIRCLE_V1_VERIFICATION_HASH || localCertificate.verification_hash || process.env.VITALS_PROGRAMMED_CIRCLE_VERIFICATION_HASH || manifest.programmed_circle_verification_hash)
-    : normalizeHash(process.env.VITALS_PROGRAMMED_CIRCLE_VERIFICATION_HASH || manifest.programmed_circle_verification_hash || localCertificate.verification_hash);
+  const expectedBytecodeHash = artifactDir === "program-fact-ledger"
+    ? normalizeHash(process.env.VITALS_FACT_LEDGER_PROGRAMMED_CIRCLE_BYTECODE_HASH || localCertificate.bytecode_hash || compileArtifact?.bytecode_hash || process.env.VITALS_PROGRAMMED_CIRCLE_BYTECODE_HASH || manifest.programmed_circle_bytecode_hash)
+    : artifactDir === "program-v1"
+      ? normalizeHash(process.env.VITALS_PROGRAMMED_CIRCLE_V1_BYTECODE_HASH || localCertificate.bytecode_hash || compatibleDeployReport?.bytecode_hash || process.env.VITALS_PROGRAMMED_CIRCLE_BYTECODE_HASH || manifest.programmed_circle_bytecode_hash)
+      : normalizeHash(process.env.VITALS_PROGRAMMED_CIRCLE_BYTECODE_HASH || manifest.programmed_circle_bytecode_hash || deployReport?.bytecode_hash || localCertificate.bytecode_hash);
+  const expectedSourceHash = artifactDir === "program-fact-ledger"
+    ? normalizeHash(process.env.VITALS_FACT_LEDGER_PROGRAMMED_CIRCLE_SOURCE_HASH || sourceResult?.source_hash || localCertificate.source_hash || compileArtifact?.source_hash || process.env.VITALS_PROGRAMMED_CIRCLE_SOURCE_HASH || manifest.programmed_circle_source_hash)
+    : artifactDir === "program-v1"
+      ? normalizeHash(process.env.VITALS_PROGRAMMED_CIRCLE_V1_SOURCE_HASH || sourceResult?.source_hash || localCertificate.source_hash || compatibleDeployReport?.source_hash || process.env.VITALS_PROGRAMMED_CIRCLE_SOURCE_HASH || manifest.programmed_circle_source_hash)
+      : normalizeHash(process.env.VITALS_PROGRAMMED_CIRCLE_SOURCE_HASH || manifest.programmed_circle_source_hash || deployReport?.source_hash || sourceResult?.source_hash || localCertificate.source_hash);
+  const expectedVerificationHash = artifactDir === "program-fact-ledger"
+    ? normalizeHash(process.env.VITALS_FACT_LEDGER_PROGRAMMED_CIRCLE_VERIFICATION_HASH || localCertificate.verification_hash || compileArtifact?.verification_hash || process.env.VITALS_PROGRAMMED_CIRCLE_VERIFICATION_HASH || manifest.programmed_circle_verification_hash)
+    : artifactDir === "program-v1"
+      ? normalizeHash(process.env.VITALS_PROGRAMMED_CIRCLE_V1_VERIFICATION_HASH || localCertificate.verification_hash || process.env.VITALS_PROGRAMMED_CIRCLE_VERIFICATION_HASH || manifest.programmed_circle_verification_hash)
+      : normalizeHash(process.env.VITALS_PROGRAMMED_CIRCLE_VERIFICATION_HASH || manifest.programmed_circle_verification_hash || localCertificate.verification_hash);
   const expectedOwner = chooseValue(process.env.VITALS_CIRCLE_OWNER_ADDRESS, process.env.VITALS_DEPLOYER_ADDRESS, manifest.programmed_circle_owner_address, deployReport?.deployer_address);
   const expectedOperator = chooseValue(process.env.VITALS_CIRCLE_OPERATOR_ADDRESS, process.env.VITALS_OPERATOR_ADDRESS, manifest.programmed_circle_operator_address, deployReport?.operator_address);
   const configuredMinProgramRpcUrls = positiveIntegerEnv("VITALS_MIN_PROGRAM_RPC_URLS", 1);
@@ -607,6 +691,7 @@ async function loadCircleProgramVerification(manifest: Record<string, any>): Pro
   const value = {
     checked_at: checkedAt,
     circle_id: circleId,
+    artifact_dir: artifactDir,
     program_info_available: Boolean(program),
     circle_info_available: Boolean(circle),
     has_program: program?.has_program === true,
@@ -1657,13 +1742,20 @@ async function serveSiteIntegrity(res: http.ServerResponse, head = false): Promi
   }, {}, head);
 }
 
-async function serveHistory(res: http.ServerResponse, head = false): Promise<void> {
+async function serveHistory(res: http.ServerResponse, url: URL, head = false): Promise<void> {
   const manifest = await loadBaseManifest();
   const target = configuredStateTarget(manifest);
+  const historyRequest = parseHistoryApiRequest(url.searchParams);
   if (!target.id) {
+    const coverage = historyApiCoverage([], [], historyRequest);
     return json(res, 200, {
-      schema: "octra-vitals-snapshot-history-v0",
+      schema: LEGACY_HISTORY_SCHEMA,
+      api_schema: HISTORY_API_SCHEMA,
+      history_model: "unavailable",
       generated_at: new Date().toISOString().replace(/\.\d{3}Z$/, "Z"),
+      request: historyRequest,
+      coverage,
+      proof: emptyHistoryProof("unavailable", false),
       snapshots: [],
       authority: {
         source: "unavailable",
@@ -1675,7 +1767,7 @@ async function serveHistory(res: http.ServerResponse, head = false): Promise<voi
   }
   try {
     const history = await readVerifiedCanonicalHistory(target);
-    const snapshots = history.rows.map((row) => ({
+    const allSnapshots = history.rows.map((row) => ({
       snapshot_index: row.snapshot_index,
       snapshot_id: `vitals.${new Date(row.observed_at_unix * 1000).toISOString().replace(/\.\d{3}Z$/, "Z")}`,
       observed_at: new Date(row.observed_at_unix * 1000).toISOString().replace(/\.\d{3}Z$/, "Z"),
@@ -1695,18 +1787,27 @@ async function serveHistory(res: http.ServerResponse, head = false): Promise<voi
         unclaimed_oct_raw: row.total_unclaimed_raw
       }
     }));
+    const snapshots = filterHistorySnapshots(allSnapshots, historyRequest);
+    const coverage = historyApiCoverage(allSnapshots, snapshots, historyRequest);
+    const historyModel = history.history_discovery || "aml_summary_window";
     return json(res, 200, {
-      schema: "octra-vitals-snapshot-history-v0",
+      schema: LEGACY_HISTORY_SCHEMA,
+      api_schema: HISTORY_API_SCHEMA,
+      history_model: historyModel,
       generated_at: new Date().toISOString().replace(/\.\d{3}Z$/, "Z"),
+      request: historyRequest,
       first_index: history.first_index,
-      row_count: history.row_count,
+      row_count: snapshots.length,
+      available_row_count: history.row_count,
       row_len: history.row_len,
       window_hash: history.window_hash,
+      coverage,
+      proof: emptyHistoryProof(historyModel, true),
       snapshots,
       authority: {
         source: target.kind === "circle_program" ? "vitals_circle_program_history" : "vitals_state_program_history",
         canonical_state_read: true,
-        history_discovery: history.history_discovery || "aml_summary_window",
+        history_discovery: historyModel,
         state_target_mode: target.kind,
         state_target_id: target.id,
         state_program_address: target.kind === "state_program" ? target.id : configuredProgramAddress(manifest.state_program_address),
@@ -1716,9 +1817,15 @@ async function serveHistory(res: http.ServerResponse, head = false): Promise<voi
     }, {}, head);
   } catch (error) {
     historyError = error instanceof Error ? error : new Error(String(error));
+    const coverage = historyApiCoverage([], [], historyRequest);
     return json(res, 200, {
-      schema: "octra-vitals-snapshot-history-v0",
+      schema: LEGACY_HISTORY_SCHEMA,
+      api_schema: HISTORY_API_SCHEMA,
+      history_model: "unavailable",
       generated_at: new Date().toISOString().replace(/\.\d{3}Z$/, "Z"),
+      request: historyRequest,
+      coverage,
+      proof: emptyHistoryProof("unavailable", false),
       snapshots: [],
       authority: {
         source: "unavailable",
@@ -1903,7 +2010,7 @@ async function route(req: http.IncomingMessage, res: http.ServerResponse): Promi
   if (url.pathname === "/api/version" || url.pathname === "/version") return serveVersion(res, head);
   if (url.pathname === "/api/native-readiness") return serveNativeReadiness(res, head);
   if (url.pathname === "/api/site-integrity") return serveSiteIntegrity(res, head);
-  if (url.pathname === "/api/history") return serveHistory(res, head);
+  if (url.pathname === "/api/history") return serveHistory(res, url, head);
   if (url.pathname === "/api/program/artifacts") return serveProgramArtifacts(res, head);
   if (url.pathname === "/health") return json(res, 200, { ok: true, service: "octra-vitals-gateway" }, {}, head);
   if (url.pathname.startsWith("/api/evidence/")) return serveEvidence(res, url, head);

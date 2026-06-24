@@ -5,6 +5,64 @@ gates below pass.
 
 Date: 2026-06-23
 
+## Current Implementation Status
+
+Initial additive implementation work has started without changing any live
+devnet or mainnet target.
+
+- `src/lib/aml-fact-ledger.ts` pins the fact-family fixed-width codecs, roots,
+  and capsule metadata.
+- `program-fact-ledger-probe/main.aml` is a disposable Gate 0 substrate probe.
+- `program-fact-ledger/main.aml` is the first production-shaped candidate. It
+  preserves the latest snapshot/evidence/source-ref getter surface, records
+  family `0000` core accounting rows, seals immutable capsules, enumerates
+  sealed capsules by ordinal, and stores predecessor era anchors.
+- `src/scripts/build-record-snapshot-call.ts` can emit explicit `fact-v1`
+  record bundles behind `VITALS_RECORD_SNAPSHOT_VERSION=fact-v1`.
+- `src/scripts/submit-snapshot.ts` requires a target-bound
+  `VITALS_FACT_LEDGER_CUTOVER_ACK=fact-v1:<target_kind>:<target_id>` and a
+  live `manifest() == octra-vitals-fact-ledger.v1` preflight before any
+  `fact-v1` write is signed.
+- `/api/history` remains the normalized UI contract and can request a 30-day
+  window while the gateway reads recent fact-family capsules.
+- `npm run fact-ledger-probe:compile` passed Octra AML compilation and formal
+  verification on 2026-06-23:
+
+```text
+source_hash       sha256:a9a1b9f55d80c2ce591258da54a4dfee5503c400927df254d78975fa0bbb4ac9
+bytecode_hash     sha256:2544030e6df0010cce003f0e9030f5b2a3ee1a3ca0d45cfd22970e228e89e375
+verification_hash sha256:755b81d964fe3cff6cf9979f6eb358c44941ffd4f266cef7f5abda5734d35a05
+safety            safe
+verified          true
+instructions      1407
+size              8702
+```
+
+This proves the small generic substrate compiles and verifies with stricter
+row-key, capsule-id, and capsule-metadata checks. It does **not** mean devnet or
+mainnet is ready to cut over. The probe does not replace the production
+latest-bundle program surface, and it does not yet provide sealed range reads.
+
+- `npm run fact-ledger-program:compile` passed Octra AML compilation and formal
+  verification on 2026-06-23:
+
+```text
+source_hash       sha256:cd3ab1807b2d813e8e207fe4866d7299efe59ff1fc7c2dc2f09a9e899375bd66
+bytecode_hash     sha256:5f65e1c69d33cb3f8f35545d5ffebdfe4b1257ed1b4a7bfd3dbed382d8f5057a
+verification_hash sha256:d40c7c252a68d1db5899e8168b1a3aa9efbe4e89c44ddf36d8b1d787836d86a2
+safety            safe
+verified          true
+instructions      2999
+size              18579
+```
+
+This proves the production-shaped candidate compiles and verifies locally. It
+still is **not** a devnet cutover approval. Before devnet cutover, the project
+must run a disposable devnet/programmed-Circle rehearsal that initializes the
+candidate, records real or fixture snapshots with `fact-v1`, seals through a
+capsule boundary, reads recent sealed capsules through `/api/history`, and
+passes the reviewer gates.
+
 ## Instruction
 
 Implement the **fact-family ledger** path, not the interim simple capsule log.
@@ -18,6 +76,7 @@ Primary target spec:
 
 - [AML Extensible Fact Ledger Proposal](aml-extensible-fact-ledger-proposal.md)
 - [ADR 0002: AML History Era Model](adr-0002-aml-history-era-model.md)
+- [Fact Ledger API and UI Compatibility Evaluation](fact-ledger-api-ui-compatibility.md)
 
 Interim proof docs, now superseded for mainnet:
 
@@ -184,6 +243,7 @@ This is not AML-only work. The gateway and browser verifier are co-equal.
 
 They must support:
 
+- the existing latest-bundle getter surface used by `/api/latest`;
 - family-aware reads;
 - family definition/state discovery from AML, not gateway-local config;
 - per-family capsule verification;

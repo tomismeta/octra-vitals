@@ -152,7 +152,11 @@ function touchesProducerRuntime(path: string): boolean {
 }
 
 function touchesProgram(path: string): boolean {
-  return path.startsWith("program-circle/") || path.startsWith("program/");
+  return path.startsWith("program-circle/") ||
+    path.startsWith("program/") ||
+    path.startsWith("program-v1/") ||
+    path.startsWith("program-fact-ledger/") ||
+    path.startsWith("program-fact-ledger-probe/");
 }
 
 const gatewayUrl = stripSlash(argValue("--gateway-url") || process.env.DEPLOY_GATEWAY_URL || process.env.VITALS_GATEWAY_ORIGIN || "https://octra.live");

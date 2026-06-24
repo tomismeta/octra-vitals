@@ -53,6 +53,8 @@
     "history-body-map-probe:resume-devnet": "npm run history-body-map-probe:compile && node dist/scripts/run-history-body-map-resumable-devnet.js",
     "history-body-map-probe:circle-devnet": "npm run history-body-map-probe:compile && node dist/scripts/run-history-body-map-circle-probe-devnet.js",
     "history-body-map-probe:circle-cadence-devnet": "npm run history-body-map-probe:compile && node dist/scripts/run-history-body-map-circle-cadence-devnet.js",
+    "fact-ledger-probe:compile": "npm run build && node dist/scripts/compile-fact-ledger-probe.js",
+    "fact-ledger-program:compile": "npm run build && node dist/scripts/compile-fact-ledger-program.js",
     "history:benchmark": "npm run build && node dist/scripts/benchmark-history-verification.js",
     "history:cost-model": "npm run build && node dist/scripts/model-history-costs.js",
     "release:plan": "bash deploy/mainnet/plan-release.sh",
@@ -60,8 +62,8 @@
     "circle:deploy": "npm run build && node dist/scripts/build-producer-audit-manifest.js && node dist/scripts/deploy-site-circle.js",
     "circle:verify": "npm run build && node dist/scripts/build-producer-audit-manifest.js && node dist/scripts/deploy-site-circle.js --dry-run",
     "circle:programmed:deploy": "npm run program-circle:compile && npm run program-circle:verify && node dist/scripts/deploy-programmed-circle.js",
-    "circle:programmed:deploy:dist": "node dist/scripts/verify-programmed-circle-artifacts.js && node dist/scripts/deploy-programmed-circle.js",
-    "native:verify": "npm run test && npm run canonical:verify && npm run program:compile && npm run program:verify && npm run program-circle:compile && npm run program-circle:verify && npm run circle:release && npm run circle:verify"
+    "circle:programmed:deploy:dist": "node dist/scripts/deploy-programmed-circle.js",
+    "native:verify": "npm run test && npm run canonical:verify && npm run program:compile && npm run program:verify && npm run program-circle:compile && npm run program-circle:verify && npm run fact-ledger-probe:compile && npm run fact-ledger-program:compile && npm run circle:release && npm run circle:verify"
   },
   "engines": {
     "node": ">=22.0.0"

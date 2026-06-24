@@ -47,6 +47,14 @@ fi
 circle_id="$(node -e 'const fs=require("fs"); const r=JSON.parse(fs.readFileSync(process.argv[1],"utf8")); process.stdout.write(r.circle_id || "")' "${REPORT}")"
 caller="$(node -e 'const fs=require("fs"); const r=JSON.parse(fs.readFileSync(process.argv[1],"utf8")); process.stdout.write(r.env_next?.VITALS_CIRCLE_VIEW_CALLER_ADDRESS || r.deployer_address || "")' "${REPORT}")"
 operator="$(node -e 'const fs=require("fs"); const r=JSON.parse(fs.readFileSync(process.argv[1],"utf8")); process.stdout.write(r.operator_address || "")' "${REPORT}")"
+program_kind="$(node -e 'const fs=require("fs"); const r=JSON.parse(fs.readFileSync(process.argv[1],"utf8")); process.stdout.write(r.program_kind || "")' "${REPORT}")"
+artifact_dir="$(node -e 'const fs=require("fs"); const r=JSON.parse(fs.readFileSync(process.argv[1],"utf8")); process.stdout.write(r.env_next?.VITALS_PROGRAMMED_CIRCLE_ARTIFACT_DIR || r.artifact_dir || "")' "${REPORT}")"
+record_version="$(node -e 'const fs=require("fs"); const r=JSON.parse(fs.readFileSync(process.argv[1],"utf8")); process.stdout.write(r.env_next?.VITALS_RECORD_SNAPSHOT_VERSION || "")' "${REPORT}")"
+fact_ack="$(node -e 'const fs=require("fs"); const r=JSON.parse(fs.readFileSync(process.argv[1],"utf8")); process.stdout.write(r.env_next?.VITALS_FACT_LEDGER_CUTOVER_ACK || "")' "${REPORT}")"
+fact_network="$(node -e 'const fs=require("fs"); const r=JSON.parse(fs.readFileSync(process.argv[1],"utf8")); process.stdout.write(r.env_next?.VITALS_FACT_LEDGER_NETWORK_ID || "")' "${REPORT}")"
+fact_source_hash="$(node -e 'const fs=require("fs"); const r=JSON.parse(fs.readFileSync(process.argv[1],"utf8")); process.stdout.write(r.env_next?.VITALS_FACT_LEDGER_PROGRAMMED_CIRCLE_SOURCE_HASH || "")' "${REPORT}")"
+fact_bytecode_hash="$(node -e 'const fs=require("fs"); const r=JSON.parse(fs.readFileSync(process.argv[1],"utf8")); process.stdout.write(r.env_next?.VITALS_FACT_LEDGER_PROGRAMMED_CIRCLE_BYTECODE_HASH || "")' "${REPORT}")"
+fact_verification_hash="$(node -e 'const fs=require("fs"); const r=JSON.parse(fs.readFileSync(process.argv[1],"utf8")); process.stdout.write(r.env_next?.VITALS_FACT_LEDGER_PROGRAMMED_CIRCLE_VERIFICATION_HASH || "")' "${REPORT}")"
 
 if [ -z "${circle_id}" ] || [ "${circle_id}" = "pending" ]; then
   echo "programmed Circle id missing from ${REPORT}" >&2
@@ -85,10 +93,20 @@ set_env "${updater_env}" VITALS_CIRCLE_OPERATOR_ADDRESS "${operator}" 600 root
 set_env "${updater_env}" VITALS_SITE_CIRCLE_ID "${circle_id}" 600 root
 set_env "${updater_env}" VITALS_STATIC_ASSET_SOURCE "${STATIC_ASSET_SOURCE}" 600 root
 set_env "${updater_env}" VITALS_SUBMIT "${SUBMIT_DEFAULT}" 600 root
+if [ "${program_kind}" = "fact-ledger" ]; then
+  set_env "${updater_env}" VITALS_PROGRAMMED_CIRCLE_PROGRAM fact-ledger 600 root
+  set_env "${updater_env}" VITALS_PROGRAMMED_CIRCLE_ARTIFACT_DIR "${artifact_dir:-program-fact-ledger}" 600 root
+  set_env "${updater_env}" VITALS_RECORD_SNAPSHOT_VERSION "${record_version:-fact-v1}" 600 root
+  set_env "${updater_env}" VITALS_FACT_LEDGER_CUTOVER_ACK "${fact_ack}" 600 root
+  set_env "${updater_env}" VITALS_FACT_LEDGER_NETWORK_ID "${fact_network}" 600 root
+  set_env "${updater_env}" VITALS_FACT_LEDGER_PROGRAMMED_CIRCLE_SOURCE_HASH "${fact_source_hash}" 600 root
+  set_env "${updater_env}" VITALS_FACT_LEDGER_PROGRAMMED_CIRCLE_BYTECODE_HASH "${fact_bytecode_hash}" 600 root
+  set_env "${updater_env}" VITALS_FACT_LEDGER_PROGRAMMED_CIRCLE_VERIFICATION_HASH "${fact_verification_hash}" 600 root
+fi
 sudo install -d -m 770 -o "${APP_USER}" -g "${APP_USER}" "${DATA_DIR}/watchdog"
 
 tmp_gateway="$(mktemp)"
-for key in ETH_RPC_URL OCTRA_OBSERVATION_RPC_URL OCTRA_PROGRAM_RPC_URL OCTRA_PROGRAM_RPC_URLS RELAYER_URL VITALS_APP_VERSION VITALS_GATEWAY_ORIGIN VITALS_CORS_ALLOW_ORIGIN; do
+for key in ETH_RPC_URL OCTRA_OBSERVATION_RPC_URL OCTRA_PROGRAM_RPC_URL OCTRA_PROGRAM_RPC_URLS RELAYER_URL VITALS_APP_VERSION VITALS_GATEWAY_ORIGIN VITALS_CORS_ALLOW_ORIGIN VITALS_OCTRA_SCAN_ADDRESS_URL VITALS_OCTRA_SCAN_TX_URL OCTRA_SCAN_ADDRESS_URL OCTRA_SCAN_TX_URL; do
   value="$(sudo grep -E "^${key}=" "${updater_env}" | tail -n1 | cut -d= -f2- || true)"
   if [ -n "${value}" ]; then
     printf '%s=%s\n' "${key}" "${value}" >> "${tmp_gateway}"
@@ -126,6 +144,17 @@ VITALS_TRAFFIC_TRUST_PROXY_HEADERS=$(gateway_value VITALS_TRAFFIC_TRUST_PROXY_HE
 VITALS_TRAFFIC_FLUSH_MS=$(gateway_value VITALS_TRAFFIC_FLUSH_MS 2000)
 VITALS_TRAFFIC_DIAGNOSTIC_PATH_LIMIT=$(gateway_value VITALS_TRAFFIC_DIAGNOSTIC_PATH_LIMIT 100)
 EOF
+if [ "${program_kind}" = "fact-ledger" ]; then
+  cat >> "${tmp_gateway}" <<EOF
+VITALS_PROGRAMMED_CIRCLE_PROGRAM=fact-ledger
+VITALS_PROGRAMMED_CIRCLE_ARTIFACT_DIR=${artifact_dir:-program-fact-ledger}
+VITALS_RECORD_SNAPSHOT_VERSION=${record_version:-fact-v1}
+VITALS_FACT_LEDGER_NETWORK_ID=${fact_network}
+VITALS_FACT_LEDGER_PROGRAMMED_CIRCLE_SOURCE_HASH=${fact_source_hash}
+VITALS_FACT_LEDGER_PROGRAMMED_CIRCLE_BYTECODE_HASH=${fact_bytecode_hash}
+VITALS_FACT_LEDGER_PROGRAMMED_CIRCLE_VERIFICATION_HASH=${fact_verification_hash}
+EOF
+fi
 sudo install -m 640 -o root -g "${APP_USER}" "${tmp_gateway}" "${gateway_env}"
 rm -f "${tmp_gateway}"
 

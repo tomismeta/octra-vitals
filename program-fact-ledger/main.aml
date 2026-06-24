@@ -1,0 +1,918 @@
+// Octra Vitals fact-family ledger state program.
+// Candidate successor for devnet rehearsal. Do not deploy to mainnet without the
+// fact-ledger cutover gates and an explicit production approval.
+
+contract VitalsFactLedgerState {
+  const SNAPSHOT_HASH_DOMAIN = "octra-vitals:snapshot:v0"
+  const EVIDENCE_HASH_DOMAIN = "octra-vitals:evidence:v0"
+  const SOURCE_REFS_HASH_DOMAIN = "octra-vitals:source-refs:v0"
+  const SUMMARY_HASH_DOMAIN = "octra-vitals:summary:v0"
+  const PAYLOAD_SCHEMA_VERSION = "octra-vitals-snapshot-v0"
+  const SUMMARY_SCHEMA_VERSION = "octra-vitals-summary-row-v0"
+  const CORE_SCHEMA_VERSION = "octra-vitals-core-accounting-v1"
+  const FACT_LEDGER_MANIFEST = "octra-vitals-fact-ledger.v1"
+  const FACT_LEDGER_VERSION = "00"
+  const CORE_FAMILY_ID = "0000"
+  const CORE_SCHEMA_ID = "0000"
+  const MAX_PAYLOAD_BYTES = 12000
+  const MAX_MANIFEST_BYTES = 8000
+  const MAX_SOURCE_REFS_BYTES = 4096
+  const SUMMARY_ROW_BYTES = 208
+  const FACT_FAMILY_DEFINITION_BYTES = 702
+  const FACT_ROW_BYTES = 295
+  const FACT_CAPSULE_META_BYTES = 577
+  const FACT_CAPSULE_ROW_LIMIT = 48
+  const ROW_HASH_DOMAIN = "octra-vitals:fact-row:v1"
+  const FAMILY_ROOT_DOMAIN = "octra-vitals:fact-family-root:v1"
+  const CAPSULE_BODY_HASH_DOMAIN = "octra-vitals:fact-capsule-body:v1"
+  const CAPSULE_META_HASH_DOMAIN = "octra-vitals:fact-capsule-meta:v1"
+  const CATALOG_ROOT_DOMAIN = "octra-vitals:fact-catalog-root:v1"
+  const ERA_ANCHOR_HASH_DOMAIN = "octra-vitals:fact-ledger-era-anchor:v1"
+  const EMPTY_TX_INDEX_HASH = "0000000000000000000000000000000000000000000000000000000000000000"
+  const EMPTY_CORE_FAMILY_ROOT = "008f25bcfca4b6697b53109e77f176f25d0475cc32097bf5925086ba0ffebdb3"
+
+  state {
+    initialized: bool
+    owner: address
+    operator: address
+    successor_program: address
+    successor_set: bool
+    era_program: address
+    era_network_id: string
+    predecessor_program: address
+    predecessor_set: bool
+    predecessor_final_root: string
+    predecessor_final_index: int
+    predecessor_anchor_hash: string
+    era_first_snapshot_index: int
+    paused: bool
+
+    snapshot_count: int
+    latest_snapshot_index: int
+    latest_snapshot_id: string
+    latest_observed_at: string
+    latest_epoch: int
+    latest_payload_hash: string
+    latest_evidence_manifest_hash: string
+    latest_source_refs_hash: string
+    latest_summary_hash: string
+    latest_history_row_hash: string
+    latest_payload: string
+    latest_evidence_manifest: string
+    latest_source_refs: string
+    latest_summary: string
+    latest_history_row: string
+    latest_submitter: string
+
+    catalog_root: string
+    family_count: int
+    family_id_by_ordinal: map[string]string
+    family_definition_by_id: map[string]string
+    family_root_by_id: map[string]string
+    family_latest_index_by_id: map[string]int
+    family_capsule_count_by_id: map[string]int
+    family_latest_capsule_id_by_id: map[string]string
+    family_open_capsule_base_id_by_id: map[string]string
+    family_open_capsule_segment_by_id: map[string]int
+    family_open_capsule_id_by_id: map[string]string
+    family_open_capsule_body_by_id: map[string]string
+    family_open_capsule_row_count_by_id: map[string]int
+    family_open_capsule_first_index_by_id: map[string]int
+    family_open_capsule_start_root_by_id: map[string]string
+    family_open_capsule_end_root_by_id: map[string]string
+    family_capsule_id_by_key: map[string]string
+    family_capsule_body_by_key: map[string]string
+    family_capsule_meta_by_key: map[string]string
+    family_capsule_root_after_by_key: map[string]string
+  }
+
+  event Initialized(operator: address)
+  event SnapshotRecorded(snapshot_id: string, snapshot_index: int, epoch_id: int, payload_hash: string, history_row_hash: string, observed_at: string, capsule_id: string, submitter: string)
+  event FamilyRegistered(family_id: string, schema_id: string, row_len: int)
+  event FamilyCapsuleSealed(family_id: string, capsule_id: string, row_count: int, body_hash: string, meta_hash: string, root_after: string)
+  event SuccessorProgramSet(program_addr: address)
+  event PredecessorProgramSet(program_addr: address)
+  event OperatorUpdated(operator: address)
+  event Paused(paused: bool)
+
+  constructor() {
+    self.initialized = false
+    self.snapshot_count = 0
+    self.latest_snapshot_index = 0
+    self.latest_snapshot_id = ""
+    self.latest_observed_at = ""
+    self.latest_epoch = 0
+    self.latest_payload_hash = ""
+    self.latest_evidence_manifest_hash = ""
+    self.latest_source_refs_hash = ""
+    self.latest_summary_hash = ""
+    self.latest_history_row_hash = ""
+    self.latest_payload = ""
+    self.latest_evidence_manifest = ""
+    self.latest_source_refs = ""
+    self.latest_summary = ""
+    self.latest_history_row = ""
+    self.catalog_root = sha256(concat(CATALOG_ROOT_DOMAIN, "\n"))
+    self.family_count = 0
+  }
+
+  private fn require_initialized() {
+    require(self.initialized, "not initialized")
+  }
+
+  private fn only_owner() {
+    require_initialized()
+    require(origin == self.owner, "not owner")
+  }
+
+  private fn only_operator() {
+    require_initialized()
+    require(origin == self.owner || origin == self.operator, "not operator")
+  }
+
+  private fn assert_digit(digit_text: string) {
+    require(digit_text >= "0", "digit low")
+    require(digit_text <= "9", "digit high")
+  }
+
+  private fn assert_hash(hash_text: string) {
+    require(substr(hash_text, 0, 7) == "sha256:", "hash prefix")
+    require(len(hash_text) == 71, "hash length")
+  }
+
+  private fn assert_hex64(hash_text: string) {
+    require(len(hash_text) == 64, "hex64 length")
+  }
+
+  private fn assert_code4(code: string) {
+    require(len(code) == 4, "code4 length")
+    assert_digit(substr(code, 0, 1))
+    assert_digit(substr(code, 1, 1))
+    assert_digit(substr(code, 2, 1))
+    assert_digit(substr(code, 3, 1))
+  }
+
+  private fn assert_network_id(network_id: string) {
+    require(len(network_id) > 0, "network id required")
+    require(len(network_id) <= 32, "network id too long")
+  }
+
+  private fn assert_snapshot_id(snapshot_id: string) {
+    require(len(snapshot_id) >= 16, "snapshot id too short")
+    require(len(snapshot_id) <= 64, "snapshot id too long")
+    require(substr(snapshot_id, 0, 7) == "vitals.", "snapshot id prefix")
+  }
+
+  private fn assert_observed_at(observed_at: string) {
+    assert_digit(substr(observed_at, 0, 1))
+    assert_digit(substr(observed_at, 1, 1))
+    assert_digit(substr(observed_at, 2, 1))
+    assert_digit(substr(observed_at, 3, 1))
+    require(substr(observed_at, 4, 1) == "-", "observed_at year separator")
+    assert_digit(substr(observed_at, 5, 1))
+    assert_digit(substr(observed_at, 6, 1))
+    require(substr(observed_at, 7, 1) == "-", "observed_at month separator")
+    assert_digit(substr(observed_at, 8, 1))
+    assert_digit(substr(observed_at, 9, 1))
+    require(substr(observed_at, 10, 1) == "T", "observed_at time separator")
+    assert_digit(substr(observed_at, 11, 1))
+    assert_digit(substr(observed_at, 12, 1))
+    require(substr(observed_at, 13, 1) == ":", "observed_at hour separator")
+    assert_digit(substr(observed_at, 14, 1))
+    assert_digit(substr(observed_at, 15, 1))
+    require(substr(observed_at, 16, 1) == ":", "observed_at minute separator")
+    assert_digit(substr(observed_at, 17, 1))
+    assert_digit(substr(observed_at, 18, 1))
+    require(substr(observed_at, 19, 1) == "Z", "observed_at UTC suffix")
+  }
+
+  private fn assert_capsule_base_id(capsule_base_id: string) {
+    require(len(capsule_base_id) == 13, "capsule base id length")
+    assert_digit(substr(capsule_base_id, 0, 1))
+    assert_digit(substr(capsule_base_id, 1, 1))
+    assert_digit(substr(capsule_base_id, 2, 1))
+    assert_digit(substr(capsule_base_id, 3, 1))
+    require(substr(capsule_base_id, 4, 1) == "-", "capsule year separator")
+    assert_digit(substr(capsule_base_id, 5, 1))
+    assert_digit(substr(capsule_base_id, 6, 1))
+    require(substr(capsule_base_id, 7, 1) == "-", "capsule month separator")
+    assert_digit(substr(capsule_base_id, 8, 1))
+    assert_digit(substr(capsule_base_id, 9, 1))
+    require(substr(capsule_base_id, 10, 1) == "T", "capsule time separator")
+    require(substr(capsule_base_id, 11, 2) == "00" || substr(capsule_base_id, 11, 2) == "12", "capsule hour boundary")
+  }
+
+  private fn assert_capsule_id(capsule_id: string) {
+    require(len(capsule_id) == 18, "capsule id length")
+    assert_capsule_base_id(substr(capsule_id, 0, 13))
+    require(substr(capsule_id, 13, 1) == ".", "capsule segment separator")
+    assert_digit(substr(capsule_id, 14, 1))
+    assert_digit(substr(capsule_id, 15, 1))
+    assert_digit(substr(capsule_id, 16, 1))
+    assert_digit(substr(capsule_id, 17, 1))
+  }
+
+  private fn decimal_4(count_value: int): string {
+    require(count_value >= 0, "decimal_4 negative")
+    require(count_value <= 9999, "decimal_4 too large")
+    let count_text = to_string(count_value)
+    if count_value < 10 {
+      return concat("000", count_text)
+    }
+    if count_value < 100 {
+      return concat("00", count_text)
+    }
+    if count_value < 1000 {
+      return concat("0", count_text)
+    }
+    return count_text
+  }
+
+  private fn decimal_6(count_value: int): string {
+    require(count_value >= 0, "decimal_6 negative")
+    require(count_value <= 999999, "decimal_6 too large")
+    let count_text = to_string(count_value)
+    if count_value < 10 {
+      return concat("00000", count_text)
+    }
+    if count_value < 100 {
+      return concat("0000", count_text)
+    }
+    if count_value < 1000 {
+      return concat("000", count_text)
+    }
+    if count_value < 10000 {
+      return concat("00", count_text)
+    }
+    if count_value < 100000 {
+      return concat("0", count_text)
+    }
+    return count_text
+  }
+
+  private fn decimal_8(count_value: int): string {
+    require(count_value >= 0, "decimal_8 negative")
+    require(count_value <= 99999999, "decimal_8 too large")
+    let count_text = to_string(count_value)
+    if count_value < 10 {
+      return concat("0000000", count_text)
+    }
+    if count_value < 100 {
+      return concat("000000", count_text)
+    }
+    if count_value < 1000 {
+      return concat("00000", count_text)
+    }
+    if count_value < 10000 {
+      return concat("0000", count_text)
+    }
+    if count_value < 100000 {
+      return concat("000", count_text)
+    }
+    if count_value < 1000000 {
+      return concat("00", count_text)
+    }
+    if count_value < 10000000 {
+      return concat("0", count_text)
+    }
+    return count_text
+  }
+
+  private fn decimal_10(count_value: int): string {
+    require(count_value >= 0, "decimal_10 negative")
+    require(count_value <= 9999999999, "decimal_10 too large")
+    let count_text = to_string(count_value)
+    if count_value < 10 {
+      return concat("000000000", count_text)
+    }
+    if count_value < 100 {
+      return concat("00000000", count_text)
+    }
+    if count_value < 1000 {
+      return concat("0000000", count_text)
+    }
+    if count_value < 10000 {
+      return concat("000000", count_text)
+    }
+    if count_value < 100000 {
+      return concat("00000", count_text)
+    }
+    if count_value < 1000000 {
+      return concat("0000", count_text)
+    }
+    if count_value < 10000000 {
+      return concat("000", count_text)
+    }
+    if count_value < 100000000 {
+      return concat("00", count_text)
+    }
+    if count_value < 1000000000 {
+      return concat("0", count_text)
+    }
+    return count_text
+  }
+
+  private fn capsule_id_for(capsule_base_id: string, capsule_segment: int): string {
+    return concat(concat(capsule_base_id, "."), decimal_4(capsule_segment))
+  }
+
+  private fn is_empty_slot(slot_value: string): bool {
+    return slot_value == "" || slot_value == "0"
+  }
+
+  private fn family_capsule_key(family_id: string, capsule_id: string): string {
+    assert_code4(family_id)
+    return concat(concat(family_id, "|"), capsule_id)
+  }
+
+  private fn family_capsule_ordinal_key(family_id: string, ordinal: int): string {
+    assert_code4(family_id)
+    require(ordinal >= 0, "ordinal negative")
+    return concat(concat(family_id, "|"), decimal_8(ordinal))
+  }
+
+  private fn is_family_registered(family_id: string): bool {
+    assert_code4(family_id)
+    return !is_empty_slot(self.family_definition_by_id[family_id])
+  }
+
+  private fn require_family_registered(family_id: string) {
+    require(is_family_registered(family_id), "unknown family")
+  }
+
+  private fn schema_id_for_family(family_id: string): string {
+    require_family_registered(family_id)
+    return substr(self.family_definition_by_id[family_id], 47, 4)
+  }
+
+  private fn assert_family_definition(definition: string, family_id: string) {
+    require(len(definition) == FACT_FAMILY_DEFINITION_BYTES, "family definition length")
+    require(substr(definition, 0, 2) == FACT_LEDGER_VERSION, "family definition version")
+    require(substr(definition, 2, 1) == "|", "family definition separator")
+    require(substr(definition, 3, 4) == family_id, "family definition id")
+    require(substr(definition, 44, 2) == "00", "only one_per_snapshot")
+    require(substr(definition, 85, 4) == "0295", "row len")
+    require(substr(definition, len(definition) - 2, 2) == "00", "family active")
+  }
+
+  private fn fold_catalog_root(start_root: string, definition: string): string {
+    let definition_hash = sha256(concat(concat(CATALOG_ROOT_DOMAIN, "\n"), definition))
+    return sha256(concat(concat(concat(CATALOG_ROOT_DOMAIN, "\n"), start_root), concat("\n", definition_hash)))
+  }
+
+  private fn row_hash(family_id: string, schema_id: string, row: string): string {
+    let row_key = concat(substr(row, 3, 10), "          ")
+    let text_a = concat(concat(ROW_HASH_DOMAIN, "\n"), FACT_LEDGER_MANIFEST)
+    let text_b = concat(concat(text_a, "\n"), family_id)
+    let text_c = concat(concat(text_b, "\n"), schema_id)
+    let text_d = concat(concat(text_c, "\n"), row_key)
+    let text_e = concat(concat(text_d, "\n"), row)
+    return sha256(text_e)
+  }
+
+  private fn fold_family_root(family_id: string, schema_id: string, start_root: string, row: string): string {
+    let row_hash_value = row_hash(family_id, schema_id, row)
+    let text_a = concat(concat(FAMILY_ROOT_DOMAIN, "\n"), FACT_LEDGER_MANIFEST)
+    let text_b = concat(concat(text_a, "\n"), family_id)
+    let text_c = concat(concat(text_b, "\n"), schema_id)
+    let text_d = concat(concat(text_c, "\n"), start_root)
+    let text_e = concat(concat(text_d, "\n"), row_hash_value)
+    return sha256(text_e)
+  }
+
+  private fn assert_fact_row(family_id: string, schema_id: string, snapshot_index: int, payload_hash: string, row: string) {
+    require(len(row) == FACT_ROW_BYTES, "row length")
+    require(substr(row, 0, 2) == FACT_LEDGER_VERSION, "row version")
+    require(substr(row, 3, 10) == decimal_10(snapshot_index), "row snapshot index")
+    require(substr(row, 231, 64) == substr(payload_hash, 7, 64), "row payload hash")
+    require(schema_id == substr(self.family_definition_by_id[family_id], 47, 4), "row schema")
+  }
+
+  private fn assert_core_row_matches_summary(summary_row: string, core_row: string) {
+    require(substr(core_row, 0, 2) == substr(summary_row, 0, 2), "core summary version")
+    require(substr(core_row, 3, 10) == substr(summary_row, 3, 10), "core summary index")
+    require(substr(core_row, 14, 12) == substr(summary_row, 14, 12), "core summary observed")
+    require(substr(core_row, 27, 12) == substr(summary_row, 27, 12), "core summary epoch")
+    require(substr(core_row, 40, 12) == substr(summary_row, 40, 12), "core summary external block")
+    require(substr(core_row, 74, 20) == substr(summary_row, 53, 20), "core summary issued")
+    require(substr(core_row, 95, 20) == substr(summary_row, 74, 20), "core summary burned")
+    require(substr(core_row, 116, 20) == substr(summary_row, 95, 20), "core summary encrypted")
+    require(substr(core_row, 137, 20) == substr(summary_row, 116, 20), "core summary locked")
+    require(substr(core_row, 158, 20) == substr(summary_row, 137, 20), "core summary wrapped")
+    require(substr(core_row, 179, 20) == substr(summary_row, 158, 20), "core summary unclaimed")
+    require(substr(core_row, 226, 4) == substr(summary_row, 179, 4), "core summary route count")
+    require(substr(core_row, 231, 24) == substr(summary_row, 184, 24), "core summary payload prefix")
+  }
+
+  private fn register_family_internal(family_id: string, definition: string, empty_family_root: string) {
+    assert_code4(family_id)
+    assert_hex64(empty_family_root)
+    assert_family_definition(definition, family_id)
+    require(!is_family_registered(family_id), "family already registered")
+    require(self.family_count < 9999, "too many families")
+    let ordinal_key = decimal_4(self.family_count)
+    self.family_id_by_ordinal[ordinal_key] = family_id
+    self.family_definition_by_id[family_id] = definition
+    self.family_root_by_id[family_id] = empty_family_root
+    self.family_latest_index_by_id[family_id] = self.predecessor_final_index
+    self.family_capsule_count_by_id[family_id] = 0
+    self.family_latest_capsule_id_by_id[family_id] = ""
+    self.family_open_capsule_base_id_by_id[family_id] = ""
+    self.family_open_capsule_segment_by_id[family_id] = 0
+    self.family_open_capsule_id_by_id[family_id] = ""
+    self.family_open_capsule_body_by_id[family_id] = ""
+    self.family_open_capsule_row_count_by_id[family_id] = 0
+    self.family_open_capsule_first_index_by_id[family_id] = 0
+    self.family_open_capsule_start_root_by_id[family_id] = empty_family_root
+    self.family_open_capsule_end_root_by_id[family_id] = empty_family_root
+    self.catalog_root = fold_catalog_root(self.catalog_root, definition)
+    self.family_count = self.family_count + 1
+    emit FamilyRegistered(family_id, schema_id_for_family(family_id), FACT_ROW_BYTES)
+  }
+
+  private fn fact_capsule_body_hash(family_id: string, schema_id: string, body: string): string {
+    let text_a = concat(concat(CAPSULE_BODY_HASH_DOMAIN, "\n"), FACT_LEDGER_MANIFEST)
+    let text_b = concat(concat(text_a, "\n"), family_id)
+    let text_c = concat(concat(text_b, "\n"), schema_id)
+    let text_d = concat(concat(text_c, "\n"), body)
+    return sha256(text_d)
+  }
+
+  private fn fact_capsule_meta_hash(meta_row: string): string {
+    return sha256(concat(concat(CAPSULE_META_HASH_DOMAIN, "\n"), meta_row))
+  }
+
+  private fn seal_family_capsule(family_id: string) {
+    require_family_registered(family_id)
+    let row_count = self.family_open_capsule_row_count_by_id[family_id]
+    require(row_count > 0, "capsule empty")
+    require(row_count <= FACT_CAPSULE_ROW_LIMIT, "capsule overfull")
+    let capsule_id = self.family_open_capsule_id_by_id[family_id]
+    let key = family_capsule_key(family_id, capsule_id)
+    require(is_empty_slot(self.family_capsule_body_by_key[key]), "capsule body already sealed")
+    require(is_empty_slot(self.family_capsule_meta_by_key[key]), "capsule meta already sealed")
+    require(is_empty_slot(self.family_capsule_root_after_by_key[key]), "capsule root already sealed")
+
+    let schema_id = schema_id_for_family(family_id)
+    let body = self.family_open_capsule_body_by_id[family_id]
+    let body_hash = fact_capsule_body_hash(family_id, schema_id, body)
+    let root_after = self.family_open_capsule_end_root_by_id[family_id]
+    let last_row_offset = (row_count - 1) * FACT_ROW_BYTES
+    let capsule_count = self.family_capsule_count_by_id[family_id]
+    let meta_family = concat(concat(concat(concat(FACT_LEDGER_VERSION, "|"), family_id), "|"), schema_id)
+    let meta_capsule = concat(concat(concat(meta_family, "|00|1|"), capsule_id), "      ")
+    let meta_b = concat(concat(meta_capsule, "|"), concat(substr(body, 3, 10), "          "))
+    let meta_c = concat(concat(meta_b, "|"), concat(substr(body, last_row_offset + 3, 10), "          "))
+    let meta_d = concat(concat(meta_c, "|"), decimal_6(row_count))
+    let meta_e = concat(concat(meta_d, "|0295|"), substr(body, 14, 12))
+    let meta_f = concat(concat(meta_e, "|"), substr(body, last_row_offset + 14, 12))
+    let meta_g = concat(concat(meta_f, "|"), body_hash)
+    let meta_h = concat(concat(meta_g, "|"), self.family_open_capsule_start_root_by_id[family_id])
+    let meta_i = concat(concat(meta_h, "|"), root_after)
+    let meta_j = concat(concat(meta_i, "|"), EMPTY_TX_INDEX_HASH)
+    let meta_k = concat(concat(meta_j, "|"), self.family_open_capsule_start_root_by_id[family_id])
+    let meta_l = concat(concat(meta_k, "|"), root_after)
+    let meta_row = concat(concat(meta_l, "|"), self.catalog_root)
+    require(len(meta_row) == FACT_CAPSULE_META_BYTES, "capsule meta length")
+    let meta_hash = fact_capsule_meta_hash(meta_row)
+
+    self.family_capsule_body_by_key[key] = body
+    self.family_capsule_meta_by_key[key] = meta_row
+    self.family_capsule_root_after_by_key[key] = root_after
+    self.family_capsule_id_by_key[family_capsule_ordinal_key(family_id, capsule_count)] = capsule_id
+    self.family_capsule_count_by_id[family_id] = capsule_count + 1
+    self.family_latest_capsule_id_by_id[family_id] = capsule_id
+    emit FamilyCapsuleSealed(family_id, capsule_id, row_count, body_hash, meta_hash, root_after)
+
+    require(self.family_open_capsule_segment_by_id[family_id] < 9999, "capsule segment overfull")
+    self.family_open_capsule_segment_by_id[family_id] = self.family_open_capsule_segment_by_id[family_id] + 1
+    self.family_open_capsule_id_by_id[family_id] = ""
+    self.family_open_capsule_body_by_id[family_id] = ""
+    self.family_open_capsule_row_count_by_id[family_id] = 0
+    self.family_open_capsule_first_index_by_id[family_id] = 0
+    self.family_open_capsule_start_root_by_id[family_id] = root_after
+    self.family_open_capsule_end_root_by_id[family_id] = root_after
+  }
+
+  private fn append_core_fact_row(capsule_base_id: string, snapshot_index: int, payload_hash: string, row: string): string {
+    let family_id = CORE_FAMILY_ID
+    let schema_id = CORE_SCHEMA_ID
+    require(len(row) == FACT_ROW_BYTES, "row length")
+    if self.family_open_capsule_row_count_by_id[family_id] > 0 && self.family_open_capsule_base_id_by_id[family_id] != capsule_base_id {
+      seal_family_capsule(family_id)
+    }
+    if self.family_open_capsule_row_count_by_id[family_id] == 0 {
+      if self.family_open_capsule_base_id_by_id[family_id] != capsule_base_id {
+        self.family_open_capsule_base_id_by_id[family_id] = capsule_base_id
+        self.family_open_capsule_segment_by_id[family_id] = 0
+      }
+      self.family_open_capsule_id_by_id[family_id] = capsule_id_for(capsule_base_id, self.family_open_capsule_segment_by_id[family_id])
+      self.family_open_capsule_first_index_by_id[family_id] = snapshot_index
+      self.family_open_capsule_start_root_by_id[family_id] = self.family_open_capsule_end_root_by_id[family_id]
+    }
+    let active_capsule_id = self.family_open_capsule_id_by_id[family_id]
+    let next_root = fold_family_root(family_id, schema_id, self.family_open_capsule_end_root_by_id[family_id], row)
+    self.family_latest_index_by_id[family_id] = snapshot_index
+    self.family_root_by_id[family_id] = next_root
+    self.family_open_capsule_body_by_id[family_id] = concat(self.family_open_capsule_body_by_id[family_id], row)
+    self.family_open_capsule_row_count_by_id[family_id] = self.family_open_capsule_row_count_by_id[family_id] + 1
+    self.family_open_capsule_end_root_by_id[family_id] = next_root
+    if self.family_open_capsule_row_count_by_id[family_id] == FACT_CAPSULE_ROW_LIMIT {
+      seal_family_capsule(family_id)
+    }
+    return active_capsule_id
+  }
+
+  public view fn manifest(): string {
+    return FACT_LEDGER_MANIFEST
+  }
+
+  public view fn is_initialized(): bool {
+    return self.initialized
+  }
+
+  public view fn get_owner(): address {
+    return self.owner
+  }
+
+  public view fn get_operator(): address {
+    return self.operator
+  }
+
+  public view fn is_paused(): bool {
+    return self.paused
+  }
+
+  public view fn get_successor_program(): address {
+    return self.successor_program
+  }
+
+  public view fn is_successor_set(): bool {
+    return self.successor_set
+  }
+
+  public view fn get_era_program(): address {
+    return self.era_program
+  }
+
+  public view fn get_era_network_id(): string {
+    return self.era_network_id
+  }
+
+  public view fn get_predecessor_program(): address {
+    return self.predecessor_program
+  }
+
+  public view fn get_predecessor_final_root(): string {
+    return self.predecessor_final_root
+  }
+
+  public view fn get_predecessor_final_index(): int {
+    return self.predecessor_final_index
+  }
+
+  public view fn get_predecessor_anchor_hash(): string {
+    return self.predecessor_anchor_hash
+  }
+
+  public view fn get_era_first_snapshot_index(): int {
+    return self.era_first_snapshot_index
+  }
+
+  public view fn get_snapshot_count(): int {
+    return self.snapshot_count
+  }
+
+  public view fn get_latest_snapshot_index(): int {
+    return self.latest_snapshot_index
+  }
+
+  public view fn get_latest_snapshot_id(): string {
+    return self.latest_snapshot_id
+  }
+
+  public view fn get_latest_observed_at(): string {
+    return self.latest_observed_at
+  }
+
+  public view fn get_latest_epoch(): int {
+    return self.latest_epoch
+  }
+
+  public view fn get_latest_payload_hash(): string {
+    return self.latest_payload_hash
+  }
+
+  public view fn get_latest_evidence_manifest_hash(): string {
+    return self.latest_evidence_manifest_hash
+  }
+
+  public view fn get_latest_source_refs_hash(): string {
+    return self.latest_source_refs_hash
+  }
+
+  public view fn get_latest_summary_hash(): string {
+    return self.latest_summary_hash
+  }
+
+  public view fn get_latest_history_row_hash(): string {
+    return self.latest_history_row_hash
+  }
+
+  public view fn get_latest_snapshot(): string {
+    return self.latest_payload
+  }
+
+  public view fn get_latest_evidence_manifest(): string {
+    return self.latest_evidence_manifest
+  }
+
+  public view fn get_latest_source_refs(): string {
+    return self.latest_source_refs
+  }
+
+  public view fn get_latest_summary(): string {
+    return self.latest_summary
+  }
+
+  public view fn get_latest_history_row(): string {
+    return self.latest_history_row
+  }
+
+  public view fn get_latest_submitter(): string {
+    return self.latest_submitter
+  }
+
+  public view fn get_summary_row_len(): int {
+    return SUMMARY_ROW_BYTES
+  }
+
+  public view fn get_history_row_len(): int {
+    return FACT_ROW_BYTES
+  }
+
+  public view fn get_capsule_meta_len(): int {
+    return FACT_CAPSULE_META_BYTES
+  }
+
+  public view fn get_capsule_row_limit(): int {
+    return FACT_CAPSULE_ROW_LIMIT
+  }
+
+  public view fn get_catalog_root(): string {
+    return self.catalog_root
+  }
+
+  public view fn get_family_count(): int {
+    return self.family_count
+  }
+
+  public view fn get_family_id_at(ordinal: string): string {
+    return self.family_id_by_ordinal[ordinal]
+  }
+
+  public view fn get_family_definition(family_id: string): string {
+    require_family_registered(family_id)
+    return self.family_definition_by_id[family_id]
+  }
+
+  public view fn get_family_root(family_id: string): string {
+    require_family_registered(family_id)
+    return self.family_root_by_id[family_id]
+  }
+
+  public view fn get_family_latest_index(family_id: string): int {
+    require_family_registered(family_id)
+    return self.family_latest_index_by_id[family_id]
+  }
+
+  public view fn get_family_capsule_count(family_id: string): int {
+    require_family_registered(family_id)
+    return self.family_capsule_count_by_id[family_id]
+  }
+
+  public view fn get_family_latest_capsule_id(family_id: string): string {
+    require_family_registered(family_id)
+    return self.family_latest_capsule_id_by_id[family_id]
+  }
+
+  public view fn get_family_capsule_id_at(family_id: string, ordinal: int): string {
+    require_family_registered(family_id)
+    return self.family_capsule_id_by_key[family_capsule_ordinal_key(family_id, ordinal)]
+  }
+
+  public view fn get_family_open_capsule_id(family_id: string): string {
+    require_family_registered(family_id)
+    return self.family_open_capsule_id_by_id[family_id]
+  }
+
+  public view fn get_family_open_capsule_body(family_id: string): string {
+    require_family_registered(family_id)
+    return self.family_open_capsule_body_by_id[family_id]
+  }
+
+  public view fn get_family_open_capsule_row_count(family_id: string): int {
+    require_family_registered(family_id)
+    return self.family_open_capsule_row_count_by_id[family_id]
+  }
+
+  public view fn get_family_open_capsule_start_root(family_id: string): string {
+    require_family_registered(family_id)
+    return self.family_open_capsule_start_root_by_id[family_id]
+  }
+
+  public view fn get_family_open_capsule_end_root(family_id: string): string {
+    require_family_registered(family_id)
+    return self.family_open_capsule_end_root_by_id[family_id]
+  }
+
+  public view fn get_family_capsule_body(family_id: string, capsule_id: string): string {
+    require_family_registered(family_id)
+    return self.family_capsule_body_by_key[family_capsule_key(family_id, capsule_id)]
+  }
+
+  public view fn get_family_capsule_meta(family_id: string, capsule_id: string): string {
+    require_family_registered(family_id)
+    return self.family_capsule_meta_by_key[family_capsule_key(family_id, capsule_id)]
+  }
+
+  public view fn get_family_capsule_root_after(family_id: string, capsule_id: string): string {
+    require_family_registered(family_id)
+    return self.family_capsule_root_after_by_key[family_capsule_key(family_id, capsule_id)]
+  }
+
+  public view fn get_history_root(): string {
+    return self.family_root_by_id[CORE_FAMILY_ID]
+  }
+
+  public view fn get_open_capsule_body(): string {
+    return self.family_open_capsule_body_by_id[CORE_FAMILY_ID]
+  }
+
+  public view fn get_open_capsule_row_count(): int {
+    return self.family_open_capsule_row_count_by_id[CORE_FAMILY_ID]
+  }
+
+  public view fn get_open_capsule_end_root(): string {
+    return self.family_open_capsule_end_root_by_id[CORE_FAMILY_ID]
+  }
+
+  public view fn get_capsule_count(): int {
+    return self.family_capsule_count_by_id[CORE_FAMILY_ID]
+  }
+
+  public view fn get_latest_capsule_id(): string {
+    return self.family_latest_capsule_id_by_id[CORE_FAMILY_ID]
+  }
+
+  public view fn get_latest_capsule_root_after(): string {
+    let capsule_id = self.family_latest_capsule_id_by_id[CORE_FAMILY_ID]
+    if capsule_id == "" {
+      return ""
+    }
+    return self.family_capsule_root_after_by_key[family_capsule_key(CORE_FAMILY_ID, capsule_id)]
+  }
+
+  public view fn get_history_capsule_body(capsule_id: string): string {
+    return self.family_capsule_body_by_key[family_capsule_key(CORE_FAMILY_ID, capsule_id)]
+  }
+
+  public view fn get_history_capsule_meta(capsule_id: string): string {
+    return self.family_capsule_meta_by_key[family_capsule_key(CORE_FAMILY_ID, capsule_id)]
+  }
+
+  public view fn get_latest_bundle(): string {
+    return concat(concat(concat(concat(concat(concat(concat(concat(concat(concat(to_string(self.latest_snapshot_index), "|"), self.latest_snapshot_id), "|"), self.latest_payload_hash), "|"), self.latest_history_row_hash), "|"), self.family_root_by_id[CORE_FAMILY_ID]), "|"), self.catalog_root)
+  }
+
+  public fn initialize_fact_ledger(operator_addr: address, predecessor_addr: address, predecessor_final_root: string, predecessor_final_index: int, era_first_snapshot_index: int, network_id: string, era_program_addr: address, core_family_definition: string): bool {
+    require(!self.initialized, "already initialized")
+    assert_address(operator_addr)
+    assert_address(predecessor_addr)
+    assert_address(era_program_addr)
+    assert_network_id(network_id)
+    assert_hex64(predecessor_final_root)
+    require(predecessor_final_index >= 0, "predecessor final index")
+    require(era_first_snapshot_index == predecessor_final_index + 1, "era first index")
+    assert_family_definition(core_family_definition, CORE_FAMILY_ID)
+
+    self.initialized = true
+    self.owner = origin
+    self.operator = operator_addr
+    self.successor_program = era_program_addr
+    self.successor_set = false
+    self.era_program = era_program_addr
+    self.era_network_id = network_id
+    self.predecessor_program = predecessor_addr
+    self.predecessor_set = true
+    self.predecessor_final_root = predecessor_final_root
+    self.predecessor_final_index = predecessor_final_index
+    let anchor_a = concat(concat(ERA_ANCHOR_HASH_DOMAIN, "\n"), network_id)
+    let anchor_b = concat(concat(anchor_a, "\n"), to_string(predecessor_addr))
+    let anchor_c = concat(concat(anchor_b, "\n"), predecessor_final_root)
+    let anchor_d = concat(concat(anchor_c, "\n"), to_string(predecessor_final_index))
+    let anchor_e = concat(concat(anchor_d, "\n"), to_string(era_program_addr))
+    let anchor_f = concat(concat(anchor_e, "\n"), to_string(era_first_snapshot_index))
+    let anchor_g = concat(concat(anchor_f, "\n"), CORE_FAMILY_ID)
+    self.predecessor_anchor_hash = sha256(anchor_g)
+    self.era_first_snapshot_index = era_first_snapshot_index
+    self.paused = false
+    self.snapshot_count = predecessor_final_index
+    self.latest_snapshot_index = predecessor_final_index
+    self.latest_snapshot_id = ""
+    self.latest_observed_at = ""
+    self.latest_epoch = 0
+    self.latest_payload_hash = ""
+    self.latest_evidence_manifest_hash = ""
+    self.latest_source_refs_hash = ""
+    self.latest_summary_hash = ""
+    self.latest_history_row_hash = ""
+    self.latest_payload = ""
+    self.latest_evidence_manifest = ""
+    self.latest_source_refs = ""
+    self.latest_summary = ""
+    self.latest_history_row = ""
+    self.latest_submitter = ""
+    self.catalog_root = sha256(concat(CATALOG_ROOT_DOMAIN, "\n"))
+    self.family_count = 0
+    register_family_internal(CORE_FAMILY_ID, core_family_definition, EMPTY_CORE_FAMILY_ROOT)
+    emit Initialized(operator_addr)
+    emit PredecessorProgramSet(predecessor_addr)
+    return true
+  }
+
+  public fn register_fact_family(family_id: string, definition: string, empty_family_root: string): bool {
+    only_owner()
+    require(family_id != CORE_FAMILY_ID, "core already registered")
+    register_family_internal(family_id, definition, empty_family_root)
+    return true
+  }
+
+  public fn set_operator(operator_addr: address): bool {
+    only_owner()
+    assert_address(operator_addr)
+    self.operator = operator_addr
+    emit OperatorUpdated(operator_addr)
+    return true
+  }
+
+  public fn set_paused(paused: bool): bool {
+    only_owner()
+    self.paused = paused
+    emit Paused(paused)
+    return true
+  }
+
+  public fn set_successor_program(program_addr: address): bool {
+    only_owner()
+    assert_address(program_addr)
+    require(!self.successor_set, "successor already set")
+    self.successor_program = program_addr
+    self.successor_set = true
+    emit SuccessorProgramSet(program_addr)
+    return true
+  }
+
+  public fn record_snapshot_fact_v1(canonical_payload: string, canonical_evidence_manifest: string, canonical_source_refs: string, summary_row: string, core_history_row: string, capsule_base_id: string, epoch_id: int, snapshot_index: int): bool {
+    only_operator()
+    require(!self.paused, "paused")
+    require(capsule_base_id != "", "capsule base required")
+    require(snapshot_index == self.snapshot_count + 1, "snapshot index")
+    require(snapshot_index >= self.era_first_snapshot_index, "snapshot before era")
+    require(epoch_id > self.latest_epoch || self.latest_epoch == 0, "snapshot moved backward")
+    require(len(canonical_payload) > 0, "payload required")
+    require(len(canonical_evidence_manifest) > 0, "evidence required")
+    require(len(canonical_source_refs) > 0, "source refs required")
+    require(len(summary_row) == SUMMARY_ROW_BYTES, "summary row length")
+    require(len(canonical_payload) <= MAX_PAYLOAD_BYTES, "payload too large")
+    require(len(canonical_evidence_manifest) <= MAX_MANIFEST_BYTES, "evidence too large")
+    require(len(canonical_source_refs) <= MAX_SOURCE_REFS_BYTES, "source refs too large")
+    let payload_hash = concat("sha256:", sha256(concat(concat(SNAPSHOT_HASH_DOMAIN, "\n"), canonical_payload)))
+    let evidence_manifest_hash = concat("sha256:", sha256(concat(concat(EVIDENCE_HASH_DOMAIN, "\n"), canonical_evidence_manifest)))
+    let source_refs_hash = concat("sha256:", sha256(concat(concat(SOURCE_REFS_HASH_DOMAIN, "\n"), canonical_source_refs)))
+    let summary_hash = concat("sha256:", sha256(concat(concat(SUMMARY_HASH_DOMAIN, "\n"), summary_row)))
+    assert_core_row_matches_summary(summary_row, core_history_row)
+
+    let active_capsule_id = append_core_fact_row(capsule_base_id, snapshot_index, payload_hash, core_history_row)
+    let core_row_hash = row_hash(CORE_FAMILY_ID, CORE_SCHEMA_ID, core_history_row)
+
+    self.snapshot_count = snapshot_index
+    self.latest_snapshot_index = snapshot_index
+    self.latest_snapshot_id = ""
+    self.latest_observed_at = ""
+    self.latest_epoch = epoch_id
+    self.latest_payload_hash = payload_hash
+    self.latest_evidence_manifest_hash = evidence_manifest_hash
+    self.latest_source_refs_hash = source_refs_hash
+    self.latest_summary_hash = summary_hash
+    self.latest_history_row_hash = core_row_hash
+    self.latest_payload = canonical_payload
+    self.latest_evidence_manifest = canonical_evidence_manifest
+    self.latest_source_refs = canonical_source_refs
+    self.latest_summary = summary_row
+    self.latest_history_row = core_history_row
+    self.latest_submitter = ""
+    emit SnapshotRecorded("", snapshot_index, epoch_id, payload_hash, core_row_hash, "", active_capsule_id, "")
+    return true
+  }
+}

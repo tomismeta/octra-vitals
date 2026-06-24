@@ -16,6 +16,13 @@ import {
   HISTORY_V1_ROW_LEN,
   type HistoryV1ObservationRow
 } from "../lib/aml-history-v1.js";
+import {
+  FACT_LEDGER_CORE_FAMILY_ID,
+  FACT_LEDGER_CORE_SCHEMA_ID,
+  FACT_LEDGER_CORE_SCHEMA_VERSION,
+  FACT_LEDGER_MANIFEST,
+  factLedgerRowHashHex
+} from "../lib/aml-fact-ledger.js";
 import type { SnapshotArtifact, SnapshotPayload } from "../lib/types.js";
 import { buildRecordSnapshotCall } from "../scripts/build-record-snapshot-call.js";
 
@@ -268,10 +275,28 @@ test("record snapshot builder can emit v1 bundles without changing the v0 defaul
   const snapshot = snapshotFixture();
   const v0 = await buildRecordSnapshotCall(snapshot, { snapshotIndex: 5, recordVersion: "v0" });
   const v1 = await buildRecordSnapshotCall(snapshot, { snapshotIndex: 5, recordVersion: "v1" });
+  const factV1 = await buildRecordSnapshotCall(snapshot, { snapshotIndex: 5, recordVersion: "fact-v1" });
 
   assert.equal(v0.method, "record_snapshot_v0");
   assert.equal(v1.method, "record_snapshot_v1");
   assert.equal(v1.history.row.length, HISTORY_V1_ROW_LEN);
   assert.equal(v1.expected_hashes.history_row_hash, historyV1RowHashHex(v1.history.row));
   assert.equal(v1.params[2], 1782216900);
+  assert.equal(factV1.method, "record_snapshot_fact_v1");
+  assert.equal(factV1.commit_mode, "fact-v1");
+  assert.equal(factV1.fact_ledger.manifest, FACT_LEDGER_MANIFEST);
+  assert.equal(factV1.fact_ledger.core_family_id, FACT_LEDGER_CORE_FAMILY_ID);
+  assert.equal(factV1.fact_ledger.core_schema_id, FACT_LEDGER_CORE_SCHEMA_ID);
+  assert.equal(factV1.fact_ledger.capsule_base_id, "2026-06-23T12");
+  assert.equal(factV1.history.schema_version, FACT_LEDGER_CORE_SCHEMA_VERSION);
+  assert.equal(factV1.history.row, v1.history.row);
+  assert.equal(factV1.expected_hashes.history_row_hash, factLedgerRowHashHex(FACT_LEDGER_CORE_FAMILY_ID, FACT_LEDGER_CORE_SCHEMA_ID, factV1.history.row));
+  assert.notEqual(factV1.expected_hashes.history_row_hash, v1.expected_hashes.history_row_hash);
+  assert.equal(factV1.snapshot_id, snapshot.envelope.snapshot_id);
+  assert.equal(factV1.observed_at, snapshot.envelope.observed_at);
+  assert.equal(factV1.params.length, 8);
+  assert.equal(factV1.params[0], snapshot.canonical_payload);
+  assert.equal(factV1.params[5], "2026-06-23T12");
+  assert.equal(factV1.params[6], Number(factV1.history.row.slice(27, 39)));
+  assert.equal(factV1.params[7], factV1.snapshot_index);
 });

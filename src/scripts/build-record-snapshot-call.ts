@@ -12,6 +12,13 @@ import {
   historyV1RowHashHex,
   HISTORY_V1_SCHEMA_VERSION
 } from "../lib/aml-history-v1.js";
+import {
+  FACT_LEDGER_CORE_FAMILY_ID,
+  FACT_LEDGER_CORE_SCHEMA_ID,
+  FACT_LEDGER_CORE_SCHEMA_VERSION,
+  FACT_LEDGER_MANIFEST,
+  factLedgerRowHashHex
+} from "../lib/aml-fact-ledger.js";
 import { sourceRefsHash, verifySnapshotArtifactHashes } from "../lib/program-state.js";
 import { encodeSummaryRow, summaryHash, summaryRowFromSnapshot, SUMMARY_SCHEMA_VERSION } from "../lib/summary-window.js";
 import type { SnapshotArtifact } from "../lib/types.js";
@@ -78,7 +85,50 @@ export interface RecordSnapshotCallV1 {
   };
 }
 
-export type RecordSnapshotCall = RecordSnapshotCallV0 | RecordSnapshotCallV1;
+export interface RecordSnapshotCallFactV1 {
+  schema: "octra-vitals-record-snapshot-call-fact-v1";
+  commit_mode: "fact-v1";
+  generated_at: string;
+  program_address: string;
+  target_kind?: "state_program" | "circle_program";
+  circle_id?: string;
+  method: "record_snapshot_fact_v1";
+  snapshot_id: string;
+  observed_at: string;
+  params: unknown[];
+  compact_message_bytes: number;
+  snapshot_index: number;
+  fact_ledger: {
+    manifest: string;
+    core_family_id: string;
+    core_schema_id: string;
+    core_schema_version: string;
+    capsule_base_id: string;
+  };
+  summary: {
+    schema_version: string;
+    row: string;
+    row_hash: string;
+  };
+  history: {
+    schema_version: string;
+    row: string;
+    row_hash: string;
+  };
+  expected_hashes: {
+    payload_hash: string;
+    evidence_manifest_hash: string;
+    source_refs_hash: string;
+    summary_hash: string;
+    history_row_hash: string;
+  };
+  readonly_check: {
+    method: string;
+    expected_after_submit: string;
+  };
+}
+
+export type RecordSnapshotCall = RecordSnapshotCallV0 | RecordSnapshotCallV1 | RecordSnapshotCallFactV1;
 
 export interface BuildRecordSnapshotCallOptions {
   compactMaxMessageBytes?: number;
@@ -87,7 +137,7 @@ export interface BuildRecordSnapshotCallOptions {
   snapshotIndex?: number;
   stateSourceMode?: string;
   submitEnabled?: boolean;
-  recordVersion?: "v0" | "v1";
+  recordVersion?: "v0" | "v1" | "fact-v1";
 }
 
 const root = resolve(new URL("../..", import.meta.url).pathname);
@@ -114,12 +164,22 @@ function minProgramRpcUrls(forceMultiRpc: boolean): number {
   return Math.max(forceMultiRpc ? 2 : 1, parsed);
 }
 
-function recordSnapshotVersion(options: BuildRecordSnapshotCallOptions): "v0" | "v1" {
+function recordSnapshotVersion(options: BuildRecordSnapshotCallOptions): "v0" | "v1" | "fact-v1" {
   const value = options.recordVersion || process.env.VITALS_RECORD_SNAPSHOT_VERSION || "v0";
-  if (value !== "v0" && value !== "v1") {
-    throw new Error("VITALS_RECORD_SNAPSHOT_VERSION must be v0 or v1");
+  if (value !== "v0" && value !== "v1" && value !== "fact-v1") {
+    throw new Error("VITALS_RECORD_SNAPSHOT_VERSION must be v0, v1, or fact-v1");
   }
   return value;
+}
+
+function factLedgerCapsuleBaseId(observedAt: string): string {
+  const match = /^(\d{4}-\d{2}-\d{2})T(\d{2}):\d{2}:\d{2}Z$/.exec(observedAt);
+  if (!match) throw new Error(`invalid snapshot observed_at for fact-ledger capsule: ${observedAt}`);
+  const hour = Number(match[2]);
+  if (!Number.isInteger(hour) || hour < 0 || hour > 23) {
+    throw new Error(`invalid snapshot observed_at hour for fact-ledger capsule: ${observedAt}`);
+  }
+  return `${match[1]}T${hour < 12 ? "00" : "12"}`;
 }
 
 async function nextSnapshotIndex(options: BuildRecordSnapshotCallOptions = {}): Promise<number> {
@@ -221,10 +281,74 @@ export async function buildRecordSnapshotCall(
   const latestSummaryHash = summaryHash(summaryRow);
   const version = recordSnapshotVersion(options);
 
-  if (version === "v1") {
+  if (version === "v1" || version === "fact-v1") {
     const historyRowModel = historyV1RowFromSnapshot(snapshot, snapshotIndex);
     const historyRow = encodeHistoryV1Row(historyRowModel);
-    const historyRowHash = historyV1RowHashHex(historyRow);
+    if (version === "fact-v1") {
+      const historyRowHash = factLedgerRowHashHex(FACT_LEDGER_CORE_FAMILY_ID, FACT_LEDGER_CORE_SCHEMA_ID, historyRow);
+      const capsuleBaseId = factLedgerCapsuleBaseId(envelope.observed_at);
+      const params = [
+        canonicalPayload,
+        canonicalEvidenceManifest,
+        canonicalSourceRefs,
+        summaryRow,
+        historyRow,
+        capsuleBaseId,
+        payload.octra.epoch,
+        snapshotIndex
+      ];
+      const compactMessageBytes = Buffer.byteLength(JSON.stringify(params));
+      const compactMaxMessageBytes = options.compactMaxMessageBytes ??
+        Number(process.env.VITALS_COMPACT_SNAPSHOT_MAX_MESSAGE_BYTES || 22_000);
+      if (compactMessageBytes > compactMaxMessageBytes) {
+        throw new Error(`record_snapshot_fact_v1 call would be ${compactMessageBytes} bytes, above VITALS_COMPACT_SNAPSHOT_MAX_MESSAGE_BYTES=${compactMaxMessageBytes}`);
+      }
+
+      const circleId = configuredProgrammedCircleId();
+      return {
+        schema: "octra-vitals-record-snapshot-call-fact-v1",
+        commit_mode: "fact-v1",
+        generated_at: options.generatedAt || isoNow(),
+        program_address: options.programAddress || process.env.VITALS_STATE_PROGRAM_ADDRESS || circleId || "pending",
+        target_kind: stateTargetMode(),
+        ...(circleId ? { circle_id: circleId } : {}),
+        method: "record_snapshot_fact_v1",
+        snapshot_id: envelope.snapshot_id,
+        observed_at: envelope.observed_at,
+        params,
+        compact_message_bytes: compactMessageBytes,
+        snapshot_index: snapshotIndex,
+        fact_ledger: {
+          manifest: FACT_LEDGER_MANIFEST,
+          core_family_id: FACT_LEDGER_CORE_FAMILY_ID,
+          core_schema_id: FACT_LEDGER_CORE_SCHEMA_ID,
+          core_schema_version: FACT_LEDGER_CORE_SCHEMA_VERSION,
+          capsule_base_id: capsuleBaseId
+        },
+        summary: {
+          schema_version: SUMMARY_SCHEMA_VERSION,
+          row: summaryRow,
+          row_hash: latestSummaryHash
+        },
+        history: {
+          schema_version: FACT_LEDGER_CORE_SCHEMA_VERSION,
+          row: historyRow,
+          row_hash: historyRowHash
+        },
+        expected_hashes: {
+          payload_hash: envelope.payload_hash,
+          evidence_manifest_hash: envelope.evidence_manifest_hash,
+          source_refs_hash: refsHash,
+          summary_hash: latestSummaryHash,
+          history_row_hash: historyRowHash
+        },
+        readonly_check: {
+          method: "get_latest_history_row_hash",
+          expected_after_submit: historyRowHash
+        }
+      };
+    }
+    const legacyHistoryRowHash = historyV1RowHashHex(historyRow);
     const params = [
       envelope.snapshot_id,
       envelope.observed_at,
@@ -271,18 +395,18 @@ export async function buildRecordSnapshotCall(
       history: {
         schema_version: HISTORY_V1_SCHEMA_VERSION,
         row: historyRow,
-        row_hash: historyRowHash
+        row_hash: legacyHistoryRowHash
       },
       expected_hashes: {
         payload_hash: envelope.payload_hash,
         evidence_manifest_hash: envelope.evidence_manifest_hash,
         source_refs_hash: refsHash,
         summary_hash: latestSummaryHash,
-        history_row_hash: historyRowHash
+        history_row_hash: legacyHistoryRowHash
       },
       readonly_check: {
         method: "get_latest_history_row_hash",
-        expected_after_submit: historyRowHash
+        expected_after_submit: legacyHistoryRowHash
       }
     };
   }
@@ -350,13 +474,14 @@ async function main(): Promise<void> {
   const outPath = process.argv[3] || join(root, "build", "record_snapshot_call.json");
   const snapshot = JSON.parse(await readFile(inputPath, "utf8")) as SnapshotArtifact;
   const call = await buildRecordSnapshotCall(snapshot);
+  const epoch = call.commit_mode === "v0" ? call.params[2] : call.params[3];
   await writeRecordSnapshotCall(call, outPath);
   console.log(JSON.stringify({
     out: outPath,
     commit_mode: call.commit_mode,
     snapshot_id: call.params[0],
     snapshot_index: call.snapshot_index,
-    epoch: call.params[2],
+    epoch,
     call_count: 1,
     compact_message_bytes: call.compact_message_bytes,
     ...call.expected_hashes

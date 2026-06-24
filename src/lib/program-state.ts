@@ -1,7 +1,14 @@
 import { canonicalJson, sha256Tagged } from "./canonical-json.js";
 import { circleProgramViewAtUrl } from "./circle-program.js";
 import { contractCallAtUrl, octraProgramRpcUrls } from "./octra-rpc.js";
-import { decodeHistoryV1Rows, type HistoryV1ObservationRow } from "./aml-history-v1.js";
+import { decodeHistoryV1Rows, HISTORY_V1_ROW_LEN, type HistoryV1ObservationRow } from "./aml-history-v1.js";
+import {
+  decodeFactCapsuleMeta,
+  factLedgerCapsuleBodyHashHex,
+  factLedgerFoldFamilyRootHex,
+  FACT_LEDGER_CORE_FAMILY_ID,
+  FACT_LEDGER_CORE_SCHEMA_ID
+} from "./aml-fact-ledger.js";
 import { assertLatestSummaryMatchesSnapshot, encodeSummaryRow, parseSummaryWindow, summaryHash, summaryWindowHash, SUMMARY_ROW_LEN, type ProgramHistoryWindow, type SummaryRow } from "./summary-window.js";
 import type { EvidenceEntry, EvidenceManifest, SnapshotArtifact, SnapshotEnvelope, SnapshotPayload, SourceRef } from "./types.js";
 
@@ -104,7 +111,7 @@ function summaryRowFromHistoryV1Row(row: HistoryV1ObservationRow): SummaryRow {
   };
 }
 
-function programHistoryWindowFromHistoryV1Body(body: string): ProgramHistoryWindow {
+function programHistoryWindowFromHistoryV1Body(body: string, historyDiscovery = "aml_history_v1_capsule"): ProgramHistoryWindow {
   const historyRows = decodeHistoryV1Rows(body);
   const rows = historyRows.map(summaryRowFromHistoryV1Row);
   const window = rows.map(encodeSummaryRow).join("");
@@ -117,8 +124,108 @@ function programHistoryWindowFromHistoryV1Body(body: string): ProgramHistoryWind
     window,
     window_hash: windowHash,
     rows,
-    history_discovery: "aml_history_v1_capsule"
+    history_discovery: historyDiscovery
   };
+}
+
+function factLedgerProbeReadsEnabled(): boolean {
+  return process.env.VITALS_ENABLE_FACT_LEDGER_PROBE_READS === "1";
+}
+
+function isFactLedgerManifest(manifest: string): boolean {
+  if (manifest === "octra-vitals-fact-ledger.v1") return true;
+  return manifest === "octra-vitals-fact-ledger-probe.v1" && factLedgerProbeReadsEnabled();
+}
+
+function factLedgerHistoryCapsuleLimit(): number {
+  const configured = Number(process.env.VITALS_FACT_LEDGER_HISTORY_CAPSULE_LIMIT || 64);
+  if (!Number.isInteger(configured) || configured < 1) return 64;
+  return Math.min(configured, 256);
+}
+
+function splitHistoryRows(body: string): string[] {
+  if (body.length % HISTORY_V1_ROW_LEN !== 0) throw new Error("history body is not row aligned");
+  const rows: string[] = [];
+  for (let offset = 0; offset < body.length; offset += HISTORY_V1_ROW_LEN) {
+    rows.push(body.slice(offset, offset + HISTORY_V1_ROW_LEN));
+  }
+  return rows;
+}
+
+function verifiedHistoryWindowFromFactLedger(input: {
+  catalogRoot: string;
+  familyRoot: string;
+  sealedCapsules: Array<{ id: string; body: string; meta: string; rootAfter: string }>;
+  openBody: string;
+  openRowCount: number;
+  openStartRoot: string;
+  openEndRoot: string;
+}): ProgramHistoryWindow {
+  const bodies: string[] = [];
+  let previousRoot: string | null = null;
+  for (const capsule of input.sealedCapsules) {
+    if (!capsule.id || !capsule.body || !capsule.meta || !capsule.rootAfter) {
+      throw new Error("fact capsule readback is incomplete");
+    }
+    const meta = decodeFactCapsuleMeta(capsule.meta);
+    if (meta.family_id !== FACT_LEDGER_CORE_FAMILY_ID || meta.schema_id !== FACT_LEDGER_CORE_SCHEMA_ID) {
+      throw new Error("fact capsule metadata is not for the core family");
+    }
+    if (meta.capsule_id !== capsule.id) {
+      throw new Error(`fact capsule id mismatch: expected ${capsule.id}, got ${meta.capsule_id}`);
+    }
+    if (meta.catalog_root_hex !== input.catalogRoot) {
+      throw new Error("fact capsule catalog root mismatch");
+    }
+    if (meta.family_root_before_hex !== meta.start_root_hex) {
+      throw new Error("fact capsule family-root-before mismatch");
+    }
+    if (capsule.body.length !== meta.row_count * HISTORY_V1_ROW_LEN) {
+      throw new Error("fact capsule body length does not match metadata row count");
+    }
+    const bodyHash = factLedgerCapsuleBodyHashHex(FACT_LEDGER_CORE_FAMILY_ID, FACT_LEDGER_CORE_SCHEMA_ID, capsule.body, HISTORY_V1_ROW_LEN);
+    if (bodyHash !== meta.body_hash_hex) {
+      throw new Error("fact capsule body hash mismatch");
+    }
+    const rows = splitHistoryRows(capsule.body);
+    const endRoot = factLedgerFoldFamilyRootHex(FACT_LEDGER_CORE_FAMILY_ID, FACT_LEDGER_CORE_SCHEMA_ID, meta.start_root_hex, rows);
+    if (endRoot !== meta.end_root_hex) {
+      throw new Error("fact capsule end root mismatch");
+    }
+    if (meta.family_root_after_hex !== meta.end_root_hex) {
+      throw new Error("fact capsule family-root-after mismatch");
+    }
+    if (meta.family_root_after_hex !== capsule.rootAfter || meta.end_root_hex !== capsule.rootAfter) {
+      throw new Error("fact capsule root-after mismatch");
+    }
+    if (previousRoot && meta.start_root_hex !== previousRoot) {
+      throw new Error("fact capsule root continuity mismatch");
+    }
+    previousRoot = meta.end_root_hex;
+    bodies.push(capsule.body);
+  }
+
+  if (Number(input.openRowCount || 0) > 0) {
+    if (input.openBody.length !== Number(input.openRowCount || 0) * HISTORY_V1_ROW_LEN) {
+      throw new Error("fact open capsule body length does not match row count");
+    }
+    const rows = splitHistoryRows(input.openBody);
+    const endRoot = factLedgerFoldFamilyRootHex(FACT_LEDGER_CORE_FAMILY_ID, FACT_LEDGER_CORE_SCHEMA_ID, input.openStartRoot, rows);
+    if (endRoot !== input.openEndRoot) {
+      throw new Error("fact open capsule end root mismatch");
+    }
+    if (previousRoot && input.openStartRoot !== previousRoot) {
+      throw new Error("fact open capsule root continuity mismatch");
+    }
+    if (input.familyRoot !== input.openEndRoot) {
+      throw new Error("fact family root does not match open capsule end root");
+    }
+    bodies.push(input.openBody);
+  } else if (previousRoot && input.familyRoot !== previousRoot) {
+    throw new Error("fact family root does not match latest sealed capsule root");
+  }
+
+  return programHistoryWindowFromHistoryV1Body(bodies.join(""), "aml_fact_family_core_capsules_verified");
 }
 
 async function readLatestProgramSnapshotFromUrl(programAddress: string, url: string): Promise<SnapshotReadback> {
@@ -234,7 +341,7 @@ async function readLatestCircleProgramSnapshotFromUrl(circleId: string, url: str
     circleProgramViewAtUrl<string>(url, circleId, "get_latest_summary_hash")
   ]);
 
-  if (!snapshotId || !canonicalPayload || !canonicalEvidenceManifest) {
+  if (!canonicalPayload || !canonicalEvidenceManifest) {
     throw new Error("Vitals Circle Program has no recorded snapshot yet");
   }
 
@@ -263,10 +370,14 @@ async function readLatestCircleProgramSnapshotFromUrl(circleId: string, url: str
   assertHash("source refs hash", sourceRefsHash(sourceRefs), sourceRefsHashStored);
   assertHash("summary hash", summaryHash(latestSummary), latestSummaryHash);
   const observedAt = observedAtStored || evidenceManifest.observed_at || snapshotId.replace(/^vitals\./, "");
+  const resolvedSnapshotId = snapshotId || (observedAt ? `vitals.${observedAt}` : "");
+  if (!resolvedSnapshotId || !observedAt) {
+    throw new Error("Vitals Circle Program latest snapshot timestamp is unavailable");
+  }
 
   const envelope: SnapshotEnvelope = {
     schema_version: "octra-vitals-envelope-v0",
-    snapshot_id: snapshotId,
+    snapshot_id: resolvedSnapshotId,
     observed_at: observedAt,
     payload_hash: payloadHash,
     evidence_manifest_hash: evidenceManifestHash,
@@ -339,12 +450,50 @@ async function readProgramSummaryHistoryFromUrlV1(programAddress: string, url: s
   return programHistoryWindowFromHistoryV1Body("");
 }
 
+async function readProgramSummaryHistoryFromUrlFactLedger(programAddress: string, url: string): Promise<ProgramHistoryWindow> {
+  const [catalogRoot, familyRoot, openBody, openRowCount, openStartRoot, openEndRoot, capsuleCount] = await Promise.all([
+    contractCallAtUrl<string>(url, programAddress, "get_catalog_root"),
+    contractCallAtUrl<string>(url, programAddress, "get_family_root", ["0000"]),
+    contractCallAtUrl<string>(url, programAddress, "get_family_open_capsule_body", ["0000"]),
+    contractCallAtUrl<number>(url, programAddress, "get_family_open_capsule_row_count", ["0000"]),
+    contractCallAtUrl<string>(url, programAddress, "get_family_open_capsule_start_root", ["0000"]),
+    contractCallAtUrl<string>(url, programAddress, "get_family_open_capsule_end_root", ["0000"]),
+    contractCallAtUrl<number>(url, programAddress, "get_family_capsule_count", ["0000"]).catch(() => 0)
+  ]);
+  const sealedCount = Number(capsuleCount || 0);
+  const sealedCapsules: Array<{ id: string; body: string; meta: string; rootAfter: string }> = [];
+  if (sealedCount > 0) {
+    const limit = factLedgerHistoryCapsuleLimit();
+    const start = Math.max(0, sealedCount - limit);
+    const capsuleIds = await Promise.all(Array.from({ length: sealedCount - start }, (_, index) => (
+      contractCallAtUrl<string>(url, programAddress, "get_family_capsule_id_at", ["0000", start + index])
+    )));
+    const readCapsules = await Promise.all(capsuleIds.filter(Boolean).map(async (capsuleId) => ({
+      id: capsuleId,
+      body: await contractCallAtUrl<string>(url, programAddress, "get_family_capsule_body", ["0000", capsuleId]),
+      meta: await contractCallAtUrl<string>(url, programAddress, "get_family_capsule_meta", ["0000", capsuleId]),
+      rootAfter: await contractCallAtUrl<string>(url, programAddress, "get_family_capsule_root_after", ["0000", capsuleId])
+    })));
+    sealedCapsules.push(...readCapsules);
+  }
+  return verifiedHistoryWindowFromFactLedger({
+    catalogRoot,
+    familyRoot,
+    sealedCapsules,
+    openBody,
+    openRowCount: Number(openRowCount || 0),
+    openStartRoot,
+    openEndRoot
+  });
+}
+
 async function readProgramSummaryHistoryFromUrl(programAddress: string, url: string): Promise<ProgramHistoryWindow> {
   try {
     return await readProgramSummaryHistoryFromUrlV0(programAddress, url);
   } catch (error) {
     const manifest = await contractCallAtUrl<string>(url, programAddress, "manifest").catch(() => "");
     if (manifest === "vitals-circle-state.v1") return readProgramSummaryHistoryFromUrlV1(programAddress, url);
+    if (isFactLedgerManifest(manifest)) return readProgramSummaryHistoryFromUrlFactLedger(programAddress, url);
     throw error;
   }
 }
@@ -375,12 +524,50 @@ async function readCircleProgramSummaryHistoryFromUrlV1(circleId: string, url: s
   return programHistoryWindowFromHistoryV1Body("");
 }
 
+async function readCircleProgramSummaryHistoryFromUrlFactLedger(circleId: string, url: string): Promise<ProgramHistoryWindow> {
+  const [catalogRoot, familyRoot, openBody, openRowCount, openStartRoot, openEndRoot, capsuleCount] = await Promise.all([
+    circleProgramViewAtUrl<string>(url, circleId, "get_catalog_root"),
+    circleProgramViewAtUrl<string>(url, circleId, "get_family_root", ["0000"]),
+    circleProgramViewAtUrl<string>(url, circleId, "get_family_open_capsule_body", ["0000"]),
+    circleProgramViewAtUrl<number>(url, circleId, "get_family_open_capsule_row_count", ["0000"]),
+    circleProgramViewAtUrl<string>(url, circleId, "get_family_open_capsule_start_root", ["0000"]),
+    circleProgramViewAtUrl<string>(url, circleId, "get_family_open_capsule_end_root", ["0000"]),
+    circleProgramViewAtUrl<number>(url, circleId, "get_family_capsule_count", ["0000"]).catch(() => 0)
+  ]);
+  const sealedCount = Number(capsuleCount || 0);
+  const sealedCapsules: Array<{ id: string; body: string; meta: string; rootAfter: string }> = [];
+  if (sealedCount > 0) {
+    const limit = factLedgerHistoryCapsuleLimit();
+    const start = Math.max(0, sealedCount - limit);
+    const capsuleIds = await Promise.all(Array.from({ length: sealedCount - start }, (_, index) => (
+      circleProgramViewAtUrl<string>(url, circleId, "get_family_capsule_id_at", ["0000", start + index])
+    )));
+    const readCapsules = await Promise.all(capsuleIds.filter(Boolean).map(async (capsuleId) => ({
+      id: capsuleId,
+      body: await circleProgramViewAtUrl<string>(url, circleId, "get_family_capsule_body", ["0000", capsuleId]),
+      meta: await circleProgramViewAtUrl<string>(url, circleId, "get_family_capsule_meta", ["0000", capsuleId]),
+      rootAfter: await circleProgramViewAtUrl<string>(url, circleId, "get_family_capsule_root_after", ["0000", capsuleId])
+    })));
+    sealedCapsules.push(...readCapsules);
+  }
+  return verifiedHistoryWindowFromFactLedger({
+    catalogRoot,
+    familyRoot,
+    sealedCapsules,
+    openBody,
+    openRowCount: Number(openRowCount || 0),
+    openStartRoot,
+    openEndRoot
+  });
+}
+
 async function readCircleProgramSummaryHistoryFromUrl(circleId: string, url: string): Promise<ProgramHistoryWindow> {
   try {
     return await readCircleProgramSummaryHistoryFromUrlV0(circleId, url);
   } catch (error) {
     const manifest = await circleProgramViewAtUrl<string>(url, circleId, "manifest").catch(() => "");
     if (manifest === "vitals-circle-state.v1") return readCircleProgramSummaryHistoryFromUrlV1(circleId, url);
+    if (isFactLedgerManifest(manifest)) return readCircleProgramSummaryHistoryFromUrlFactLedger(circleId, url);
     throw error;
   }
 }

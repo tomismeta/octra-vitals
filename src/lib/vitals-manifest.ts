@@ -28,6 +28,10 @@ export function runtimeVitalsManifest(
 ): VitalsManifest {
   const env = options.env || process.env;
   const stateTargetMode = targetMode(manifest, env);
+  const programmedCircleProgram = choose(env.VITALS_PROGRAMMED_CIRCLE_PROGRAM, manifest.programmed_circle_program);
+  const programmedCircleArtifactDir = choose(env.VITALS_PROGRAMMED_CIRCLE_ARTIFACT_DIR, manifest.programmed_circle_artifact_dir);
+  const recordSnapshotVersion = choose(env.VITALS_RECORD_SNAPSHOT_VERSION, manifest.record_snapshot_version);
+  const factLedgerProgram = programmedCircleProgram === "fact-ledger" || recordSnapshotVersion === "fact-v1";
   const siteCircleId = choose(options.siteCircleId, env.VITALS_SITE_CIRCLE_ID, manifest.site_circle_id);
   const programmedCircleId = choose(options.programmedCircleId, env.VITALS_PROGRAMMED_CIRCLE_ID, manifest.programmed_circle_id);
   const stateProgramAddress = stateTargetMode === "circle_program"
@@ -42,6 +46,24 @@ export function runtimeVitalsManifest(
     site_circle_id: siteCircleId,
     state_target_mode: stateTargetMode,
     programmed_circle_id: programmedCircleId,
+    programmed_circle_program: programmedCircleProgram,
+    programmed_circle_artifact_dir: programmedCircleArtifactDir,
+    record_snapshot_version: recordSnapshotVersion,
+    programmed_circle_source_hash: choose(
+      factLedgerProgram ? env.VITALS_FACT_LEDGER_PROGRAMMED_CIRCLE_SOURCE_HASH : null,
+      env.VITALS_PROGRAMMED_CIRCLE_SOURCE_HASH,
+      manifest.programmed_circle_source_hash
+    ),
+    programmed_circle_bytecode_hash: choose(
+      factLedgerProgram ? env.VITALS_FACT_LEDGER_PROGRAMMED_CIRCLE_BYTECODE_HASH : null,
+      env.VITALS_PROGRAMMED_CIRCLE_BYTECODE_HASH,
+      manifest.programmed_circle_bytecode_hash
+    ),
+    programmed_circle_verification_hash: choose(
+      factLedgerProgram ? env.VITALS_FACT_LEDGER_PROGRAMMED_CIRCLE_VERIFICATION_HASH : null,
+      env.VITALS_PROGRAMMED_CIRCLE_VERIFICATION_HASH,
+      manifest.programmed_circle_verification_hash
+    ),
     state_program_address: stateProgramAddress,
     authority: {
       ...(manifest.authority || {}),

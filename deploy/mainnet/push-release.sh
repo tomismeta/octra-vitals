@@ -44,6 +44,8 @@ ssh "${HOST}" "REMOTE_TMP=$(quote "${REMOTE_TMP}") REMOTE_RELEASE=$(quote "${REM
   npm run build
   npm run program-circle:compile
   npm run program-circle:verify
+  npm run fact-ledger-probe:compile
+  npm run fact-ledger-program:compile
   npm run producer:audit:dist
   node dist/scripts/build-site-circle-release.js
   sudo rm -rf "${REMOTE_RELEASE}"

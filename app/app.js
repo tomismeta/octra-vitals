@@ -70,6 +70,7 @@ const HISTORY_WINDOWS = Object.freeze({
   "30d": { label: "30d", ms: 30 * 24 * 60 * 60 * 1000 }
 });
 const DEFAULT_HISTORY_WINDOW = "1d";
+const HISTORY_FETCH_WINDOW = "30d";
 const MAX_HISTORY_POINTS = 30 * 24 * 4 + 8; // 30 days at the current ~15-minute cadence, plus a little drift.
 
 /* ============================================================================
@@ -988,7 +989,7 @@ async function loadCanonicalHistory(versionResult){
       console.warn("[Octra Vitals] direct Octra history read unavailable; falling back to gateway", error);
     }
   }
-  return fetchFirst(endpointCandidates("/api/history", null, {
+  return fetchFirst(endpointCandidates(historyApiPath(), null, {
     gatewayOrigin: configuredGatewayOrigin(versionResult?.body || APP_CONFIG)
   }));
 }
@@ -1548,6 +1549,10 @@ function setupSparkControls(){
   setupSparkWindow();
 }
 
+function historyApiPath(){
+  return `/api/history?window=${encodeURIComponent(HISTORY_FETCH_WINDOW)}`;
+}
+
 /* ============================================================================
    ACT II · READING LINE (four clocks)  — public v0 layout.
    ============================================================================ */
@@ -1946,7 +1951,8 @@ function applyCanonicalHistory(historyResult){
       ...DATA.source,
       history_canonical: true,
       history_source: historyAuthority.source || null,
-      history_url: historyResult.url || null
+      history_url: historyResult.url || null,
+      history_coverage: historyBody.coverage || null
     }
   };
   A = accounting(DATA);
