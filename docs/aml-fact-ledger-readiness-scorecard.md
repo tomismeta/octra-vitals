@@ -1,8 +1,8 @@
 # AML Fact Ledger — Devnet Readiness Scorecard
 
-Status: **devnet-only update candidate**. Mainnet (`octra.live`) is untouched.
+Status: **devnet soak candidate live**. Mainnet (`octra.live`) is untouched.
 Date: 2026-06-24
-Scope: the fact-family ledger running behind `devnet.octra.live`, with the next AML/runtime update staged for the devnet programmed Site Circle.
+Scope: the fact-family ledger running behind `devnet.octra.live`, updated in place on the devnet programmed Site Circle.
 
 This scorecard records the gates we require before the fact-ledger model is considered production-ready. It is intentionally conservative: a local/formal pass is not treated as a live pass until the devnet Circle has run through the same path.
 
@@ -15,16 +15,16 @@ This scorecard records the gates we require before the fact-ledger model is cons
 
 ## Candidate Build
 
-The candidate fact-ledger program was built with `npm run native:verify` on 2026-06-24.
+The candidate fact-ledger program was built with `npm run native:verify` on 2026-06-24 and deployed to the devnet Circle in place.
 
 | Artifact | Value |
 | --- | --- |
-| Source hash | `sha256:4d344e1ae8aad78fd973a0097072967055456ecc1ceb4fe73fc71c488fb1b0db` |
-| Bytecode hash | `sha256:89a063fa54e17a773aa6a38bdabc090d938a15d6a48ea5401061f01c63587613` |
+| Source hash | `sha256:0be233844291a66a9a50a0607d28efde506c65633416e58f214976a35bf061d2` |
+| Bytecode hash | `sha256:2423f9af739b7307dd741560e1bd1762821ad412a492f1c7423154f16ae5ef63` |
 | Verification hash | `sha256:bf6d1e091139e7e794d3433cefdc031c9726e43b6c6abe07e3385fbc03ded7ea` |
 | Formal result | `safe`, `verified`, 0 errors, 0 warnings |
-| Size | 19,370 bytes |
-| Instructions | 3,178 |
+| Size | 19,528 bytes |
+| Instructions | 3,214 |
 
 The generic fact-ledger substrate probe also verifies cleanly:
 
@@ -37,12 +37,25 @@ The generic fact-ledger substrate probe also verifies cleanly:
 
 ## Growth-Headroom Changes In This Candidate
 
-Two changes directly address the size fragility found during devnet deployment:
+Three changes directly address the size fragility found during devnet deployment:
 
 1. **Sealed capsule-chain root.** Each family now stores `family_capsules_root_by_id[family_id]`, and sealed capsule metadata carries `family_root_before` / `family_root_after` for the capsule chain. A browser or gateway can verify a capsule slice by checking ordered capsule-chain continuity instead of replaying all historical rows from genesis.
 2. **Per-snapshot size headroom telemetry.** Every producer call/report now includes byte usage and remaining headroom for canonical payload, evidence manifest, source refs, summary row, fact row, compact message, and the 48-row capsule body. Low-margin warnings are emitted before a data-growth change becomes an AML write failure.
+3. **Fixed-width capsule id slot restored.** The live seal boundary exposed that capsule ids such as `2026-06-24T12.0000` are 18 bytes and must be padded to the 24-byte slot expected by the TypeScript verifier. The AML seal path now uses the same 24-byte capsule id slot as the browser/gateway encoding.
 
 The AML state remains boring and bounded per write: one latest payload/evidence/source-ref set, one open capsule body per family, immutable sealed capsules, and small roots/counters.
+
+Latest live post-restart headroom, from devnet snapshot `#73` (`vitals.2026-06-24T16:53:56Z`):
+
+| Field | Used | Limit | Remaining |
+| --- | ---: | ---: | ---: |
+| Canonical payload | 2,970 bytes | 12,000 bytes | 9,030 bytes |
+| Evidence manifest | 2,626 bytes | 8,000 bytes | 5,374 bytes |
+| Source refs | 1,270 bytes | 4,096 bytes | 2,826 bytes |
+| Compact record message | 8,042 bytes | 22,000 bytes | 13,958 bytes |
+| Open capsule after restart | 2 rows / 590 bytes | 48 rows / 14,160 bytes | 46 rows / 13,570 bytes |
+
+The latest size-headroom report has no warnings. A near-full capsule may warn as it approaches the 48-row seal boundary; that is expected telemetry, not a failure.
 
 ## Legend
 
@@ -66,19 +79,19 @@ The AML state remains boring and bounded per write: one latest payload/evidence/
 
 | Gate | Status | Evidence | To close |
 | --- | --- | --- | --- |
-| Devnet Circle updated to candidate AML | live pending | Candidate compiled locally | In-place `circle_program_update` on devnet |
-| Snapshot reports expose size headroom | live pending | `size_headroom` emitted by builder/submitter | Confirm in latest devnet run report |
-| Seal-through a capsule boundary | live pending | Code/tests pass | Run devnet cadence past at least one 48-row seal |
-| Over-cadence in one 12h half opens `.0001` cleanly | live pending | Code/tests pass | Run devnet burst with real producer snapshots until a new segment opens |
-| Restart/resume across seal boundary | open | — | Stop/restart updater across sealed state and confirm clean next write |
-| Many-capsule scale in programmed Circle | open | Previous body-map probe reached multiple capsules; fact-ledger needs live soak | Let devnet accumulate capsules; track read/write cost |
+| Devnet Circle updated to candidate AML | done | Circle `octDxj...HsG9K8` code hash `2423f9af...ae5ef63`; in-place update used 1000 OU | Continue soak |
+| Snapshot reports expose size headroom | done | Latest submit report includes byte use, remaining headroom, dynamic capsule rows, submitted OU, and receipt effort | Continue monitoring |
+| Seal-through a capsule boundary | done | Snapshot `#71` sealed capsule `2026-06-24T12.0000`; tx `960c0bee...698c3039` | Continue soak |
+| Over-cadence in one 12h half opens `.0001` cleanly | done | Snapshot `#72` opened `2026-06-24T12.0001`; tx `0fb7e19d...0cf39a7e` | Continue soak |
+| Restart/resume across seal boundary | done | Systemd updater service produced snapshot `#73` after gateway restart and sealed-state resume; tx `1a67242d...61b3b559` | Continue soak |
+| Many-capsule scale in programmed Circle | open | First fact-ledger capsule is sealed and verified; more live capsules still need time | Let devnet accumulate capsules; track read/write cost |
 
 ### Read Path & Honesty
 
 | Gate | Status | Evidence | To close |
 | --- | --- | --- | --- |
-| `/api/latest` serves program-backed data | live pending | Existing devnet did before candidate | Reconfirm after update |
-| `/api/history` sourced from verified fact-family capsules | live pending | Verifier updated for capsule-chain root | Reconfirm after update and after first seal |
+| `/api/latest` serves program-backed data | done | `/api/latest` returns 200, `status=program`, `source=program` after update | Continue monitoring freshness |
+| `/api/history` sourced from verified fact-family capsules | done | `/api/history?window=1d` returns 50 canonical points, capsule-chain verification readable | Continue monitoring |
 | Browser-side range verification measured | open | — | Measure 1d/7d/30d reads once enough history exists |
 | Coverage honesty for short history | done | UI/API expose available coverage; no fake history is synthesized | Continue monitoring |
 | Completeness for future multi-family snapshots | deferred | Core-only launch is atomic; 1:many families are not active | Decide before adding route/detail families |
@@ -87,20 +100,18 @@ The AML state remains boring and bounded per write: one latest payload/evidence/
 
 | Gate | Status | Evidence | To close |
 | --- | --- | --- | --- |
-| Exact artifacts pinned | live pending | Candidate hashes above | Write hashes to devnet gateway/updater env after Circle update |
+| Exact artifacts pinned | done | Devnet gateway/updater env pins source, bytecode, and verification hashes above | Reconfirm after any AML edit |
 | Programmed-Circle method surface includes new views | done | `get_family_capsules_root` / `get_capsules_root` added to readiness method list | Live readiness check |
 | No raw private material in repo | done | Secrets remain host-local root-only env files | Continue not printing/copying secrets |
-| Cost optimized for devnet update | planned | Current devnet has no sealed capsules; in-place update preserves rows and costs update OU only | Execute `circle_program_update`, not fresh Circle deploy |
-| Final devnet report | open | — | Record live hashes, receipt effort, size headroom, seal/overflow results |
+| Cost optimized for devnet update | done | Existing Circle updated in place at 1000 OU; no fresh Circle deploy | Keep using update path for AML-only devnet patches |
+| Final devnet report | done | `/var/lib/octra-vitals/reports/fact-ledger-program-update-20260624T1648Z.json`; latest run reports under `/var/lib/octra-vitals/runs/snapshot-2026-06-24T165356Z-251758/` | Keep updating this scorecard after major gates |
 
 ## Mainnet Gate
 
 Mainnet remains no-go until:
 
-- the candidate AML is live on devnet with pinned hashes;
-- at least one live capsule seal is verified;
-- same-half overflow is exercised without brick risk;
-- snapshot reports show size headroom with no low-margin warnings;
-- `/api/latest`, `/api/history`, `/api/native-readiness`, and `/api/site-integrity` are green on devnet;
+- the candidate AML has soaked on devnet beyond the first sealed capsule;
+- many-capsule reads and writes remain healthy as devnet history grows;
+- browser-side 1d/7d/30d verification timing is measured once enough history exists;
 - the final report records receipt effort/cost and live Circle readback;
 - the user explicitly approves mainnet.
