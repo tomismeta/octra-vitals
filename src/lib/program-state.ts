@@ -154,6 +154,12 @@ function splitHistoryRows(body: string): string[] {
   return rows;
 }
 
+function hexRootOrNull(value: unknown): string | null {
+  if (typeof value !== "string") return null;
+  const text = value.replace(/^sha256:/, "").toLowerCase();
+  return /^[0-9a-f]{64}$/.test(text) ? text : null;
+}
+
 function verifiedHistoryWindowFromFactLedger(input: {
   catalogRoot: string;
   familyRoot: string;
@@ -168,6 +174,7 @@ function verifiedHistoryWindowFromFactLedger(input: {
 }): ProgramHistoryWindow {
   const bodies: string[] = [];
   let previousRoot: string | null = null;
+  const expectedCapsulesRoot = hexRootOrNull(input.familyCapsulesRoot);
   let previousCapsulesRoot: string | null = input.sealedCapsuleStartOrdinal === 0
     ? factLedgerEmptyFamilyCapsulesRootHex(FACT_LEDGER_CORE_FAMILY_ID, FACT_LEDGER_CORE_SCHEMA_ID)
     : null;
@@ -223,11 +230,11 @@ function verifiedHistoryWindowFromFactLedger(input: {
   }
 
   if (
-    input.familyCapsulesRoot &&
+    expectedCapsulesRoot &&
     previousCapsulesRoot &&
     Number(input.sealedCapsuleStartOrdinal || 0) === 0 &&
     input.sealedCapsules.length === Number(input.sealedCapsuleTotalCount || input.sealedCapsules.length) &&
-    input.familyCapsulesRoot !== previousCapsulesRoot
+    expectedCapsulesRoot !== previousCapsulesRoot
   ) {
     throw new Error("fact family capsules root does not match latest sealed capsule chain root");
   }

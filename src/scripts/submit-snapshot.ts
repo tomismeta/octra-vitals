@@ -720,6 +720,12 @@ function splitFixedRows(body: string, rowLen: number): string[] {
   return rows;
 }
 
+function hexRootOrNull(value: unknown): string | null {
+  if (typeof value !== "string") return null;
+  const text = value.replace(/^sha256:/, "").toLowerCase();
+  return /^[0-9a-f]{64}$/.test(text) ? text : null;
+}
+
 function verifyFactReadback(input: {
   call: RecordSnapshotCallFactV1;
   latestPayloadHash: string;
@@ -843,7 +849,8 @@ function verifyFactReadback(input: {
     if (meta.family_root_after_hex !== familyCapsulesRootAfter) {
       throw new Error("readback latest sealed fact capsule family capsules root metadata mismatch");
     }
-    if (familyCapsulesRoot && familyCapsulesRoot !== meta.family_root_after_hex) {
+    const expectedCapsulesRoot = hexRootOrNull(familyCapsulesRoot);
+    if (expectedCapsulesRoot && expectedCapsulesRoot !== meta.family_root_after_hex) {
       throw new Error("readback family capsules root does not match latest sealed capsule root");
     }
     if (latestCapsuleRootAfter !== endRoot) {
