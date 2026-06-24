@@ -128,6 +128,8 @@ Useful routes:
 /health
 ```
 
+API JSON responses are pretty-printed by default for inspection. Evidence endpoints also accept `?exact=1` when the stored file bytes need to be returned without gateway reformatting.
+
 Set `VITALS_DATA_DIR` to keep runtime snapshots and evidence outside the checkout.
 
 ## Command Lanes

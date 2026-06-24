@@ -1870,6 +1870,9 @@ function rawEvidenceView(raw: any): Record<string, unknown> {
 
 async function serveEvidence(res: http.ServerResponse, url: URL, head = false): Promise<void> {
   const pathname = url.pathname;
+  const immutableJsonHeaders = {
+    "Cache-Control": "public, max-age=3600, immutable"
+  };
   const rawMatch = pathname.match(/^\/api\/evidence\/raw\/([a-fA-F0-9]{64})$/);
   if (rawMatch) {
     const rawHash = rawMatch[1];
@@ -1892,9 +1895,10 @@ async function serveEvidence(res: http.ServerResponse, url: URL, head = false): 
       }
       const rawWrapperRequested = url.searchParams.get("raw") === "1";
       if (!rawWrapperRequested) {
-        return json(res, 200, rawEvidenceView(parsed), {
-          "Cache-Control": "public, max-age=3600, immutable"
-        }, head);
+        return json(res, 200, rawEvidenceView(parsed), immutableJsonHeaders, head);
+      }
+      if (url.searchParams.get("exact") !== "1") {
+        return json(res, 200, parsed, immutableJsonHeaders, head);
       }
       res.writeHead(200, {
         "Content-Type": "application/json; charset=utf-8",
@@ -1920,6 +1924,9 @@ async function serveEvidence(res: http.ServerResponse, url: URL, head = false): 
     const parsed = JSON.parse(text);
     if (sha256Tagged(EVIDENCE_HASH_DOMAIN, canonicalJson(parsed)) !== expected) {
       throw new Error("evidence manifest hash mismatch");
+    }
+    if (url.searchParams.get("exact") !== "1") {
+      return json(res, 200, parsed, immutableJsonHeaders, head);
     }
     res.writeHead(200, {
       "Content-Type": "application/json; charset=utf-8",

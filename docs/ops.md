@@ -410,6 +410,8 @@ VITALS_UPDATE_RETENTION_DISABLED=0
 
 Raw evidence files live in `VITALS_DATA_DIR/evidence/raw/<response_hash>.json`. They include the exact response body and, where available, the exact request payload that produced the response. They are intentionally public forensic evidence when linked from the app or API, so source URLs must stay public-safe and response sizes are capped before collection and serving. They are content-hash linked from source refs but are not AML state.
 
+Gateway API JSON is pretty-printed by default for human inspection. Use `/api/evidence/raw/<response_hash>` for the parsed evidence view, `/api/evidence/raw/<response_hash>?raw=1` for the raw wrapper as formatted JSON, and `?exact=1` only when you need the stored file bytes without reformatting.
+
 This does not prune AML state. The canonical latest payload/evidence/source refs and bounded summary window remain in the programmed Circle; local retention only caps host debugging artifacts.
 
 ## Readiness Checks
