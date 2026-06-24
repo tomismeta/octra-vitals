@@ -33,6 +33,7 @@ export interface RecordSnapshotCallV0 {
   method: "record_snapshot_v0";
   params: unknown[];
   compact_message_bytes: number;
+  size_headroom?: Record<string, unknown>;
   snapshot_index: number;
   summary: {
     schema_version: string;
@@ -61,6 +62,7 @@ export interface RecordSnapshotCallV1 {
   method: "record_snapshot_v1";
   params: unknown[];
   compact_message_bytes: number;
+  size_headroom?: Record<string, unknown>;
   snapshot_index: number;
   summary: {
     schema_version: string;
@@ -97,6 +99,7 @@ export interface RecordSnapshotCallFactV1 {
   observed_at: string;
   params: unknown[];
   compact_message_bytes: number;
+  size_headroom?: Record<string, unknown>;
   snapshot_index: number;
   fact_ledger: {
     manifest: string;
@@ -162,6 +165,74 @@ function minProgramRpcUrls(forceMultiRpc: boolean): number {
     throw new Error("VITALS_MIN_PROGRAM_RPC_URLS must be a positive integer");
   }
   return Math.max(forceMultiRpc ? 2 : 1, parsed);
+}
+
+function byteLength(value: string): number {
+  return Buffer.byteLength(value, "utf8");
+}
+
+function warnIfLow(label: string, used: number, limit: number, warnings: string[]): void {
+  if (limit <= 0) return;
+  const remaining = limit - used;
+  if (remaining < 0) {
+    warnings.push(`${label}_over_limit`);
+  } else if (remaining / limit <= 0.15) {
+    warnings.push(`${label}_within_15pct_limit`);
+  }
+}
+
+function buildSizeHeadroom(input: {
+  canonicalPayload: string;
+  canonicalEvidenceManifest: string;
+  canonicalSourceRefs: string;
+  summaryRow: string;
+  historyRow?: string;
+  params: unknown[];
+  compactMessageBytes: number;
+  compactMaxMessageBytes: number;
+}): Record<string, unknown> {
+  const payloadBytes = byteLength(input.canonicalPayload);
+  const evidenceBytes = byteLength(input.canonicalEvidenceManifest);
+  const sourceRefsBytes = byteLength(input.canonicalSourceRefs);
+  const summaryRowBytes = byteLength(input.summaryRow);
+  const historyRowBytes = input.historyRow ? byteLength(input.historyRow) : null;
+  const paramsJsonBytes = byteLength(JSON.stringify(input.params));
+  const payloadLimit = Number(process.env.VITALS_AML_MAX_PAYLOAD_BYTES || 12_000);
+  const evidenceLimit = Number(process.env.VITALS_AML_MAX_EVIDENCE_BYTES || 8_000);
+  const sourceRefsLimit = Number(process.env.VITALS_AML_MAX_SOURCE_REFS_BYTES || 4_096);
+  const capsuleRowLimit = Number(process.env.VITALS_FACT_LEDGER_CAPSULE_ROW_LIMIT || 48);
+  const warnings: string[] = [];
+  warnIfLow("payload", payloadBytes, payloadLimit, warnings);
+  warnIfLow("evidence_manifest", evidenceBytes, evidenceLimit, warnings);
+  warnIfLow("source_refs", sourceRefsBytes, sourceRefsLimit, warnings);
+  warnIfLow("record_call", input.compactMessageBytes, input.compactMaxMessageBytes, warnings);
+  return {
+    schema: "octra-vitals-size-headroom-v0",
+    bytes: {
+      canonical_payload: payloadBytes,
+      canonical_evidence_manifest: evidenceBytes,
+      canonical_source_refs: sourceRefsBytes,
+      summary_row: summaryRowBytes,
+      history_row: historyRowBytes,
+      record_call_params_json: paramsJsonBytes,
+      compact_message: input.compactMessageBytes
+    },
+    limits: {
+      canonical_payload: payloadLimit,
+      canonical_evidence_manifest: evidenceLimit,
+      canonical_source_refs: sourceRefsLimit,
+      compact_message: input.compactMaxMessageBytes,
+      fact_capsule_row_limit: capsuleRowLimit,
+      fact_capsule_body_bytes: historyRowBytes ? capsuleRowLimit * historyRowBytes : null
+    },
+    remaining_bytes: {
+      canonical_payload: payloadLimit - payloadBytes,
+      canonical_evidence_manifest: evidenceLimit - evidenceBytes,
+      canonical_source_refs: sourceRefsLimit - sourceRefsBytes,
+      compact_message: input.compactMaxMessageBytes - input.compactMessageBytes
+    },
+    warnings
+  };
 }
 
 function recordSnapshotVersion(options: BuildRecordSnapshotCallOptions): "v0" | "v1" | "fact-v1" {
@@ -303,6 +374,16 @@ export async function buildRecordSnapshotCall(
       if (compactMessageBytes > compactMaxMessageBytes) {
         throw new Error(`record_snapshot_fact_v1 call would be ${compactMessageBytes} bytes, above VITALS_COMPACT_SNAPSHOT_MAX_MESSAGE_BYTES=${compactMaxMessageBytes}`);
       }
+      const sizeHeadroom = buildSizeHeadroom({
+        canonicalPayload,
+        canonicalEvidenceManifest,
+        canonicalSourceRefs,
+        summaryRow,
+        historyRow,
+        params,
+        compactMessageBytes,
+        compactMaxMessageBytes
+      });
 
       const circleId = configuredProgrammedCircleId();
       return {
@@ -317,6 +398,7 @@ export async function buildRecordSnapshotCall(
         observed_at: envelope.observed_at,
         params,
         compact_message_bytes: compactMessageBytes,
+        size_headroom: sizeHeadroom,
         snapshot_index: snapshotIndex,
         fact_ledger: {
           manifest: FACT_LEDGER_MANIFEST,
@@ -374,6 +456,16 @@ export async function buildRecordSnapshotCall(
     if (compactMessageBytes > compactMaxMessageBytes) {
       throw new Error(`record_snapshot_v1 call would be ${compactMessageBytes} bytes, above VITALS_COMPACT_SNAPSHOT_MAX_MESSAGE_BYTES=${compactMaxMessageBytes}`);
     }
+    const sizeHeadroom = buildSizeHeadroom({
+      canonicalPayload,
+      canonicalEvidenceManifest,
+      canonicalSourceRefs,
+      summaryRow,
+      historyRow,
+      params,
+      compactMessageBytes,
+      compactMaxMessageBytes
+    });
 
     const circleId = configuredProgrammedCircleId();
     return {
@@ -386,6 +478,7 @@ export async function buildRecordSnapshotCall(
       method: "record_snapshot_v1",
       params,
       compact_message_bytes: compactMessageBytes,
+      size_headroom: sizeHeadroom,
       snapshot_index: snapshotIndex,
       summary: {
         schema_version: SUMMARY_SCHEMA_VERSION,
@@ -433,6 +526,15 @@ export async function buildRecordSnapshotCall(
   if (compactMessageBytes > compactMaxMessageBytes) {
     throw new Error(`record_snapshot_v0 call would be ${compactMessageBytes} bytes, above VITALS_COMPACT_SNAPSHOT_MAX_MESSAGE_BYTES=${compactMaxMessageBytes}`);
   }
+  const sizeHeadroom = buildSizeHeadroom({
+    canonicalPayload,
+    canonicalEvidenceManifest,
+    canonicalSourceRefs,
+    summaryRow,
+    params,
+    compactMessageBytes,
+    compactMaxMessageBytes
+  });
 
   const circleId = configuredProgrammedCircleId();
   return {
@@ -445,6 +547,7 @@ export async function buildRecordSnapshotCall(
     method: "record_snapshot_v0",
     params,
     compact_message_bytes: compactMessageBytes,
+    size_headroom: sizeHeadroom,
     snapshot_index: snapshotIndex,
     summary: {
       schema_version: SUMMARY_SCHEMA_VERSION,

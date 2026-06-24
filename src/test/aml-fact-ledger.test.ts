@@ -17,8 +17,10 @@ import {
   encodeFactFamilyDefinition,
   encodeFactFamilyState,
   factLedgerEmptyCatalogRootHex,
+  factLedgerEmptyFamilyCapsulesRootHex,
   factLedgerEmptyFamilyRootHex,
   factLedgerFamilySetHashHex,
+  factLedgerFoldFamilyCapsulesRootHex,
   factLedgerFoldCatalogRootHex,
   factLedgerFoldFamilyRootHex,
   factLedgerRowHashHex,
@@ -121,6 +123,7 @@ test("fact capsule metadata is fixed-width and verifies a core row body", () => 
   const rows = [1, 2, 3].map((index) => encodeCoreAccountingFactRow(row(index)));
   const body = rows.join("");
   const startRoot = factLedgerEmptyFamilyRootHex(FACT_LEDGER_CORE_FAMILY_ID, FACT_LEDGER_CORE_SCHEMA_ID);
+  const capsulesStartRoot = factLedgerEmptyFamilyCapsulesRootHex(FACT_LEDGER_CORE_FAMILY_ID, FACT_LEDGER_CORE_SCHEMA_ID);
   const catalogRoot = factLedgerFoldCatalogRootHex(factLedgerEmptyCatalogRootHex(), [
     encodeFactFamilyDefinition(coreFactFamilyDefinition(1))
   ]);
@@ -132,7 +135,7 @@ test("fact capsule metadata is fixed-width and verifies a core row body", () => 
     body,
     rowLen: HISTORY_V1_ROW_LEN,
     startRootHex: startRoot,
-    familyRootBeforeHex: startRoot,
+    familyRootBeforeHex: capsulesStartRoot,
     catalogRootHex: catalogRoot
   });
   const decoded = decodeFactCapsuleMeta(capsule.meta_row);
@@ -144,6 +147,15 @@ test("fact capsule metadata is fixed-width and verifies a core row body", () => 
   assert.equal(decoded.first_key, "0000000001");
   assert.equal(decoded.last_key, "0000000003");
   assert.equal(decoded.end_root_hex, factLedgerFoldFamilyRootHex(FACT_LEDGER_CORE_FAMILY_ID, FACT_LEDGER_CORE_SCHEMA_ID, startRoot, rows));
+  assert.notEqual(decoded.family_root_before_hex, decoded.start_root_hex);
+  assert.equal(decoded.family_root_after_hex, factLedgerFoldFamilyCapsulesRootHex({
+    familyId: FACT_LEDGER_CORE_FAMILY_ID,
+    schemaId: FACT_LEDGER_CORE_SCHEMA_ID,
+    startRootHex: capsulesStartRoot,
+    capsuleId: "2026-06-23T00.0000",
+    bodyHashHex: decoded.body_hash_hex,
+    rowRootAfterHex: decoded.end_root_hex
+  }));
 });
 
 test("family set hash is deterministic regardless of caller ordering", () => {

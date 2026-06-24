@@ -5,6 +5,8 @@ import { decodeHistoryV1Rows, HISTORY_V1_ROW_LEN, type HistoryV1ObservationRow }
 import {
   decodeFactCapsuleMeta,
   factLedgerCapsuleBodyHashHex,
+  factLedgerEmptyFamilyCapsulesRootHex,
+  factLedgerFoldFamilyCapsulesRootHex,
   factLedgerFoldFamilyRootHex,
   FACT_LEDGER_CORE_FAMILY_ID,
   FACT_LEDGER_CORE_SCHEMA_ID
@@ -155,7 +157,10 @@ function splitHistoryRows(body: string): string[] {
 function verifiedHistoryWindowFromFactLedger(input: {
   catalogRoot: string;
   familyRoot: string;
+  familyCapsulesRoot?: string | null;
   sealedCapsules: Array<{ id: string; body: string; meta: string; rootAfter: string }>;
+  sealedCapsuleStartOrdinal?: number;
+  sealedCapsuleTotalCount?: number;
   openBody: string;
   openRowCount: number;
   openStartRoot: string;
@@ -163,6 +168,9 @@ function verifiedHistoryWindowFromFactLedger(input: {
 }): ProgramHistoryWindow {
   const bodies: string[] = [];
   let previousRoot: string | null = null;
+  let previousCapsulesRoot: string | null = input.sealedCapsuleStartOrdinal === 0
+    ? factLedgerEmptyFamilyCapsulesRootHex(FACT_LEDGER_CORE_FAMILY_ID, FACT_LEDGER_CORE_SCHEMA_ID)
+    : null;
   for (const capsule of input.sealedCapsules) {
     if (!capsule.id || !capsule.body || !capsule.meta || !capsule.rootAfter) {
       throw new Error("fact capsule readback is incomplete");
@@ -177,8 +185,8 @@ function verifiedHistoryWindowFromFactLedger(input: {
     if (meta.catalog_root_hex !== input.catalogRoot) {
       throw new Error("fact capsule catalog root mismatch");
     }
-    if (meta.family_root_before_hex !== meta.start_root_hex) {
-      throw new Error("fact capsule family-root-before mismatch");
+    if (previousCapsulesRoot && meta.family_root_before_hex !== previousCapsulesRoot) {
+      throw new Error("fact capsule family capsules root continuity mismatch");
     }
     if (capsule.body.length !== meta.row_count * HISTORY_V1_ROW_LEN) {
       throw new Error("fact capsule body length does not match metadata row count");
@@ -192,17 +200,36 @@ function verifiedHistoryWindowFromFactLedger(input: {
     if (endRoot !== meta.end_root_hex) {
       throw new Error("fact capsule end root mismatch");
     }
-    if (meta.family_root_after_hex !== meta.end_root_hex) {
-      throw new Error("fact capsule family-root-after mismatch");
+    const familyCapsulesRootAfter = factLedgerFoldFamilyCapsulesRootHex({
+      familyId: FACT_LEDGER_CORE_FAMILY_ID,
+      schemaId: FACT_LEDGER_CORE_SCHEMA_ID,
+      startRootHex: meta.family_root_before_hex,
+      capsuleId: capsule.id,
+      bodyHashHex: meta.body_hash_hex,
+      rowRootAfterHex: meta.end_root_hex
+    });
+    if (meta.family_root_after_hex !== familyCapsulesRootAfter) {
+      throw new Error("fact capsule family capsules root mismatch");
     }
-    if (meta.family_root_after_hex !== capsule.rootAfter || meta.end_root_hex !== capsule.rootAfter) {
+    if (meta.end_root_hex !== capsule.rootAfter) {
       throw new Error("fact capsule root-after mismatch");
     }
     if (previousRoot && meta.start_root_hex !== previousRoot) {
       throw new Error("fact capsule root continuity mismatch");
     }
     previousRoot = meta.end_root_hex;
+    previousCapsulesRoot = meta.family_root_after_hex;
     bodies.push(capsule.body);
+  }
+
+  if (
+    input.familyCapsulesRoot &&
+    previousCapsulesRoot &&
+    Number(input.sealedCapsuleStartOrdinal || 0) === 0 &&
+    input.sealedCapsules.length === Number(input.sealedCapsuleTotalCount || input.sealedCapsules.length) &&
+    input.familyCapsulesRoot !== previousCapsulesRoot
+  ) {
+    throw new Error("fact family capsules root does not match latest sealed capsule chain root");
   }
 
   if (Number(input.openRowCount || 0) > 0) {
@@ -525,9 +552,10 @@ async function readCircleProgramSummaryHistoryFromUrlV1(circleId: string, url: s
 }
 
 async function readCircleProgramSummaryHistoryFromUrlFactLedger(circleId: string, url: string): Promise<ProgramHistoryWindow> {
-  const [catalogRoot, familyRoot, openBody, openRowCount, openStartRoot, openEndRoot, capsuleCount] = await Promise.all([
+  const [catalogRoot, familyRoot, familyCapsulesRoot, openBody, openRowCount, openStartRoot, openEndRoot, capsuleCount] = await Promise.all([
     circleProgramViewAtUrl<string>(url, circleId, "get_catalog_root"),
     circleProgramViewAtUrl<string>(url, circleId, "get_family_root", ["0000"]),
+    circleProgramViewAtUrl<string>(url, circleId, "get_family_capsules_root", ["0000"]).catch(() => null),
     circleProgramViewAtUrl<string>(url, circleId, "get_family_open_capsule_body", ["0000"]),
     circleProgramViewAtUrl<number>(url, circleId, "get_family_open_capsule_row_count", ["0000"]),
     circleProgramViewAtUrl<string>(url, circleId, "get_family_open_capsule_start_root", ["0000"]),
@@ -553,7 +581,10 @@ async function readCircleProgramSummaryHistoryFromUrlFactLedger(circleId: string
   return verifiedHistoryWindowFromFactLedger({
     catalogRoot,
     familyRoot,
+    familyCapsulesRoot,
     sealedCapsules,
+    sealedCapsuleStartOrdinal: Math.max(0, sealedCount - factLedgerHistoryCapsuleLimit()),
+    sealedCapsuleTotalCount: sealedCount,
     openBody,
     openRowCount: Number(openRowCount || 0),
     openStartRoot,

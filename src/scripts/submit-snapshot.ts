@@ -19,6 +19,7 @@ import {
   decodeFactCapsuleMeta,
   factLedgerCapsuleBodyHashHex,
   factLedgerCapsuleMetaHashHex,
+  factLedgerFoldFamilyCapsulesRootHex,
   factLedgerFoldFamilyRootHex,
   factLedgerRowHashHex,
   FACT_LEDGER_CORE_FAMILY_ID,
@@ -169,6 +170,7 @@ export async function writeLatestReceipt(report: Record<string, any>, options: W
     native_receipts: report.native_receipts || null,
     readback: report.readback,
     expected_hashes: report.expected_hashes,
+    size_headroom: report.size_headroom || null,
     fee_telemetry: report.fee_telemetry || null,
     timings_ms: report.timings_ms || null,
     paths: report.paths || null
@@ -205,10 +207,50 @@ function summarizeReport(report: unknown, outPath: string): unknown {
     ou: value.ou,
     missing_requirements: value.missing_requirements,
     expected_hashes: value.expected_hashes || value.call?.expected_hashes,
+    size_headroom: value.size_headroom || value.call?.size_headroom || null,
     native_receipts: value.native_receipts || null,
     timings_ms: value.timings_ms,
     report_path: outPath
   };
+}
+
+function receiptEffort(nativeReceipts: Array<Record<string, any>>): number | null {
+  const efforts = nativeReceipts
+    .map((entry) => Number(entry?.receipt?.effort ?? entry?.receipt?.effort_used ?? NaN))
+    .filter((value) => Number.isFinite(value));
+  return efforts.length ? Math.max(...efforts) : null;
+}
+
+function enrichSizeHeadroom(call: RecordSnapshotCall, preSubmitState: Record<string, unknown> | null, ou: string | null, nativeReceipts: Array<Record<string, any>> = []): Record<string, unknown> | null {
+  const base = call.size_headroom ? JSON.parse(JSON.stringify(call.size_headroom)) as Record<string, any> : null;
+  if (!base) return null;
+  const factState = preSubmitState?.fact_ledger && typeof preSubmitState.fact_ledger === "object"
+    ? preSubmitState.fact_ledger as Record<string, any>
+    : null;
+  const historyRowBytes = call.commit_mode === "fact-v1" ? Buffer.byteLength(call.history.row, "utf8") : null;
+  const rowLimit = Number(base?.limits?.fact_capsule_row_limit || factState?.capsule_row_limit || 48);
+  const openRowsBefore = factState ? Number(factState.open_capsule_row_count || 0) : null;
+  const projectedRowsBeforeSeal = openRowsBefore !== null ? openRowsBefore + 1 : null;
+  const projectedBodyBytesBeforeSeal = projectedRowsBeforeSeal !== null && historyRowBytes !== null ? projectedRowsBeforeSeal * historyRowBytes : null;
+  const bodyLimitBytes = historyRowBytes !== null ? rowLimit * historyRowBytes : null;
+  const effort = receiptEffort(nativeReceipts);
+  const dynamicWarnings = new Set<string>(Array.isArray(base.warnings) ? base.warnings : []);
+  if (projectedRowsBeforeSeal !== null && projectedRowsBeforeSeal >= rowLimit) dynamicWarnings.add("fact_capsule_seals_on_this_write");
+  if (projectedRowsBeforeSeal !== null && projectedRowsBeforeSeal / rowLimit >= 0.85) dynamicWarnings.add("fact_capsule_within_15pct_row_limit");
+  base.dynamic = {
+    open_capsule_row_count_before: openRowsBefore,
+    projected_open_capsule_rows_before_seal: projectedRowsBeforeSeal,
+    projected_open_capsule_body_bytes_before_seal: projectedBodyBytesBeforeSeal,
+    fact_capsule_body_limit_bytes: bodyLimitBytes,
+    seal_on_submit: projectedRowsBeforeSeal !== null ? projectedRowsBeforeSeal >= rowLimit : null,
+    capsule_count_before: factState ? Number(factState.capsule_count || 0) : null,
+    latest_capsule_id_before: factState?.latest_capsule_id || null,
+    submitted_ou: ou,
+    receipt_effort_used: effort,
+    effort_to_ou_ratio: effort !== null && ou ? effort / Number(ou) : null
+  };
+  base.warnings = Array.from(dynamicWarnings);
+  return base;
 }
 
 function receiptSummary(receipt: any): Record<string, unknown> | null {
@@ -410,6 +452,7 @@ async function readAndVerifyProgramReadbackFactV1(programAddress: string, call: 
     latestHistoryRowHash,
     catalogRoot,
     familyRoot,
+    familyCapsulesRoot,
     openCapsuleBody,
     openCapsuleRowCount,
     openCapsuleStartRoot,
@@ -427,6 +470,7 @@ async function readAndVerifyProgramReadbackFactV1(programAddress: string, call: 
     contractCall<string>(programAddress, "get_latest_history_row_hash"),
     contractCall<string>(programAddress, "get_catalog_root"),
     contractCall<string>(programAddress, "get_family_root", [FACT_LEDGER_CORE_FAMILY_ID]),
+    contractCall<string>(programAddress, "get_family_capsules_root", [FACT_LEDGER_CORE_FAMILY_ID]).catch(() => null),
     contractCall<string>(programAddress, "get_family_open_capsule_body", [FACT_LEDGER_CORE_FAMILY_ID]),
     contractCall<number>(programAddress, "get_family_open_capsule_row_count", [FACT_LEDGER_CORE_FAMILY_ID]),
     contractCall<string>(programAddress, "get_family_open_capsule_start_root", [FACT_LEDGER_CORE_FAMILY_ID]),
@@ -453,6 +497,7 @@ async function readAndVerifyProgramReadbackFactV1(programAddress: string, call: 
     latestHistoryRowHash,
     catalogRoot,
     familyRoot,
+    familyCapsulesRoot,
     openCapsuleBody,
     openCapsuleRowCount,
     openCapsuleStartRoot,
@@ -687,6 +732,7 @@ function verifyFactReadback(input: {
   latestHistoryRowHash: string;
   catalogRoot: string;
   familyRoot: string;
+  familyCapsulesRoot: string | null;
   openCapsuleBody: string;
   openCapsuleRowCount: number;
   openCapsuleStartRoot: string;
@@ -710,6 +756,7 @@ function verifyFactReadback(input: {
     latestHistoryRowHash,
     catalogRoot,
     familyRoot,
+    familyCapsulesRoot,
     openCapsuleBody,
     openCapsuleRowCount,
     openCapsuleStartRoot,
@@ -785,8 +832,19 @@ function verifyFactReadback(input: {
     if (endRoot !== meta.end_root_hex) {
       throw new Error(`readback latest sealed fact capsule end root mismatch: expected ${meta.end_root_hex}, got ${endRoot}`);
     }
-    if (meta.family_root_before_hex !== meta.start_root_hex || meta.family_root_after_hex !== endRoot) {
-      throw new Error("readback latest sealed fact capsule family root metadata mismatch");
+    const familyCapsulesRootAfter = factLedgerFoldFamilyCapsulesRootHex({
+      familyId: FACT_LEDGER_CORE_FAMILY_ID,
+      schemaId: FACT_LEDGER_CORE_SCHEMA_ID,
+      startRootHex: meta.family_root_before_hex,
+      capsuleId: latestCapsuleId,
+      bodyHashHex: meta.body_hash_hex,
+      rowRootAfterHex: endRoot
+    });
+    if (meta.family_root_after_hex !== familyCapsulesRootAfter) {
+      throw new Error("readback latest sealed fact capsule family capsules root metadata mismatch");
+    }
+    if (familyCapsulesRoot && familyCapsulesRoot !== meta.family_root_after_hex) {
+      throw new Error("readback family capsules root does not match latest sealed capsule root");
     }
     if (latestCapsuleRootAfter !== endRoot) {
       throw new Error("readback latest sealed fact capsule root-after does not match end root");
@@ -830,6 +888,7 @@ function verifyFactReadback(input: {
     history_row_hash: latestHistoryRowHash,
     catalog_root: catalogRoot,
     family_root: familyRoot,
+    family_capsules_root: familyCapsulesRoot || null,
     open_capsule_rows: Number(openCapsuleRowCount || 0),
     capsule_count: Number(capsuleCount || 0),
     latest_capsule_id: latestCapsuleId || null,
@@ -919,6 +978,7 @@ async function readAndVerifyCircleReadbackFromUrlFactV1(circleId: string, call: 
     latestHistoryRowHash,
     catalogRoot,
     familyRoot,
+    familyCapsulesRoot,
     openCapsuleBody,
     openCapsuleRowCount,
     openCapsuleStartRoot,
@@ -936,6 +996,7 @@ async function readAndVerifyCircleReadbackFromUrlFactV1(circleId: string, call: 
     circleProgramViewAtUrl<string>(url, circleId, "get_latest_history_row_hash"),
     circleProgramViewAtUrl<string>(url, circleId, "get_catalog_root"),
     circleProgramViewAtUrl<string>(url, circleId, "get_family_root", [FACT_LEDGER_CORE_FAMILY_ID]),
+    circleProgramViewAtUrl<string>(url, circleId, "get_family_capsules_root", [FACT_LEDGER_CORE_FAMILY_ID]).catch(() => null),
     circleProgramViewAtUrl<string>(url, circleId, "get_family_open_capsule_body", [FACT_LEDGER_CORE_FAMILY_ID]),
     circleProgramViewAtUrl<number>(url, circleId, "get_family_open_capsule_row_count", [FACT_LEDGER_CORE_FAMILY_ID]),
     circleProgramViewAtUrl<string>(url, circleId, "get_family_open_capsule_start_root", [FACT_LEDGER_CORE_FAMILY_ID]),
@@ -962,6 +1023,7 @@ async function readAndVerifyCircleReadbackFromUrlFactV1(circleId: string, call: 
     latestHistoryRowHash,
     catalogRoot,
     familyRoot,
+    familyCapsulesRoot,
     openCapsuleBody,
     openCapsuleRowCount,
     openCapsuleStartRoot,
@@ -1087,11 +1149,35 @@ async function assertPreSubmitState(targetKind: StateTargetMode, targetId: strin
   if (primary.count !== expectedPrior) {
     throw new Error(`pre-submit state advanced or drifted: expected snapshot_count ${expectedPrior}, got ${primary.count}`);
   }
+  let factLedger: Record<string, unknown> | null = null;
+  if (call.commit_mode === "fact-v1" && targetKind === "circle_program") {
+    const [openRows, openBody, openStartRoot, openEndRoot, capsuleCount, latestCapsuleId, capsuleRowLimit, familyCapsulesRoot] = await Promise.all([
+      circleProgramViewAtUrl<number>(primary.url, targetId, "get_family_open_capsule_row_count", [FACT_LEDGER_CORE_FAMILY_ID]),
+      circleProgramViewAtUrl<string>(primary.url, targetId, "get_family_open_capsule_body", [FACT_LEDGER_CORE_FAMILY_ID]),
+      circleProgramViewAtUrl<string>(primary.url, targetId, "get_family_open_capsule_start_root", [FACT_LEDGER_CORE_FAMILY_ID]),
+      circleProgramViewAtUrl<string>(primary.url, targetId, "get_family_open_capsule_end_root", [FACT_LEDGER_CORE_FAMILY_ID]),
+      circleProgramViewAtUrl<number>(primary.url, targetId, "get_family_capsule_count", [FACT_LEDGER_CORE_FAMILY_ID]),
+      circleProgramViewAtUrl<string>(primary.url, targetId, "get_family_latest_capsule_id", [FACT_LEDGER_CORE_FAMILY_ID]).catch(() => ""),
+      circleProgramViewAtUrl<number>(primary.url, targetId, "get_capsule_row_limit").catch(() => 48),
+      circleProgramViewAtUrl<string>(primary.url, targetId, "get_family_capsules_root", [FACT_LEDGER_CORE_FAMILY_ID]).catch(() => null)
+    ]);
+    factLedger = {
+      open_capsule_row_count: Number(openRows || 0),
+      open_capsule_body_bytes: Buffer.byteLength(openBody || "", "utf8"),
+      open_capsule_start_root: openStartRoot || null,
+      open_capsule_end_root: openEndRoot || null,
+      capsule_count: Number(capsuleCount || 0),
+      latest_capsule_id: latestCapsuleId || null,
+      capsule_row_limit: Number(capsuleRowLimit || 48),
+      family_capsules_root: familyCapsulesRoot || null
+    };
+  }
   return {
     snapshot_count: primary.count,
     expected_prior_snapshot_count: expectedPrior,
     rpc_urls_checked: urls.length,
-    rpc_agreement: true
+    rpc_agreement: true,
+    ...(factLedger ? { fact_ledger: factLedger } : {})
   };
 }
 
@@ -1137,6 +1223,7 @@ export async function submitSnapshotCall(
       commit_mode: call.commit_mode || "v0",
       call_count: 1,
       compact_message_bytes: call.compact_message_bytes || null,
+      size_headroom: call.size_headroom || null,
       call: {
         method: call.method,
         params: call.params,
@@ -1177,6 +1264,7 @@ export async function submitSnapshotCall(
       nonces: [],
       confirmations: [],
       expected_hashes: call.expected_hashes,
+      size_headroom: call.size_headroom || null,
       readback: existingReadback,
       fact_ledger_preflight: factLedgerPreflight,
       readonly_check: {
@@ -1284,6 +1372,7 @@ export async function submitSnapshotCall(
   }
 
   const readback = await readAndVerifyTargetReadback(targetKind, targetId, call);
+  const sizeHeadroom = enrichSizeHeadroom(call, preSubmitState, ou, nativeReceipts);
   const report = {
     schema: "octra-vitals-submit-snapshot-report-v0",
     status: waitForConfirmations ? "confirmed" : "submitted",
@@ -1304,6 +1393,7 @@ export async function submitSnapshotCall(
     nonces: submissions.map((submission) => submission.nonce),
     ou,
     fee_telemetry: fee,
+    size_headroom: sizeHeadroom,
     submissions,
     confirmations,
     native_receipts: nativeReceipts,

@@ -24,6 +24,7 @@ contract VitalsFactLedgerState {
   const FACT_CAPSULE_ROW_LIMIT = 48
   const ROW_HASH_DOMAIN = "octra-vitals:fact-row:v1"
   const FAMILY_ROOT_DOMAIN = "octra-vitals:fact-family-root:v1"
+  const FAMILY_CAPSULES_ROOT_DOMAIN = "octra-vitals:fact-family-capsules-root:v1"
   const CAPSULE_BODY_HASH_DOMAIN = "octra-vitals:fact-capsule-body:v1"
   const CAPSULE_META_HASH_DOMAIN = "octra-vitals:fact-capsule-meta:v1"
   const CATALOG_ROOT_DOMAIN = "octra-vitals:fact-catalog-root:v1"
@@ -69,6 +70,7 @@ contract VitalsFactLedgerState {
     family_id_by_ordinal: map[string]string
     family_definition_by_id: map[string]string
     family_root_by_id: map[string]string
+    family_capsules_root_by_id: map[string]string
     family_latest_index_by_id: map[string]int
     family_capsule_count_by_id: map[string]int
     family_latest_capsule_id_by_id: map[string]string
@@ -380,6 +382,24 @@ contract VitalsFactLedgerState {
     return sha256(text_e)
   }
 
+  private fn empty_family_capsules_root(family_id: string, schema_id: string): string {
+    let text_a = concat(concat(FAMILY_CAPSULES_ROOT_DOMAIN, "\n"), FACT_LEDGER_MANIFEST)
+    let text_b = concat(concat(text_a, "\n"), family_id)
+    let text_c = concat(concat(text_b, "\n"), schema_id)
+    return sha256(text_c)
+  }
+
+  private fn fold_family_capsules_root(family_id: string, schema_id: string, start_root: string, capsule_id: string, body_hash: string, row_root_after: string): string {
+    let text_a = concat(concat(FAMILY_CAPSULES_ROOT_DOMAIN, "\n"), FACT_LEDGER_MANIFEST)
+    let text_b = concat(concat(text_a, "\n"), family_id)
+    let text_c = concat(concat(text_b, "\n"), schema_id)
+    let text_d = concat(concat(text_c, "\n"), start_root)
+    let text_e = concat(concat(text_d, "\n"), capsule_id)
+    let text_f = concat(concat(text_e, "\n"), body_hash)
+    let text_g = concat(concat(text_f, "\n"), row_root_after)
+    return sha256(text_g)
+  }
+
   private fn assert_fact_row(family_id: string, schema_id: string, snapshot_index: int, payload_hash: string, row: string) {
     require(len(row) == FACT_ROW_BYTES, "row length")
     require(substr(row, 0, 2) == FACT_LEDGER_VERSION, "row version")
@@ -414,6 +434,7 @@ contract VitalsFactLedgerState {
     self.family_id_by_ordinal[ordinal_key] = family_id
     self.family_definition_by_id[family_id] = definition
     self.family_root_by_id[family_id] = empty_family_root
+    self.family_capsules_root_by_id[family_id] = empty_family_capsules_root(family_id, schema_id_for_family(family_id))
     self.family_latest_index_by_id[family_id] = self.predecessor_final_index
     self.family_capsule_count_by_id[family_id] = 0
     self.family_latest_capsule_id_by_id[family_id] = ""
@@ -457,6 +478,11 @@ contract VitalsFactLedgerState {
     let body = self.family_open_capsule_body_by_id[family_id]
     let body_hash = fact_capsule_body_hash(family_id, schema_id, body)
     let root_after = self.family_open_capsule_end_root_by_id[family_id]
+    let family_root_before = self.family_capsules_root_by_id[family_id]
+    if family_root_before == "" {
+      family_root_before = empty_family_capsules_root(family_id, schema_id)
+    }
+    let family_root_after = fold_family_capsules_root(family_id, schema_id, family_root_before, capsule_id, body_hash, root_after)
     let last_row_offset = (row_count - 1) * FACT_ROW_BYTES
     let capsule_count = self.family_capsule_count_by_id[family_id]
     let meta_family = concat(concat(concat(concat(FACT_LEDGER_VERSION, "|"), family_id), "|"), schema_id)
@@ -470,8 +496,8 @@ contract VitalsFactLedgerState {
     let meta_h = concat(concat(meta_g, "|"), self.family_open_capsule_start_root_by_id[family_id])
     let meta_i = concat(concat(meta_h, "|"), root_after)
     let meta_j = concat(concat(meta_i, "|"), EMPTY_TX_INDEX_HASH)
-    let meta_k = concat(concat(meta_j, "|"), self.family_open_capsule_start_root_by_id[family_id])
-    let meta_l = concat(concat(meta_k, "|"), root_after)
+    let meta_k = concat(concat(meta_j, "|"), family_root_before)
+    let meta_l = concat(concat(meta_k, "|"), family_root_after)
     let meta_row = concat(concat(meta_l, "|"), self.catalog_root)
     require(len(meta_row) == FACT_CAPSULE_META_BYTES, "capsule meta length")
     let meta_hash = fact_capsule_meta_hash(meta_row)
@@ -479,6 +505,7 @@ contract VitalsFactLedgerState {
     self.family_capsule_body_by_key[key] = body
     self.family_capsule_meta_by_key[key] = meta_row
     self.family_capsule_root_after_by_key[key] = root_after
+    self.family_capsules_root_by_id[family_id] = family_root_after
     self.family_capsule_id_by_key[family_capsule_ordinal_key(family_id, capsule_count)] = capsule_id
     self.family_capsule_count_by_id[family_id] = capsule_count + 1
     self.family_latest_capsule_id_by_id[family_id] = capsule_id
@@ -681,6 +708,15 @@ contract VitalsFactLedgerState {
     return self.family_root_by_id[family_id]
   }
 
+  public view fn get_family_capsules_root(family_id: string): string {
+    require_family_registered(family_id)
+    let root_value = self.family_capsules_root_by_id[family_id]
+    if root_value == "" {
+      return empty_family_capsules_root(family_id, schema_id_for_family(family_id))
+    }
+    return root_value
+  }
+
   public view fn get_family_latest_index(family_id: string): int {
     require_family_registered(family_id)
     return self.family_latest_index_by_id[family_id]
@@ -743,6 +779,14 @@ contract VitalsFactLedgerState {
 
   public view fn get_history_root(): string {
     return self.family_root_by_id[CORE_FAMILY_ID]
+  }
+
+  public view fn get_capsules_root(): string {
+    let root_value = self.family_capsules_root_by_id[CORE_FAMILY_ID]
+    if root_value == "" {
+      return empty_family_capsules_root(CORE_FAMILY_ID, CORE_SCHEMA_ID)
+    }
+    return root_value
   }
 
   public view fn get_open_capsule_body(): string {

@@ -17,6 +17,7 @@ export const FACT_LEDGER_FAMILY_STATE_LEN = 338;
 export const FACT_LEDGER_CAPSULE_META_LEN = 577;
 export const FACT_LEDGER_ROW_HASH_DOMAIN = "octra-vitals:fact-row:v1";
 export const FACT_LEDGER_FAMILY_ROOT_DOMAIN = "octra-vitals:fact-family-root:v1";
+export const FACT_LEDGER_FAMILY_CAPSULES_ROOT_DOMAIN = "octra-vitals:fact-family-capsules-root:v1";
 export const FACT_LEDGER_CAPSULE_BODY_HASH_DOMAIN = "octra-vitals:fact-capsule-body:v1";
 export const FACT_LEDGER_CAPSULE_META_HASH_DOMAIN = "octra-vitals:fact-capsule-meta:v1";
 export const FACT_LEDGER_CATALOG_ROOT_DOMAIN = "octra-vitals:fact-catalog-root:v1";
@@ -222,6 +223,10 @@ export function factLedgerEmptyFamilyRootHex(familyId: string, schemaId: string)
   return taggedHashHex(FACT_LEDGER_FAMILY_ROOT_DOMAIN, `${FACT_LEDGER_MANIFEST}\n${code4(familyId, "family_id")}\n${code4(schemaId, "schema_id")}`);
 }
 
+export function factLedgerEmptyFamilyCapsulesRootHex(familyId: string, schemaId: string): string {
+  return taggedHashHex(FACT_LEDGER_FAMILY_CAPSULES_ROOT_DOMAIN, `${FACT_LEDGER_MANIFEST}\n${code4(familyId, "family_id")}\n${code4(schemaId, "schema_id")}`);
+}
+
 export function factLedgerEmptyCatalogRootHex(): string {
   return taggedHashHex(FACT_LEDGER_CATALOG_ROOT_DOMAIN, "");
 }
@@ -256,6 +261,30 @@ export function factLedgerFoldFamilyRootHex(familyId: string, schemaId: string, 
     root = taggedHashHex(FACT_LEDGER_FAMILY_ROOT_DOMAIN, `${FACT_LEDGER_MANIFEST}\n${familyId}\n${schemaId}\n${root}\n${factLedgerRowHashHex(familyId, schemaId, row)}`);
   }
   return root;
+}
+
+export function factLedgerFoldFamilyCapsulesRootHex(input: {
+  familyId: string;
+  schemaId: string;
+  startRootHex: string;
+  capsuleId: string;
+  bodyHashHex: string;
+  rowRootAfterHex: string;
+}): string {
+  const familyId = code4(input.familyId, "family_id");
+  const schemaId = code4(input.schemaId, "schema_id");
+  return taggedHashHex(
+    FACT_LEDGER_FAMILY_CAPSULES_ROOT_DOMAIN,
+    [
+      FACT_LEDGER_MANIFEST,
+      familyId,
+      schemaId,
+      hex64(input.startRootHex, "start_root_hex"),
+      fixedText(input.capsuleId, 24, "capsule_id").trimEnd(),
+      hex64(input.bodyHashHex, "body_hash_hex"),
+      hex64(input.rowRootAfterHex, "row_root_after_hex")
+    ].join("\n")
+  );
 }
 
 export function factLedgerCapsuleBodyHashHex(familyId: string, schemaId: string, body: string, rowLen: number): string {
@@ -597,7 +626,14 @@ export function makeFactCapsule(input: {
   const lastObservedUnix = input.lastObservedUnix ?? Number(lastRow.slice(14, 26));
   const bodyHashHex = factLedgerCapsuleBodyHashHex(input.familyId, input.schemaId, input.body, input.rowLen);
   const endRootHex = factLedgerFoldFamilyRootHex(input.familyId, input.schemaId, input.startRootHex, rows);
-  const familyRootAfterHex = endRootHex;
+  const familyRootAfterHex = factLedgerFoldFamilyCapsulesRootHex({
+    familyId: input.familyId,
+    schemaId: input.schemaId,
+    startRootHex: input.familyRootBeforeHex,
+    capsuleId: input.capsuleId,
+    bodyHashHex,
+    rowRootAfterHex: endRootHex
+  });
   const meta: FactCapsuleMeta = {
     version: FACT_LEDGER_VERSION,
     family_id: input.familyId,

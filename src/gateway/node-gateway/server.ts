@@ -512,6 +512,7 @@ const requiredCircleProgramMethodsFactV1 = [
   "get_family_id_at",
   "get_family_definition",
   "get_family_root",
+  "get_family_capsules_root",
   "get_family_latest_index",
   "get_family_capsule_count",
   "get_family_latest_capsule_id",
@@ -524,6 +525,7 @@ const requiredCircleProgramMethodsFactV1 = [
   "get_family_capsule_body",
   "get_family_capsule_meta",
   "get_family_capsule_root_after",
+  "get_capsules_root",
   "get_latest_bundle",
   "record_snapshot_fact_v1"
 ];
