@@ -74,11 +74,14 @@ The gateway/API verifier now reads the current fact-v2 Circle and recursively ve
 
 The proof envelope exposes these eras under `/api/history.proof.eras`. Fact-ledger boundaries verify by recomputing `predecessor_anchor_hash` from `(network_id, predecessor_program, predecessor_final_root, predecessor_final_index, era_program, era_first_snapshot_index, core_family_id)`. The v1-to-fact-ledger boundary is intentionally represented as an era boundary, not as one single replayable root over all rows, because the fact-ledger root domain starts a new namespace.
 
-Local gates for this pass:
+Gates for this pass:
 
 - `npm test`: 82 passing, including manifest-scoped capsule roots and devnet era-anchor vectors.
 - `npm run native:verify`: passed; fact-v2 AML bytecode remains `sha256:aa30cedd75ab28ef2057a58312afac529d72753dee81768494e2abdba8fb28c2`.
-- Live devnet readback before deploy: stitched history spans rows `#1` through latest and returns `history_model=aml_multi_era_fact_family_core_capsules_verified`.
+- Devnet host release: commit `aae09e279f3716a2c3b1f919ccb380d68a8412e1`, `release_git_dirty=false`.
+- Devnet Circle asset update: changed-asset upload tx `42fe50b5b85859b027484e131205cc9a22b2aebc7e5099e94763fc5804e65d74` (`1` uploaded, `14` skipped).
+- Live devnet readback after deploy: `/api/history?from_index=1&to_index=98` returns rows `#1` through `#98`, `history_model=aml_multi_era_fact_family_core_capsules_verified`, `era_count=4`, and `3` verified successor boundaries.
+- Live readiness after deploy: `/api/latest` is program-backed at `#98` (`vitals.2026-06-24T23:17:00Z`) and `/api/native-readiness` reports `native_ready`, `canonical_history_readable=true`, `history_rows=98`.
 
 Latest live headroom, from first fresh fact-v2 devnet snapshot `#95` (`vitals.2026-06-24T22:29:51Z`):
 
