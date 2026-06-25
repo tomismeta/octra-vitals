@@ -1,112 +1,84 @@
-# Octra Vitals Architecture
+# Architecture
 
-Octra Vitals is Octra-first and web-compatible.
+Octra Vitals is an Octra-native accounting instrument with a web-compatible access path.
 
-## Mainnet Target
-
-The go-forward mainnet architecture is a programmed Site Circle: the Circle is both the app identity and the native state boundary.
+## Shape
 
 ```text
 Programmed Site Circle
-  canonical app assets
-  hash-only producer audit manifest
-  Vitals Circle program
-  latest canonical snapshot/provenance state
-  bounded recent summary window
+  public app assets
+  producer audit manifest
+  Vitals AML fact ledger
+  latest full snapshot/provenance
+  compact historical fact capsules
 
 Gateway
-  HTTPS transport adapter for normal browsers
-  pinned mini oct:// browser for this app only
+  HTTPS adapter for normal browsers
+  Circle asset verifier
+  AML read verifier
 
 Snapshot Producer
   scheduled external evidence collection
-  signed record_snapshot_v0 writes into the programmed Site Circle
+  signed writes into the programmed Circle
 ```
 
-In this shape, Circle browsers read state from the active Circle's own program view surface. Normal browsers still use the gateway, but the gateway remains replaceable: it translates and verifies, not originates truth.
+The programmed Site Circle is the canonical app identity and the canonical state boundary. The gateway exists so normal browsers can use the app before Circle-native browser APIs are universal. It must translate, verify, and fail closed; it must not originate production truth.
 
-This is the preferred mainnet pattern after the 2026-06-10 Circle program evaluation, stage rehearsal, and 2026-06-17 devnet cutover rehearsal. Do not cut over to mainnet until the production-sized programmed-Circle release gate passes with realistic latest payload, evidence, and source-ref sizes.
+## Verification Boundary
 
-## Devnet Dogfood
+Normal browsers receive data through the gateway, then the app re-derives canonical hashes and conservation checks before rendering. This path is integrity-verified and gateway-tamper-evident, but it is still transported through the gateway.
 
-```text
-Programmed Site Circle
-  canonical app assets
-  Vitals Circle program
-  latest canonical snapshot/provenance state
-  bounded recent summary window
+Circle-native clients can read the programmed Circle directly and verify against the chain-native state surface. That is the stronger trust boundary.
 
-Gateway
-  HTTPS transport adapter
-  pinned mini oct:// browser for this app only
-```
+## State Model
 
-As of the 2026-06-17 rehearsal, `devnet.octra.live` uses the same programmed-Circle shape planned for mainnet. The previous split deployment, with a separate Site Circle and standalone Vitals State Program, remains useful as a compatibility path and historical dogfood reference. It is no longer the active devnet target.
+The AML program stores:
 
-The gateway is not the source of truth. In both shapes, it serves the Circle-hosted app assets to normal browsers and adapts normal HTTPS routes to native state reads.
+- latest canonical payload, evidence manifest, and source references;
+- latest compact accounting fact row;
+- append-only capsule bodies and metadata for historical facts;
+- row and capsule root checkpoints;
+- predecessor/successor era anchors;
+- owner/operator, pause, and configuration state.
 
-The Site Circle follows the public Proof Console pattern: a public `octb` static asset Circle with `privacy_class = public`, `browser_mode = gateway_allowed`, and `resource_mode = public_resources`. The gateway is the normal-browser transport layer for those Circle-hosted app bytes, not a second source of truth.
+The AML program does not store historical raw RPC bodies. Raw evidence is retained by content hash on the host/archive layer and linked from source references. This keeps AML focused on ordering, commitments, compact facts, and verification roots.
 
-The collector/updater does not run in the Site Circle or inside AML. It requires scheduled execution and outbound Octra, Ethereum, and relayer RPC reads. The Circle includes `producer.audit.json` as a hash-only manifest for the producer and related source files, while the AML program remains the canonical state and history verifier.
+## History Model
 
-Production authority rule:
+Each successful snapshot writes one compact core accounting fact. Facts are fixed-width rows grouped into deterministic UTC half-day capsules. A capsule contains the row body plus metadata: row count, key bounds, body hash, row-root range, and capsule-chain root.
 
-```text
-App bytes     must resolve to the pinned Site Circle release
-State reads   must resolve to the verified AML program
-Gateway       must be replaceable; it may cache and translate, not originate truth
-```
+History can span eras. When the AML shape changes incompatibly, a new programmed Circle era starts at the next snapshot index. The successor commits to the predecessor program id, predecessor final index, predecessor final root, era first index, and a domain-separated anchor hash. `/api/history` may stitch eras only when those anchors verify against live predecessor reads.
 
-The gateway has three explicit state-source modes:
+Compatible in-place AML updates are allowed only when old state layout, old getters, old row semantics, and capsule immutability remain valid.
 
-- `program_required`: production/reference mode. `/api/latest` refuses to serve data unless it can read and verify the Vitals State Program.
-- `program_preferred`: transition mode. The gateway tries AML state first, then can fall back to bootstrap observation.
-- `bootstrap_live`: bootstrap mode only. The gateway builds live observations so we can stand up the system before the experimental program is deployed.
+## Extensibility
 
-Only `program_required` with a configured Site Circle and verified AML program should be called Octra-native production. For mainnet, the verified AML program should be attached to the Site Circle unless the production-sized programmed-Circle release gate reveals a hard protocol limit.
+Most source expansion should not require AML changes:
 
-Current implementation split:
+- new source fields can live in the latest payload/evidence/source refs;
+- new chains can appear in `payload.routes[]` while core history remains aggregate OCT accounting;
+- new derived UI values can be computed from existing facts and verified latest payloads;
+- durable new historical scalar families can use bounded auxiliary fact rows when activated.
 
-- `app/`: static browser shell that can move into the Site Circle.
-- `app/manifest.json`: Circle asset manifest for public static resources.
-- `app/producer.audit.json`: generated hash-only audit manifest for the off-chain producer and relevant state/gateway source files.
-- `circle.json`: Circle build/deploy metadata using the official `runtime`, `build`, `deploy`, and `assets` sections.
-- `program-circle/`: programmed Site Circle AML source for the preferred public path.
-- `program/`: standalone AML source and formal verification artifacts for the compatibility path.
-- `src/`: TypeScript gateway, RPC, snapshot, and artifact tooling.
-- `dist/`: compiled JavaScript deployed on gateway hosts.
-- `build/site-circle-release.json`: content-hashed Site Circle asset release manifest.
+Core row changes, new cardinality models, new authorization semantics, or incompatible storage layout changes require an AML update or a new era.
 
-The AML source intentionally follows the style of `octra-labs/circle_examples`: small state declarations, explicit initialization, `public view fn` reads, `public fn` writes, and private helpers only for repeated guard logic. For Circle `program_update`, constructor defaults are not sufficient; any production programmed-Circle AML must expose an explicit `initialize_v0` that resets all state fields it depends on.
+## External Sources
 
-Formal verification is part of the architecture, not a release decoration. A deploy is only native-ready when the active AML target has a matching source/code-hash story and the scanner/RPC formal trace is `safe` with zero errors. For the standalone compatibility path, `contract_source(<program_address>)` must expose the matching source, ABI, verification report, and certificate. For the programmed Site Circle path, `program-circle/main.aml` must have its own compile/verification artifacts, deployment must refuse unsafe compiler output, and `/api/native-readiness` must see a non-null matching Circle program code hash.
+The producer observes:
 
-Bridge accounting uses three external accounting surfaces:
+- Octra supply and bridge/vault state through Octra RPC;
+- Ethereum wOCT supply and decimals at a pinned Ethereum block;
+- relayer status and recovery data;
+- source metadata needed to reproduce or inspect the observation.
 
-- Octra BridgeVault `oct5MrNfjiXFNRDLwsodn8Zm9hDKNGAYt3eQDCQ52bSpCHq` for vault balance and storage keys such as `total_locked`, `total_unlocked`, `lock_nonce`, and `unlock_count`.
-- Ethereum wOCT `0x4647e1fE715c9e23959022C2416C71867F5a6E80` for ERC-20 `totalSupply()`.
-- EthereumBridge `0xE7eD69b852fd2a1406080B26A37e8E04e7dA4caE` and the relayer status/recovery endpoints for bridge identifiers, finalized/scanned epochs, and recovery claims.
+The observation RPC and program RPC are separate lanes. The gateway compares all configured program RPCs for latest/history/readback agreement and fails closed on disagreement. If only one canonical program RPC exists, the system can run with one while keeping the multi-RPC comparison path ready.
 
-The observation RPC and program RPC are separate lanes. `OCTRA_OBSERVATION_RPC_URL` is the source of observed Octra supply/vault facts and is currently `https://octra.network/rpc`. `OCTRA_PROGRAM_RPC_URL` is the endpoint used for Vitals State Program deploy/read/write calls; during devnet dogfood it may point at `https://devnet.octrascan.io/rpc` even while observations come from the live Octra RPC.
+## Assets
 
-The gateway verifies hash consistency for the program state it receives, but it is not an Octra consensus light client. A single program RPC is therefore a trust root for what state is reported. Public/mainnet deployments should configure `OCTRA_PROGRAM_RPC_URLS` with two or more independent endpoints when they exist. Until then, one canonical mainnet RPC is acceptable and the multi-RPC comparison path stays ready. When multiple RPCs are configured, the gateway compares programmed-Circle latest snapshot reads, history-window reads, submit preflight/readback, owner/operator views, and readiness metadata, then fails closed on disagreement.
+Static app assets are published into the same programmed Circle as the AML state. The gateway verifies pinned release hashes, resource keys, returned blob hashes, and Circle asset parity before serving in `circle_required` mode.
 
-For Circle-served static assets, the gateway also verifies the pinned release hash, the webcli-compatible Circle `resource_key` derivation, and the returned `blob_hash` against decoded bytes. `/api/site-integrity` exposes those fields plus `stable_root`/`assets_root`; Circle asset response headers include roots when `circle_info` returns quickly, but static asset serving does not depend on those header-only metadata fields. This is still RPC consistency metadata until Octra exposes inclusion witnesses from asset/state keys to finalized roots.
+`producer.audit.json` is part of the public asset set. It is a hash-only manifest of producer, gateway, deploy, AML, and architecture files used to build and operate the instrument.
 
-Vitals does not claim to be a full bridge verifier. It is a hash-bound accounting and reconciliation surface. It stores direct observations and derived bridge reconciliation values in the Vitals State Program so reviewers can inspect the payload, formulas, source refs, and raw evidence independently.
+## Non-Goals
 
-Public v0 keeps the latest payload, evidence manifest, and source refs as full AML strings for native inspection. It stores trend history as a bounded fixed-width summary window rather than historical payload maps. The gateway verifies the latest summary row against the latest payload before serving it, and `/api/history` is drawn only from that AML summary window. The recommended future forever-history design is captured in [AML History Capsules](aml-history-capsules.md). The upgrade model for that history is the [AML History Era Model](adr-0002-aml-history-era-model.md): each AML program is canonical for the rows it actually records, and future schema changes create explicit eras unless an audited import path exists.
-
-## Programmed Circle Adoption Rules
-
-When we incorporate the programmed Site Circle into the production solution:
-
-- Deploy or update the Site Circle with its AML program attached.
-- Call `initialize_v0` exactly once before the first snapshot write.
-- Keep the state shape bounded: latest full bodies plus a fixed-width recent summary window.
-- Add a Circle-local app adapter for `window.OctraCircle.request("program.view", ...)`.
-- Keep normal-browser API routes as verified gateway adapters.
-- Do not reintroduce gateway-local history, static sample fallbacks, unbounded maps, staged records, or generic record stores.
-- Keep a production-sized programmed-Circle release gate before mainnet cutover.
-
-The deployment bar is intentionally narrow: public state and assets live in the programmed Circle, while the gateway remains a verified transport shim and the producer remains off-chain only for sources the Circle cannot read directly.
+Octra Vitals is not a bridge light client and does not replace explorers, protocol RPCs, or bridge internals. It is a hash-bound accounting and reconciliation surface: it records what was observed, preserves compact commitments in AML, exposes raw evidence by hash, and makes conservation status visible.

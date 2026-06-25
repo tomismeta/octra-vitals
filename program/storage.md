@@ -1,6 +1,6 @@
-# Vitals State Storage
+# Standalone Vitals State Storage
 
-`VitalsState` public v0 is a bounded snapshot ledger. It keeps the latest full payload/evidence/source refs on-chain for native inspection, and keeps recent trend history as a fixed-width rolling summary window.
+`VitalsState` is the standalone compatibility state shape. It keeps the latest full payload/evidence/source refs on-chain for native inspection, and keeps recent trend history as a fixed-width rolling summary window.
 
 It intentionally does not store historical full payload maps, generic records, staged snapshot records, or an unbounded id index.
 
@@ -76,7 +76,7 @@ summary_hash          = sha256("octra-vitals:summary:v0\n" + summary_row)
 summary_window_hash   = sha256("octra-vitals:summary-window:v0\n" + summary_window)
 ```
 
-Historical rows carry a payload-hash prefix as a commitment/locator, not a fetchable on-chain historical payload. Full historical bodies may later be archived by content hash outside AML.
+Historical rows carry a payload-hash prefix as a commitment/locator, not a fetchable on-chain historical payload. Full historical bodies are archived by content hash outside this standalone AML shape.
 
 ## Latest Bundle Getter
 

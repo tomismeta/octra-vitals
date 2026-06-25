@@ -1,25 +1,23 @@
-# Vitals State Program
+# Standalone Vitals State Program
 
-The Vitals State Program is the canonical public v0 AML state surface.
+This directory contains the standalone State Program compatibility path. The current public architecture uses a programmed Site Circle with the fact-ledger AML under `program-fact-ledger/`.
 
-It stores:
+The standalone program remains useful for compatibility, regression tests, and historical comparison. It stores:
 
 - latest full canonical payload;
 - latest full evidence manifest;
 - latest full source refs;
 - latest summary row;
-- bounded recent summary-window history;
+- bounded rolling summary-window history;
 - operator/owner/successor control state.
 
-It intentionally does not store historical full payload maps, generic records, staged records, duplicate id maps, or unbounded indexes.
+It intentionally does not store permanent historical capsules or full historical payload maps.
 
 ## Requirements
 
 - Source is verified after deployment.
-- `contract_source(<program_address>)` exposes source, ABI, verification, and certificate.
 - Formal verification is `verified == true`.
 - Formal verification safety is `safe`.
-- Scanner/RPC formal verification trace has zero errors.
 - `record_snapshot_v0` is owner/operator gated.
 - Snapshot indexes and epoch/time move forward under the monotonicity rule.
 - Hash domains, schema gates, and size bounds match the TypeScript updater.

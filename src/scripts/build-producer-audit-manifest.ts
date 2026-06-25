@@ -76,8 +76,13 @@ const auditedFiles = [
   "docs/architecture.md",
   "docs/schema.md",
   "docs/ops.md",
+  "docs/release-management.md",
+  "docs/mainnet-deployment.md",
+  "docs/costs.md",
+  "docs/readiness.md",
   "docs/adr-0001-programmed-site-circle.md",
-  "docs/mainnet-deployment.md"
+  "docs/adr-0002-aml-history-era-model.md",
+  "docs/adr-0003-fact-ledger-history.md"
 ];
 
 const files = await Promise.all(auditedFiles.map(async (path) => {
@@ -99,7 +104,7 @@ const manifest = {
     collector_runs_in_site_circle: false,
     collector_runs_on_octra_aml: false,
     reason: "The collector requires outbound Octra/Ethereum/relayer RPC reads and scheduled execution. The Vitals State Program verifies and stores canonical commitments; it does not perform outbound oracle work.",
-    canonical_state: "Programmed Site Circle AML state, or standalone Vitals State Program for devnet dogfood",
+    canonical_state: "Programmed Site Circle AML state; standalone Vitals State Program remains a compatibility path",
     canonical_app: "Site Circle",
     producer_role: "auditable off-chain scheduler"
   },

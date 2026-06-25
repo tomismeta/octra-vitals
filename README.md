@@ -201,7 +201,7 @@ Production should use:
 ```text
 VITALS_PROGRAMMED_CIRCLE_PROGRAM=fact-ledger
 VITALS_PROGRAMMED_CIRCLE_ARTIFACT_DIR=program-fact-ledger
-VITALS_RECORD_SNAPSHOT_VERSION=fact-v2
+VITALS_RECORD_SNAPSHOT_VERSION=<matches deployed AML>
 VITALS_STATE_TARGET_MODE=circle_program
 VITALS_STATE_SOURCE_MODE=program_required
 VITALS_STATIC_ASSET_SOURCE=circle_required
@@ -232,8 +232,8 @@ See:
 - `docs/release-management.md`
 - `docs/mainnet-deployment.md`
 - `docs/costs.md`
-- `docs/aml-fact-ledger-readiness-scorecard.md`
-- `docs/aml-fact-ledger-implementation-brief.md`
+- `docs/readiness.md`
+- `docs/adr-0003-fact-ledger-history.md`
 - `docs/adr-0002-aml-history-era-model.md`
 - `docs/adr-0001-programmed-site-circle.md`
 

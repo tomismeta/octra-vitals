@@ -61,9 +61,9 @@ Every change should be classified before deployment.
 | Browser app | `app/index.html`, `app/app.js`, `app/style.css`, icons, manifest | Host release plus Circle asset publish |
 | Gateway shim | `src/gateway/**`, route behavior, headers, diagnostics | Host release, restart gateway |
 | Producer/updater | `src/lib/snapshot.ts`, collection, evidence, write path | Host release, updater timer/service |
-| Programmed Circle AML | `program-circle/main.aml`, AML schema/state logic | New program update or new Circle, explicit rehearsal |
+| Programmed Circle AML | `program-fact-ledger/main.aml`, compatibility AML, schema/state logic | New program update or new era, explicit rehearsal |
 | Runtime config | env values, RPC URLs, Circle ids, timers | Host env update, no git change |
-| Docs/tests | README, docs, test-only files | GitHub only unless included in audit assets |
+| Docs/tests | README, docs, test-only files | GitHub only unless included in producer-audit assets |
 
 If browser app assets changed, the Circle asset publish is required for
 `VITALS_STATIC_ASSET_SOURCE=circle_required`. If only gateway code changed, a
@@ -109,6 +109,8 @@ VITALS_STATE_TARGET_MODE=circle_program
 VITALS_STATE_SOURCE_MODE=program_required
 VITALS_STATIC_ASSET_SOURCE=circle_required
 ```
+
+Program/version compatibility env values should match the deployed AML, but documentation itself does not need per-version copies. Git history is the document version log.
 
 Environment differences should be configuration only: hostnames, Circle ids,
 wallets, allowed hosts, public origins, and RPC/network targets.
