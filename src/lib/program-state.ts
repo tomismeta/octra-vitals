@@ -354,9 +354,6 @@ function verifiedHistoryWindowFromFactLedger(input: {
     if (meta.capsule_id !== capsule.id) {
       throw new Error(`fact capsule id mismatch: expected ${capsule.id}, got ${meta.capsule_id}`);
     }
-    if (meta.catalog_root_hex !== input.catalogRoot) {
-      throw new Error("fact capsule catalog root mismatch");
-    }
     if (previousCapsulesRoot && meta.family_root_before_hex !== previousCapsulesRoot) {
       throw new Error("fact capsule family capsules root continuity mismatch");
     }

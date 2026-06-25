@@ -890,9 +890,6 @@ function verifyFactReadback(input: {
     if (latestCapsuleRootAfter !== endRoot) {
       throw new Error("readback latest sealed fact capsule root-after does not match end root");
     }
-    if (meta.catalog_root_hex !== catalogRoot) {
-      throw new Error("readback latest sealed fact capsule catalog root mismatch");
-    }
     latestSealedRootAfter = endRoot;
     latestCapsuleVerified = Boolean(metaHash);
   }
