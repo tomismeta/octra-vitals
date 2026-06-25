@@ -2,9 +2,9 @@
 
 Octra Vitals is a public, Octra-native supply and bridge reconciliation surface: a financial instrument that proves itself.
 
-It observes Octra, Ethereum, and relayer RPC sources, commits canonical snapshots into an Octra AML program, and serves a static browser UI that verifies and explains the latest state. The goal is not to replace explorers, RPCs, or bridge internals. The goal is to make the important accounting relationships visible, source-linked, and hard to silently fake.
+It observes Octra, Ethereum, and relayer RPC sources, commits canonical snapshots into an Octra AML program, and serves a static browser UI that verifies and explains the latest state and history. The goal is not to replace explorers, RPCs, or bridge internals. The goal is to make the important accounting relationships visible, source-linked, and hard to silently fake.
 
-The current public shape is a programmed Site Circle: the Circle hosts the app assets and also carries the AML state program that stores the latest snapshot plus a bounded recent-history window.
+The go-forward shape is a programmed Site Circle: the Circle hosts the app assets and also carries the AML state program. The current mainnet-shaped AML candidate is a fact-family ledger that stores the latest full snapshot plus compact per-snapshot accounting facts in sealed history capsules. Successor eras are stitched with explicit predecessor anchors so future AML versions can be verified without pretending old state moved.
 
 ## Verification Boundary
 
@@ -40,11 +40,13 @@ Octra Vitals is built around a few constraints.
 
 **Program-backed state.** Production mode requires `program_required` reads from the Vitals AML program. If the program state is unavailable, the app shows unavailable rather than rendering fallback numbers.
 
-**Hash-gated payloads.** The AML program stores canonical snapshot strings and hashes for payload, evidence manifest, source references, summary row, and recent-history window. The gateway and browser verify those hashes before rendering.
+**Hash-gated payloads.** The AML program stores canonical snapshot strings and hashes for payload, evidence manifest, source references, latest fact row, and history/capsule roots. The gateway and browser verify those commitments before rendering.
 
 **Conservation verdicts.** The app does not only display balances. It recomputes accounting identities and renders whether supply and bridge claims reconcile against the signed snapshot verdict.
 
-**Bounded on-chain history.** AML state stores the latest full snapshot and a fixed recent summary window. Long raw evidence retention belongs on the host or external archival systems, not in AML.
+**AML-retained history.** AML state keeps thin, fixed-width accounting facts in capsule form for long-horizon history. The latest full payload, evidence manifest, and source refs remain AML-readable for provenance. Historical raw RPC bodies are retained by content hash outside AML so the program does not become a raw-response database.
+
+**Era-aware upgrades.** New AML generations create explicit eras. A successor stores the predecessor program id, final index, final root, first successor index, and a domain-separated anchor hash. The gateway and browser-facing API can stitch eras only when the boundary verifies.
 
 **Auditable producer.** The off-chain producer is deliberately visible. The Site Circle includes `producer.audit.json`, a hash-only manifest of the producer, gateway, deploy scripts, AML, and architecture docs used to create and serve snapshots.
 
@@ -54,7 +56,9 @@ Octra Vitals is built around a few constraints.
 
 ```text
 app/              Static browser app assets for the Site Circle
-program-circle/   AML for the programmed Site Circle target
+program-circle/   Bounded v0 programmed Site Circle AML compatibility path
+program-fact-ledger/
+                  Mainnet-shaped AML fact ledger candidate
 program/          Standalone State Program compatibility path
 src/              TypeScript producer, gateway, verification, deploy tooling
 deploy/           Host, systemd, stage, and mainnet deployment scripts
@@ -75,11 +79,11 @@ app/producer.audit.json
 
 **Producer**
 
-Collects Octra supply, Octra bridge/vault state, Ethereum wOCT supply, relayer recovery data, and source metadata. It builds canonical JSON, writes raw evidence locally, prepares the AML `record_snapshot_v0` call, submits only when explicitly enabled, then verifies program readback.
+Collects Octra supply, Octra bridge/vault state, Ethereum wOCT supply, relayer recovery data, and source metadata. It builds canonical JSON, writes raw evidence locally, prepares the configured AML `record_snapshot_*` call, submits only when explicitly enabled, then verifies program readback.
 
 **AML Program**
 
-Stores the latest canonical snapshot, evidence manifest, source references, summary row, recent summary window, owner/operator controls, paused/successor state, and hash commitments. It is intentionally small and bounded.
+Stores the latest canonical snapshot, evidence manifest, source references, compact accounting facts, capsule metadata, owner/operator controls, successor-era anchors, and hash commitments. The fact-ledger path is intentionally narrow: AML owns ordering, roots, hashes, and compact history; raw evidence bodies stay outside AML.
 
 **Gateway**
 
@@ -96,6 +100,14 @@ Octra Vitals is a reconciliation and proof surface, not a consensus light client
 It trusts configured RPC endpoints for observation, then preserves exactly what was observed through canonical payloads, evidence hashes, source references, raw evidence, and AML commitments. A normal browser can verify internal consistency and detect gateway tampering, but it still receives transport through the gateway. A Circle-native client can verify against the programmed Circle state surface directly. When multiple program RPCs are configured, reads and write preflight/readback must agree. If only one canonical mainnet RPC exists, the system can run with one RPC while keeping the comparison path ready.
 
 Bridge residuals are intentionally visible. A positive value for `locked - wOCT - unclaimed` is treated as reconciliation data, not automatically as a Vitals health issue. Red health is reserved for invalid identities such as overclaims, cap/burn mismatch, vault shortfall, missing required fields, or unit/decimal mismatch.
+
+## History Model
+
+The fact-ledger model stores one compact core accounting fact per snapshot. Facts are fixed-width rows grouped into deterministic UTC half-day capsules. Each capsule has a body, metadata, body hash, row-root range, and capsule-chain root so a verifier can check a historical slice without replaying all history from genesis.
+
+History can span multiple AML eras. The active era points to its predecessor by program id and commits to the predecessor final root/index. `/api/history` exposes the visible timeline plus proof metadata for each era boundary; continuity is accepted only when the predecessor root and successor anchor verify.
+
+The latest snapshot remains richer than historical rows. Full latest payload, evidence manifest, and source references stay AML-readable. Older raw RPC bodies are linked by hash and served from host/archive storage for forensic inspection, not stored permanently in AML.
 
 ## Local Development
 
@@ -158,6 +170,8 @@ AML lifecycle:
 ```bash
 npm run program:compile
 npm run program:verify
+npm run fact-ledger-probe:compile
+npm run fact-ledger-program:compile
 npm run program:deploy
 npm run program:read-latest
 ```
@@ -185,6 +199,9 @@ DEPLOY_GATEWAY_URL=https://octra.live npm run release:plan
 Production should use:
 
 ```text
+VITALS_PROGRAMMED_CIRCLE_PROGRAM=fact-ledger
+VITALS_PROGRAMMED_CIRCLE_ARTIFACT_DIR=program-fact-ledger
+VITALS_RECORD_SNAPSHOT_VERSION=fact-v2
 VITALS_STATE_TARGET_MODE=circle_program
 VITALS_STATE_SOURCE_MODE=program_required
 VITALS_STATIC_ASSET_SOURCE=circle_required
@@ -215,13 +232,16 @@ See:
 - `docs/release-management.md`
 - `docs/mainnet-deployment.md`
 - `docs/costs.md`
+- `docs/aml-fact-ledger-readiness-scorecard.md`
+- `docs/aml-fact-ledger-implementation-brief.md`
+- `docs/adr-0002-aml-history-era-model.md`
 - `docs/adr-0001-programmed-site-circle.md`
 
 ## Security Notes
 
 Never commit wallet material, private keys, `.env` files, Telegram tokens, raw host secrets, or production updater env files.
 
-The gateway env should contain public/non-secret config only. Snapshot-writing keys belong in `/etc/octra-vitals/updater.env` on the host, owned by root, with minimal permissions. The v0 launch posture uses a dedicated low-balance production wallet and keeps the path open for later operator rotation.
+The gateway env should contain public/non-secret config only. Snapshot-writing keys belong in `/etc/octra-vitals/updater.env` on the host, owned by root, with minimal permissions. The launch posture uses a dedicated low-balance production wallet and keeps the path open for later operator rotation.
 
 Raw evidence is intentionally public when linked from the app or API. Evidence source URLs must therefore stay public-safe: no credentials, query tokens, fragments, private hosts, or non-HTTPS sources. The producer and gateway enforce public-host and byte-size guardrails before collecting or serving raw evidence.
 
