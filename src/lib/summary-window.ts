@@ -36,7 +36,19 @@ export interface ProgramHistoryWindow {
   history_discovery?: string;
   history_root?: string;
   capsules_root?: string | null;
+  proof?: ProgramHistoryProof;
   eras?: ProgramHistoryEra[];
+}
+
+export interface ProgramHistoryProof {
+  scope: "full_chain" | "tail_window" | "summary_window" | "unavailable";
+  truncated: boolean;
+  sealed_capsule_start_ordinal?: number;
+  sealed_capsule_total_count?: number;
+  sealed_capsule_verified_count?: number;
+  capsule_limit?: number;
+  families?: unknown[];
+  capsules?: unknown[];
 }
 
 export interface ProgramHistoryEra {
@@ -57,6 +69,8 @@ export interface ProgramHistoryEra {
   predecessor_anchor_verified?: boolean;
   era_first_snapshot_index?: number | null;
   boundary_verified?: boolean;
+  proof_scope?: ProgramHistoryProof["scope"];
+  proof_truncated?: boolean;
 }
 
 function digits(value: string | number | bigint, width: number, label: string): string {

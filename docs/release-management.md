@@ -61,13 +61,15 @@ Every change should be classified before deployment.
 | Browser app | `app/index.html`, `app/app.js`, `app/style.css`, icons, manifest | Host release plus Circle asset publish |
 | Gateway shim | `src/gateway/**`, route behavior, headers, diagnostics | Host release, restart gateway |
 | Producer/updater | `src/lib/snapshot.ts`, collection, evidence, write path | Host release, updater timer/service |
-| Programmed Circle AML | `program-fact-ledger/main.aml`, compatibility AML, schema/state logic | New program update or new era, explicit rehearsal |
+| Programmed Circle AML | `program-fact-ledger/main.aml`, compatibility AML, schema/state logic | Compatible in-place code update or new era, explicit rehearsal |
 | Runtime config | env values, RPC URLs, Circle ids, timers | Host env update, no git change |
 | Docs/tests | README, docs, test-only files | GitHub only unless included in producer-audit assets |
 
 If browser app assets changed, the Circle asset publish is required for
 `VITALS_STATIC_ASSET_SOURCE=circle_required`. If only gateway code changed, a
 host release and gateway restart are usually enough.
+
+If AML changed, do not assume a new era is required. Use a compatible in-place code update only when old state layout, old getters, row encodings, capsule immutability, and authorization semantics remain valid. Use a fresh era when any of those change.
 
 ## Circle Asset Batch Publishing
 

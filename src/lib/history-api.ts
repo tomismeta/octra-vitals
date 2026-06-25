@@ -30,6 +30,12 @@ export interface HistoryApiCoverage {
 export interface HistoryApiProof {
   history_model: string;
   proof_status: "fact_family_verified" | "summary_window_verified" | "unavailable";
+  proof_scope: "full_chain" | "tail_window" | "summary_window" | "unavailable";
+  truncated: boolean;
+  sealed_capsule_start_ordinal?: number;
+  sealed_capsule_total_count?: number;
+  sealed_capsule_verified_count?: number;
+  capsule_limit?: number;
   eras: unknown[];
   families: unknown[];
   capsules: unknown[];
@@ -203,13 +209,34 @@ export function emptyHistoryProof(historyModel: string, verified: boolean): Hist
   return verifiedHistoryProof(historyModel, verified, []);
 }
 
-export function verifiedHistoryProof(historyModel: string, verified: boolean, eras: unknown[] = [], families: unknown[] = [], capsules: unknown[] = []): HistoryApiProof {
+export function verifiedHistoryProof(
+  historyModel: string,
+  verified: boolean,
+  eras: unknown[] = [],
+  families: unknown[] = [],
+  capsules: unknown[] = [],
+  proof: Partial<Pick<
+    HistoryApiProof,
+    "proof_scope" | "truncated" | "sealed_capsule_start_ordinal" | "sealed_capsule_total_count" | "sealed_capsule_verified_count" | "capsule_limit"
+  >> = {}
+): HistoryApiProof {
   const factFamilyVerified = verified && historyModel.includes("fact_family") && historyModel.includes("verified");
-  return {
+  const proofScope = proof.proof_scope ||
+    (factFamilyVerified
+      ? historyModel.includes("tail") ? "tail_window" : "full_chain"
+      : verified ? "summary_window" : "unavailable");
+  const out: HistoryApiProof = {
     history_model: historyModel,
     proof_status: factFamilyVerified ? "fact_family_verified" : verified ? "summary_window_verified" : "unavailable",
+    proof_scope: proofScope,
+    truncated: proof.truncated ?? proofScope === "tail_window",
     eras,
     families,
     capsules
   };
+  if (proof.sealed_capsule_start_ordinal !== undefined) out.sealed_capsule_start_ordinal = proof.sealed_capsule_start_ordinal;
+  if (proof.sealed_capsule_total_count !== undefined) out.sealed_capsule_total_count = proof.sealed_capsule_total_count;
+  if (proof.sealed_capsule_verified_count !== undefined) out.sealed_capsule_verified_count = proof.sealed_capsule_verified_count;
+  if (proof.capsule_limit !== undefined) out.capsule_limit = proof.capsule_limit;
+  return out;
 }

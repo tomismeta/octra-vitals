@@ -52,6 +52,10 @@ The core fact row is a fixed-width OCT-denominated accounting observation. It co
 
 Rows are grouped into deterministic UTC half-day capsules. Capsule metadata commits to body hash, row-root range, key bounds, row count, catalog root, and capsule-chain root.
 
+Snapshot index is the ordering invariant. Octra epoch is stored for source provenance and is required to be non-decreasing, not strictly increasing.
+
+Optional auxiliary fact rows may be included in the same atomic AML call after the corresponding fact family is registered. The default path uses `aux_count = 0`; activating an auxiliary family is a conscious schema decision, not an implicit side effect of new payload fields.
+
 ## Latest Versus History
 
 The latest snapshot is intentionally rich. It keeps full payload, evidence manifest, source refs, health verdicts, routes, and source provenance AML-readable.
@@ -74,6 +78,12 @@ Historical rows are intentionally thin. They preserve the accounting facts neede
 - boundary verification status.
 
 The gateway only marks a boundary verified after reading the predecessor era's actual final root and recomputing the successor anchor.
+
+`/api/history.proof` also includes proof scope:
+
+- `full_chain` means the response folded every sealed capsule exposed for the era from the empty root;
+- `tail_window` means the returned rows and capsule tail were verified, but older sealed capsules were not replayed in that response;
+- `summary_window` is used only by legacy bounded-window history.
 
 ## Bridge Accounting
 

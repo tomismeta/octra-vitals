@@ -3375,21 +3375,23 @@ JDEST 10191
 SLOAD r10, "latest_epoch"
 LDI r11, 0
 ADD r10, r11, r10
-GT r12, r8, r10
+LT r12, r8, r10
+LDI r13, true
+NEQ r12, r12, r13
 JIF r12, 10192
-SLOAD r14, "latest_epoch"
-LDI r15, 0
-ADD r14, r15, r14
+SLOAD r15, "latest_epoch"
 LDI r16, 0
-EQ r17, r14, r16
-MOV r13, r17
+ADD r15, r16, r15
+LDI r17, 0
+EQ r18, r15, r17
+MOV r14, r18
 JMP 10193
 JDEST 10192
-LDI r13, true
+LDI r14, true
 JDEST 10193
-JIF r13, 10194
-LDI r18, "snapshot moved backward"
-EMIT "Require", r18
+JIF r14, 10194
+LDI r19, "snapshot epoch moved backward"
+EMIT "Require", r19
 REVERT
 JDEST 10194
 STRLEN r10, r1
@@ -3604,21 +3606,23 @@ JDEST 10205
 SLOAD r15, "latest_epoch"
 LDI r16, 0
 ADD r15, r16, r15
-GT r17, r8, r15
+LT r17, r8, r15
+LDI r18, true
+NEQ r17, r17, r18
 JIF r17, 10206
-SLOAD r19, "latest_epoch"
-LDI r20, 0
-ADD r19, r20, r19
+SLOAD r20, "latest_epoch"
 LDI r21, 0
-EQ r22, r19, r21
-MOV r18, r22
+ADD r20, r21, r20
+LDI r22, 0
+EQ r23, r20, r22
+MOV r19, r23
 JMP 10207
 JDEST 10206
-LDI r18, true
+LDI r19, true
 JDEST 10207
-JIF r18, 10208
-LDI r23, "snapshot moved backward"
-EMIT "Require", r23
+JIF r19, 10208
+LDI r24, "snapshot epoch moved backward"
+EMIT "Require", r24
 REVERT
 JDEST 10208
 LDI r15, 0

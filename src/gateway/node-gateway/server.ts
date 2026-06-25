@@ -1716,8 +1716,13 @@ function nativeReadiness(manifest: Record<string, any>) {
     },
     circle_program_errors: circleProgram.errors || null,
     canonical_history_readable: historyVerified,
-    history_rows: history.row_count || 0,
+      history_rows: history.row_count || 0,
       history_window_hash: history.window_hash || null,
+      history_proof_scope: history.proof?.scope || null,
+      history_proof_truncated: history.proof?.truncated ?? null,
+      history_sealed_capsule_total_count: history.proof?.sealed_capsule_total_count ?? null,
+      history_sealed_capsule_verified_count: history.proof?.sealed_capsule_verified_count ?? null,
+      history_capsule_limit: history.proof?.capsule_limit ?? null,
     successor_set: live.successor_set ?? null,
     successor_program: live.successor_program || null,
     state_source_mode: mode,
@@ -1796,6 +1801,13 @@ async function serveHistory(res: http.ServerResponse, url: URL, head = false): P
     const snapshots = filterHistorySnapshots(allSnapshots, historyRequest);
     const coverage = historyApiCoverage(allSnapshots, snapshots, historyRequest);
     const historyModel = history.history_discovery || "aml_summary_window";
+    const proofHints: Parameters<typeof verifiedHistoryProof>[5] = {};
+    if (history.proof?.scope) proofHints.proof_scope = history.proof.scope;
+    if (history.proof?.truncated !== undefined) proofHints.truncated = history.proof.truncated;
+    if (history.proof?.sealed_capsule_start_ordinal !== undefined) proofHints.sealed_capsule_start_ordinal = history.proof.sealed_capsule_start_ordinal;
+    if (history.proof?.sealed_capsule_total_count !== undefined) proofHints.sealed_capsule_total_count = history.proof.sealed_capsule_total_count;
+    if (history.proof?.sealed_capsule_verified_count !== undefined) proofHints.sealed_capsule_verified_count = history.proof.sealed_capsule_verified_count;
+    if (history.proof?.capsule_limit !== undefined) proofHints.capsule_limit = history.proof.capsule_limit;
     return json(res, 200, {
       schema: LEGACY_HISTORY_SCHEMA,
       api_schema: HISTORY_API_SCHEMA,
@@ -1808,7 +1820,7 @@ async function serveHistory(res: http.ServerResponse, url: URL, head = false): P
       row_len: history.row_len,
       window_hash: history.window_hash,
       coverage,
-      proof: verifiedHistoryProof(historyModel, true, history.eras || []),
+      proof: verifiedHistoryProof(historyModel, true, history.eras || [], history.proof?.families || [], history.proof?.capsules || [], proofHints),
       snapshots,
       authority: {
         source: target.kind === "circle_program" ? "vitals_circle_program_history" : "vitals_state_program_history",

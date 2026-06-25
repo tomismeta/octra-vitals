@@ -9,11 +9,13 @@ This checklist defines what must be true before a devnet-soaked candidate can be
 - Live Circle code hash matches the compiled artifact.
 - Required view/write methods are exposed.
 - Owner/operator controls are configured as intended.
+- Non-owner/non-operator Circle calls are rejected by a devnet negative probe.
 
 ## Runtime
 
 - `/api/latest` is program-backed, fresh, and conservation-aware.
 - `/api/history` is AML-backed and exposes proof metadata.
+- `/api/history.proof.proof_scope` honestly states whether the response is a full-chain proof or a tail-window proof.
 - `/api/site-integrity` reports Circle asset parity.
 - `/api/native-readiness` reports `native_ready`.
 - Configured program RPCs agree, or the deployment explicitly accepts one canonical RPC.
@@ -23,6 +25,7 @@ This checklist defines what must be true before a devnet-soaked candidate can be
 - Snapshot cadence is stable.
 - At least one fresh capsule has sealed in the active era.
 - Prefer multiple fresh capsule seals before mainnet.
+- If auxiliary fact support is included in the AML, devnet has registered an auxiliary family and written at least one `aux_count > 0` snapshot.
 - Cross-era reads remain continuous.
 - Era boundaries verify against predecessor roots, not only index continuity.
 - History read latency and RPC count are acceptable for expected UI horizons.

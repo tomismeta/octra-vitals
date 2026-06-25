@@ -97,9 +97,14 @@ test("history API invalid ranges do not return a broad history response", () => 
 
 test("empty history proof does not overclaim fact-family verification", () => {
   assert.equal(emptyHistoryProof("aml_summary_window", true).proof_status, "summary_window_verified");
+  assert.equal(emptyHistoryProof("aml_summary_window", true).proof_scope, "summary_window");
   assert.equal(emptyHistoryProof("aml_fact_family_core_capsules", true).proof_status, "summary_window_verified");
   assert.equal(emptyHistoryProof("aml_fact_family_core_capsules_verified", true).proof_status, "fact_family_verified");
+  assert.equal(emptyHistoryProof("aml_fact_family_core_capsules_verified", true).proof_scope, "full_chain");
+  assert.equal(emptyHistoryProof("aml_fact_family_core_capsules_tail_verified", true).proof_scope, "tail_window");
+  assert.equal(emptyHistoryProof("aml_fact_family_core_capsules_tail_verified", true).truncated, true);
   assert.equal(emptyHistoryProof("unavailable", false).proof_status, "unavailable");
+  assert.equal(emptyHistoryProof("unavailable", false).proof_scope, "unavailable");
 });
 
 test("verified history proof carries era boundary evidence", () => {
@@ -109,6 +114,26 @@ test("verified history proof carries era boundary evidence", () => {
   ]);
 
   assert.equal(proof.proof_status, "fact_family_verified");
+  assert.equal(proof.proof_scope, "full_chain");
   assert.equal(proof.eras.length, 2);
   assert.deepEqual(proof.eras[1], { era_id: "new", predecessor_final_index: 23, boundary_verified: true });
+});
+
+test("verified history proof exposes capsule proof scope and counts", () => {
+  const proof = verifiedHistoryProof("aml_fact_family_core_capsules_tail_verified", true, [], [], [], {
+    proof_scope: "tail_window",
+    truncated: true,
+    sealed_capsule_start_ordinal: 12,
+    sealed_capsule_total_count: 80,
+    sealed_capsule_verified_count: 64,
+    capsule_limit: 64
+  });
+
+  assert.equal(proof.proof_status, "fact_family_verified");
+  assert.equal(proof.proof_scope, "tail_window");
+  assert.equal(proof.truncated, true);
+  assert.equal(proof.sealed_capsule_start_ordinal, 12);
+  assert.equal(proof.sealed_capsule_total_count, 80);
+  assert.equal(proof.sealed_capsule_verified_count, 64);
+  assert.equal(proof.capsule_limit, 64);
 });

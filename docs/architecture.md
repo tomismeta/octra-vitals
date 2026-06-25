@@ -47,9 +47,19 @@ The AML program does not store historical raw RPC bodies. Raw evidence is retain
 
 Each successful snapshot writes one compact core accounting fact. Facts are fixed-width rows grouped into deterministic UTC half-day capsules. A capsule contains the row body plus metadata: row count, key bounds, body hash, row-root range, and capsule-chain root.
 
+Snapshot index is the canonical ordering key. Octra epoch is recorded as observed source metadata and must not move backward, but two consecutive snapshots may observe the same epoch.
+
+The fact ledger also supports dormant auxiliary fact families. The default producer writes only the core family. When a durable scalar metric needs historical retention, the operator can register an auxiliary family and include bounded auxiliary rows in the same atomic snapshot call.
+
 History can span eras. When the AML shape changes incompatibly, a new programmed Circle era starts at the next snapshot index. The successor commits to the predecessor program id, predecessor final index, predecessor final root, era first index, and a domain-separated anchor hash. `/api/history` may stitch eras only when those anchors verify against live predecessor reads.
 
 Compatible in-place AML updates are allowed only when old state layout, old getters, old row semantics, and capsule immutability remain valid.
+
+Durable history reads are verified by folding capsule bodies and metadata against AML roots. The gateway exposes proof scope explicitly:
+
+- `full_chain`: every sealed capsule needed for that era was read and folded from the empty root;
+- `tail_window`: only the recent configured capsule tail was read, so the returned rows are verified locally but the whole era was not replayed in that response;
+- `summary_window`: legacy bounded-window history.
 
 ## Extensibility
 

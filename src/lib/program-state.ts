@@ -125,6 +125,12 @@ function combinedHistoryWindow(eras: ProgramHistoryWindow[], historyDiscovery = 
       window_hash: summaryWindowHash(""),
       rows: [],
       history_discovery: historyDiscovery,
+      proof: {
+        scope: "unavailable",
+        truncated: false,
+        families: [],
+        capsules: []
+      },
       eras: eras.flatMap((era) => era.eras || [])
     };
   }
@@ -149,6 +155,12 @@ function combinedHistoryWindow(eras: ProgramHistoryWindow[], historyDiscovery = 
     window_hash: summaryWindowHash(window),
     rows,
     history_discovery: historyDiscovery,
+    proof: {
+      scope: eras.every((era) => era.proof?.scope === "full_chain") ? "full_chain" : "tail_window",
+      truncated: eras.some((era) => era.proof?.truncated === true),
+      families: eras.flatMap((era) => era.proof?.families || []),
+      capsules: eras.flatMap((era) => era.proof?.capsules || [])
+    },
     eras: eras.flatMap((era) => era.eras || [])
   };
   const latestEra = eras[eras.length - 1];
@@ -259,6 +271,21 @@ function verifiedHistoryWindowFromHistoryV1(input: {
   const window = programHistoryWindowFromHistoryV1Body(bodies.join(""), "aml_history_v1_capsule_tail_verified");
   window.history_root = input.historyRoot;
   window.capsules_root = input.capsulesRoot || null;
+  window.proof = {
+    scope: Number(input.capsuleCount || 0) <= 1 ? "full_chain" : "tail_window",
+    truncated: Number(input.capsuleCount || 0) > 1,
+    sealed_capsule_start_ordinal: Number(input.capsuleCount || 0) > 0 ? Math.max(0, Number(input.capsuleCount || 0) - 1) : 0,
+    sealed_capsule_total_count: Number(input.capsuleCount || 0),
+    sealed_capsule_verified_count: input.sealedCapsule?.id ? 1 : 0,
+    capsule_limit: 1,
+    families: [],
+    capsules: input.sealedCapsule?.id ? [{
+      family_id: "history_v1",
+      capsule_id: input.sealedCapsule.id,
+      proof_scope: Number(input.capsuleCount || 0) <= 1 ? "full_chain" : "tail_window",
+      root_after: input.sealedCapsule.rootAfter
+    }] : []
+  };
   return window;
 }
 
@@ -308,9 +335,12 @@ function verifiedHistoryWindowFromFactLedger(input: {
 }): ProgramHistoryWindow {
   const bodies: string[] = [];
   const manifest = input.manifest || "octra-vitals-fact-ledger.v2";
+  const sealedCapsuleStartOrdinal = Number(input.sealedCapsuleStartOrdinal || 0);
+  const sealedCapsuleTotalCount = Number(input.sealedCapsuleTotalCount ?? input.sealedCapsules.length);
+  const fullSealedChainRead = sealedCapsuleStartOrdinal === 0 && input.sealedCapsules.length === sealedCapsuleTotalCount;
   let previousRoot: string | null = null;
   const expectedCapsulesRoot = hexRootOrNull(input.familyCapsulesRoot);
-  let previousCapsulesRoot: string | null = input.sealedCapsuleStartOrdinal === 0
+  let previousCapsulesRoot: string | null = sealedCapsuleStartOrdinal === 0
     ? factLedgerEmptyFamilyCapsulesRootHex(FACT_LEDGER_CORE_FAMILY_ID, FACT_LEDGER_CORE_SCHEMA_ID, manifest)
     : null;
   for (const capsule of input.sealedCapsules) {
@@ -368,8 +398,7 @@ function verifiedHistoryWindowFromFactLedger(input: {
   if (
     expectedCapsulesRoot &&
     previousCapsulesRoot &&
-    Number(input.sealedCapsuleStartOrdinal || 0) === 0 &&
-    input.sealedCapsules.length === Number(input.sealedCapsuleTotalCount || input.sealedCapsules.length) &&
+    fullSealedChainRead &&
     expectedCapsulesRoot !== previousCapsulesRoot
   ) {
     throw new Error("fact family capsules root does not match latest sealed capsule chain root");
@@ -395,9 +424,38 @@ function verifiedHistoryWindowFromFactLedger(input: {
     throw new Error("fact family root does not match latest sealed capsule root");
   }
 
-  const window = programHistoryWindowFromHistoryV1Body(bodies.join(""), "aml_fact_family_core_capsules_verified");
+  const proofScope = fullSealedChainRead ? "full_chain" : "tail_window";
+  const window = programHistoryWindowFromHistoryV1Body(
+    bodies.join(""),
+    fullSealedChainRead ? "aml_fact_family_core_capsules_verified" : "aml_fact_family_core_capsules_tail_verified"
+  );
   window.history_root = input.familyRoot;
   window.capsules_root = input.familyCapsulesRoot || null;
+  window.proof = {
+    scope: proofScope,
+    truncated: !fullSealedChainRead,
+    sealed_capsule_start_ordinal: sealedCapsuleStartOrdinal,
+    sealed_capsule_total_count: sealedCapsuleTotalCount,
+    sealed_capsule_verified_count: input.sealedCapsules.length,
+    capsule_limit: factLedgerHistoryCapsuleLimit(),
+    families: [{
+      family_id: FACT_LEDGER_CORE_FAMILY_ID,
+      schema_id: FACT_LEDGER_CORE_SCHEMA_ID,
+      manifest,
+      family_root: input.familyRoot,
+      capsules_root: input.familyCapsulesRoot || null,
+      open_capsule_row_count: Number(input.openRowCount || 0),
+      proof_scope: proofScope,
+      truncated: !fullSealedChainRead
+    }],
+    capsules: input.sealedCapsules.map((capsule, index) => ({
+      family_id: FACT_LEDGER_CORE_FAMILY_ID,
+      capsule_id: capsule.id,
+      ordinal: sealedCapsuleStartOrdinal + index,
+      proof_scope: proofScope,
+      root_after: capsule.rootAfter
+    }))
+  };
   return window;
 }
 
@@ -724,7 +782,7 @@ async function readCircleProgramSummaryHistoryFromUrlV1(circleId: string, url: s
     capsulesRoot,
     capsuleCount: Number(capsuleCount || 0)
   });
-  history.eras = [{
+  const era: ProgramHistoryEra = {
     era_id: circleId,
     era_program: circleId,
     manifest: manifest || "vitals-circle-state.v1",
@@ -735,7 +793,10 @@ async function readCircleProgramSummaryHistoryFromUrlV1(circleId: string, url: s
     root_hash: history.history_root || null,
     capsules_root: history.capsules_root || null,
     predecessor_program: predecessorProgram || null
-  }];
+  };
+  if (history.proof?.scope) era.proof_scope = history.proof.scope;
+  if (history.proof?.truncated !== undefined) era.proof_truncated = history.proof.truncated;
+  history.eras = [era];
   return history;
 }
 
@@ -787,7 +848,7 @@ async function readCircleProgramSummaryHistoryFromUrlFactLedger(circleId: string
     openStartRoot,
     openEndRoot
   });
-  history.eras = [{
+  const era: ProgramHistoryEra = {
     era_id: circleId,
     era_program: eraProgram || circleId,
     era_network_id: eraNetworkId || null,
@@ -803,7 +864,10 @@ async function readCircleProgramSummaryHistoryFromUrlFactLedger(circleId: string
     predecessor_final_index: Number(predecessorFinalIndex || 0),
     predecessor_anchor_hash: predecessorAnchorHash || null,
     era_first_snapshot_index: Number(eraFirstSnapshotIndex || 0)
-  }];
+  };
+  if (history.proof?.scope) era.proof_scope = history.proof.scope;
+  if (history.proof?.truncated !== undefined) era.proof_truncated = history.proof.truncated;
+  history.eras = [era];
   return history;
 }
 

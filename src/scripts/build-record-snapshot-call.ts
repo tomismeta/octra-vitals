@@ -158,6 +158,7 @@ export interface BuildRecordSnapshotCallOptions {
   stateSourceMode?: string;
   submitEnabled?: boolean;
   recordVersion?: RecordSnapshotVersion;
+  auxRows?: string[];
 }
 
 const root = resolve(new URL("../..", import.meta.url).pathname);
@@ -375,8 +376,19 @@ export async function buildRecordSnapshotCall(
     if (version === "fact-v1" || version === "fact-v2") {
       const historyRowHash = factLedgerRowHashHex(FACT_LEDGER_CORE_FAMILY_ID, FACT_LEDGER_CORE_SCHEMA_ID, historyRow);
       const capsuleBaseId = factLedgerCapsuleBaseId(envelope.observed_at);
-      const auxRows = ["", "", "", ""];
-      const auxCount = 0;
+      const requestedAuxRows = options.auxRows || [];
+      if (requestedAuxRows.length > 4) throw new Error("fact-v2 supports at most 4 aux rows per snapshot");
+      if (requestedAuxRows.some((row) => typeof row !== "string" || row.length === 0)) {
+        throw new Error("auxRows must contain non-empty encoded fact rows");
+      }
+      if (requestedAuxRows.length > 0 && version !== "fact-v2") {
+        throw new Error("auxRows are only supported for record_snapshot_fact_v2");
+      }
+      const auxRows = [
+        ...requestedAuxRows,
+        ...Array.from({ length: 4 - requestedAuxRows.length }, () => "")
+      ];
+      const auxCount = requestedAuxRows.length;
       const params = [
         canonicalPayload,
         canonicalEvidenceManifest,

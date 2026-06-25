@@ -35,6 +35,10 @@ The gateway/API may stitch eras only after reading the predecessor era and verif
 
 Compatible in-place AML updates are still allowed when the new program preserves old state layout, old getters, old row semantics, and old capsule immutability. Incompatible changes create a new era.
 
+Snapshot index is the cross-era ordering key. Source epochs are recorded and must be non-decreasing inside an era, but epoch equality does not force a new era or failed snapshot.
+
+Auxiliary fact families are era-local capabilities. Adding rows to an already-registered compatible family can remain within the same era. Changing core rows, family cardinality, authorization, or storage layout requires the compatibility analysis above.
+
 ## Consequences
 
 - Historical truth stays local to the AML era that recorded it.

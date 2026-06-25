@@ -76,11 +76,16 @@ Classify every change before deploying:
 | Browser app | `app/index.html`, `app/app.js`, styles, icons | Host release plus Circle asset publish |
 | Gateway | `src/gateway/**`, headers, API behavior | Host release and gateway restart |
 | Producer/updater | collection, evidence, snapshot call, readback | Host release and updater/watchdog check |
-| AML | `program-fact-ledger/**` or compatibility AML | New program update or new era rehearsal |
+| AML | `program-fact-ledger/**` or compatibility AML | Compatible in-place code update or new era rehearsal |
 | Runtime config | env, RPC URLs, timers, Circle ids | Host env update |
 | Docs/tests | README, docs, test-only files | GitHub only unless included in producer audit assets |
 
 Asset publishing is changed-only by default. Full republish is a recovery/drill action, not the normal path.
+
+For AML changes, first decide compatibility:
+
+- compatible layout/getter/row/authorization changes use `npm run circle:programmed:update-code` against the existing programmed Circle;
+- incompatible storage, row, cardinality, or authorization changes require a fresh era and predecessor-anchor rehearsal.
 
 ## Health Checks
 
