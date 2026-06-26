@@ -73,6 +73,17 @@ function check(id, ok, detail) {
   const historyRows = Number(historyBody.row_count || historySnapshots.length || 0);
   const historyFirstIndex = Number(historyBody.first_index || historySnapshots[0]?.snapshot_index || 0);
   const historyLatestIndex = Number(historySnapshots[historySnapshots.length - 1]?.snapshot_index || 0);
+  const historyProof = historyBody.proof || {};
+  const historyCoverage = historyBody.coverage || {};
+  const historyProvesFullChain = historyProof.proof_status === "fact_family_verified" &&
+    historyProof.proof_scope === "full_chain" &&
+    historyProof.truncated === false;
+  const historyProvesRolloverWindow = historyRows >= 48 &&
+    historyFirstIndex > 1 &&
+    historyLatestIndex >= minHistoryIndex;
+  const historyProvesCanonicalRange = historyProvesFullChain
+    ? historyRows >= minHistoryIndex && historyLatestIndex >= minHistoryIndex
+    : historyProvesRolloverWindow;
 
   const summary = {
     gateway_url: gatewayUrl,
@@ -90,6 +101,11 @@ function check(id, ok, detail) {
     history_latest_index: historyLatestIndex || null,
     history_canonical_state_read: historyBody.authority?.canonical_state_read ?? null,
     history_window_hash: historyBody.window_hash || null,
+    history_model: historyBody.history_model || historyProof.history_model || null,
+    history_proof_status: historyProof.proof_status || null,
+    history_proof_scope: historyProof.proof_scope || null,
+    history_proof_truncated: historyProof.truncated ?? null,
+    history_coverage_status: historyCoverage.status || null,
     site_status_code: site.status,
     site_circle_id: siteIntegrity.circle_id || null,
     site_local_assets_match: siteIntegrity.local_assets_match ?? null,
@@ -117,8 +133,8 @@ function check(id, ok, detail) {
     check("history_is_canonical", history.status === 200 && summary.history_canonical_state_read === true, `${history.status} ${summary.history_canonical_state_read}`),
     check(
       "history_proves_rollover_window",
-      summary.history_rows >= 48 && summary.history_first_index > 1 && summary.history_latest_index >= minHistoryIndex,
-      `rows=${summary.history_rows} first=${summary.history_first_index} latest=${summary.history_latest_index} min_latest=${minHistoryIndex}`
+      historyProvesCanonicalRange,
+      `rows=${summary.history_rows} first=${summary.history_first_index} latest=${summary.history_latest_index} min_latest=${minHistoryIndex} proof=${summary.history_proof_status}/${summary.history_proof_scope} truncated=${summary.history_proof_truncated}`
     ),
     check("site_integrity_verified", site.status === 200 && summary.site_local_assets_match === true && summary.site_circle_assets_match === true, `${site.status} local=${summary.site_local_assets_match} circle=${summary.site_circle_assets_match}`),
     check("native_readiness_ready", readiness.status === 200 && summary.readiness_status === "native_ready", `${readiness.status} ${summary.readiness_status}`),
