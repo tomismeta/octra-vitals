@@ -318,11 +318,16 @@ function hex64OrFallback(value: unknown, fallback: string): string {
 
 async function resolveFactLedgerPredecessor(callerAddress: string, nextCircleId: string) {
   const zeroRoot = "0".repeat(64);
-  const predecessorAddress =
+  const configuredPredecessor =
     process.env.VITALS_FACT_LEDGER_PREDECESSOR_PROGRAM ||
     process.env.VITALS_PREDECESSOR_PROGRAM ||
-    process.env.VITALS_PROGRAMMED_CIRCLE_ID ||
-    nextCircleId;
+    "";
+  const cleanGenesis = /^(self|none|genesis|clean)$/i.test(configuredPredecessor);
+  const predecessorAddress = cleanGenesis
+    ? nextCircleId
+    : configuredPredecessor ||
+      process.env.VITALS_PROGRAMMED_CIRCLE_ID ||
+      nextCircleId;
   const explicitIndex = process.env.VITALS_FACT_LEDGER_PREDECESSOR_FINAL_INDEX || process.env.VITALS_PREDECESSOR_FINAL_INDEX;
   const explicitRoot = process.env.VITALS_FACT_LEDGER_PREDECESSOR_FINAL_ROOT || process.env.VITALS_PREDECESSOR_FINAL_ROOT;
   let predecessorFinalIndex = explicitIndex ? Number(explicitIndex) : 0;

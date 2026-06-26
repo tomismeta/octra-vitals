@@ -121,6 +121,16 @@ Use the plan to decide which deployment objects must move. Do not infer from loc
 
 It deliberately does not enable recurring timers.
 
+For a clean first mainnet fact-ledger era, set:
+
+```text
+VITALS_FACT_LEDGER_PREDECESSOR_PROGRAM=self
+```
+
+That initializes the new programmed Circle as its own genesis boundary with
+predecessor index `0` and a zero predecessor root. Omit this only when the
+deployment is an intentional successor migration from an older mainnet era.
+
 ## Patch Release
 
 Common safe patch order:
