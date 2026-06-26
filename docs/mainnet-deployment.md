@@ -124,12 +124,17 @@ It deliberately does not enable recurring timers.
 For a clean first mainnet fact-ledger era, set:
 
 ```text
-VITALS_FACT_LEDGER_PREDECESSOR_PROGRAM=self
+DEPLOY_PROGRAMMED_CIRCLE_PROGRAM=fact-ledger
+DEPLOY_RECORD_SNAPSHOT_VERSION=fact-v2
+DEPLOY_PROGRAMMED_CIRCLE_ARTIFACT_DIR=program-fact-ledger
+DEPLOY_FACT_LEDGER_PREDECESSOR_PROGRAM=self
 ```
 
 That initializes the new programmed Circle as its own genesis boundary with
 predecessor index `0` and a zero predecessor root. Omit this only when the
 deployment is an intentional successor migration from an older mainnet era.
+The dispatcher forwards these values to the host deployment script so the
+result does not depend on stale values already present in `updater.env`.
 
 ## Patch Release
 
