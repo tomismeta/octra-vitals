@@ -376,11 +376,11 @@ svg text{ font-family:var(--sans); }
 .sl-hit:focus-visible{ outline:none; stroke:var(--blue); stroke-width:0.8; }
 .spark-tip{
   position:fixed; z-index:50; pointer-events:none; opacity:0; transform:translateY(2px);
-  max-width:min(260px, calc(100vw - 20px)); padding:7px 9px;
+  max-width:min(230px, calc(100vw - 20px)); padding:7px 9px;
   border:1px solid var(--rule); border-radius:5px; background:var(--paper-card);
   box-shadow:0 6px 18px rgba(22,24,32,.12);
   color:var(--ink); font-family:var(--mono); font-size:10.5px; line-height:1.45;
-  white-space:pre; transition:opacity .08s ease, transform .08s ease;
+  white-space:pre-line; overflow-wrap:anywhere; transition:opacity .08s ease, transform .08s ease;
 }
 .spark-tip.show{ opacity:1; transform:translateY(0); }
 

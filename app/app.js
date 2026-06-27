@@ -1215,7 +1215,7 @@ function deltaPct(values, dp=4){
   const span = historySpan(rows);
   const d = values[values.length - 1] - values[0];
   const rounded = Number(d.toFixed(dp));
-  return rounded === 0 ? `no visible change · ${span}` : `${rounded > 0 ? "+" : "−"}${Math.abs(rounded).toFixed(dp)} pp · ${span}`;
+  return rounded === 0 ? `no change · ${span}` : `${rounded > 0 ? "+" : "−"}${Math.abs(rounded).toFixed(dp)} pp · ${span}`;
 }
 function signedFixed(value, dp=2){
   if(!Number.isFinite(value) || value === 0) return "0";
@@ -1229,24 +1229,24 @@ function sparkPointTip(values, index, opts={}){
   const rows = activeSeries();
   const row = rows[index];
   const time = browserDateTime(row?.[COL.T]);
-  if(index <= 0 || !rows[index - 1]) return `${time}\nΔ first snapshot in window`;
+  if(index <= 0 || !rows[index - 1]) return `${time}\nΔ first in window`;
   if(Number.isInteger(opts.rawCol)){
     const delta = BigInt(row[opts.rawCol]) - BigInt(rows[index - 1][opts.rawCol]);
     const label = delta === 0n ? "no change" : `${compactDelta(delta)} OCT`;
-    return `${time}\nΔ ${label} from previous snapshot`;
+    return `${time}\nΔ ${label} vs previous`;
   }
   const delta = values[index] - values[index - 1];
   if(opts.deltaUnit === "pp"){
     const rounded = Number(delta.toFixed(opts.deltaDp ?? 4));
-    const label = rounded === 0 ? "no visible change" : `${signedFixed(rounded, opts.deltaDp ?? 4)} pp`;
-    return `${time}\nΔ ${label} from previous snapshot`;
+    const label = rounded === 0 ? "no change" : `${signedFixed(rounded, opts.deltaDp ?? 4)} pp`;
+    return `${time}\nΔ ${label} vs previous`;
   }
   if(opts.deltaUnit === "ratio"){
     const rounded = Number(delta.toFixed(opts.deltaDp ?? 4));
     const label = rounded === 0 ? "no change" : signedFixed(rounded, opts.deltaDp ?? 4);
-    return `${time}\nΔ ${label} from previous snapshot`;
+    return `${time}\nΔ ${label} vs previous`;
   }
-  return `${time}\nΔ ${numericOCTDelta(delta)} from previous snapshot`;
+  return `${time}\nΔ ${numericOCTDelta(delta)} vs previous`;
 }
 
 const SVGNS = "http://www.w3.org/2000/svg";
