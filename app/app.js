@@ -1222,7 +1222,7 @@ function signedFixed(value, dp=2){
   return `${value > 0 ? "+" : "−"}${Math.abs(value).toFixed(dp)}`;
 }
 function numericOCTDelta(value){
-  if(!Number.isFinite(value) || value === 0) return "0 OCT";
+  if(!Number.isFinite(value) || value === 0) return "no change";
   return `${value > 0 ? "+" : "−"}${compact(BigInt(Math.round(Math.abs(value) * 1e6))).replace("K", "k")} OCT`;
 }
 function sparkPointTip(values, index, opts={}){
