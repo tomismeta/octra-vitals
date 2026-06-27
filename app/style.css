@@ -372,6 +372,17 @@ svg text{ font-family:var(--sans); }
 .sl-point{ fill:var(--blue); stroke:var(--paper-card); stroke-width:4; vector-effect:non-scaling-stroke; }
 .panel.flat .sl-point{ stroke:var(--paper-2); }
 .sl-point.flatpt{ fill:var(--structural); }
+.sl-hit{ fill:transparent; stroke:transparent; pointer-events:all; cursor:crosshair; }
+.sl-hit:focus-visible{ outline:none; stroke:var(--blue); stroke-width:0.8; }
+.spark-tip{
+  position:fixed; z-index:50; pointer-events:none; opacity:0; transform:translateY(2px);
+  max-width:min(260px, calc(100vw - 20px)); padding:7px 9px;
+  border:1px solid var(--rule); border-radius:5px; background:var(--paper-card);
+  box-shadow:0 6px 18px rgba(22,24,32,.12);
+  color:var(--ink); font-family:var(--mono); font-size:10.5px; line-height:1.45;
+  white-space:pre; transition:opacity .08s ease, transform .08s ease;
+}
+.spark-tip.show{ opacity:1; transform:translateY(0); }
 
 /* flow (per-interval change) sparkline */
 .sl-zero{ stroke:var(--rule); stroke-width:1; }

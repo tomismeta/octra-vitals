@@ -1217,6 +1217,37 @@ function deltaPct(values, dp=4){
   const rounded = Number(d.toFixed(dp));
   return rounded === 0 ? `no visible change · ${span}` : `${rounded > 0 ? "+" : "−"}${Math.abs(rounded).toFixed(dp)} pp · ${span}`;
 }
+function signedFixed(value, dp=2){
+  if(!Number.isFinite(value) || value === 0) return "0";
+  return `${value > 0 ? "+" : "−"}${Math.abs(value).toFixed(dp)}`;
+}
+function numericOCTDelta(value){
+  if(!Number.isFinite(value) || value === 0) return "0 OCT";
+  return `${value > 0 ? "+" : "−"}${compact(BigInt(Math.round(Math.abs(value) * 1e6))).replace("K", "k")} OCT`;
+}
+function sparkPointTip(values, index, opts={}){
+  const rows = activeSeries();
+  const row = rows[index];
+  const time = browserDateTime(row?.[COL.T]);
+  if(index <= 0 || !rows[index - 1]) return `${time}\nΔ first snapshot in window`;
+  if(Number.isInteger(opts.rawCol)){
+    const delta = BigInt(row[opts.rawCol]) - BigInt(rows[index - 1][opts.rawCol]);
+    const label = delta === 0n ? "no change" : `${compactDelta(delta)} OCT`;
+    return `${time}\nΔ ${label} from previous snapshot`;
+  }
+  const delta = values[index] - values[index - 1];
+  if(opts.deltaUnit === "pp"){
+    const rounded = Number(delta.toFixed(opts.deltaDp ?? 4));
+    const label = rounded === 0 ? "no visible change" : `${signedFixed(rounded, opts.deltaDp ?? 4)} pp`;
+    return `${time}\nΔ ${label} from previous snapshot`;
+  }
+  if(opts.deltaUnit === "ratio"){
+    const rounded = Number(delta.toFixed(opts.deltaDp ?? 4));
+    const label = rounded === 0 ? "no change" : signedFixed(rounded, opts.deltaDp ?? 4);
+    return `${time}\nΔ ${label} from previous snapshot`;
+  }
+  return `${time}\nΔ ${numericOCTDelta(delta)} from previous snapshot`;
+}
 
 const SVGNS = "http://www.w3.org/2000/svg";
 function el(tag, attrs={}, text){ const n=document.createElementNS(SVGNS,tag); for(const k in attrs) n.setAttribute(k,attrs[k]); if(text!=null) n.textContent=text; return n; }
@@ -1471,6 +1502,18 @@ function sparkSM(values, opts={}){
   const midY=padT+innerH/2;
   const wrap = inner => `<span class="spark"><svg class="sl-svg" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" role="img" aria-label="${esc(opts.aria||"")}">${inner}</svg></span>`;
   if(!n) return `<span class="spark"></span>`;
+  const hitSlots = ()=>{
+    const step = n > 1 ? innerW / (n - 1) : innerW;
+    return values.map((_, i)=>{
+      const slotW = n > 1
+        ? (i === 0 || i === n - 1 ? step / 2 : step)
+        : innerW;
+      const left = Math.max(0, x(i) - slotW / 2);
+      const width = Math.min(W - left, slotW);
+      const tip = sparkPointTip(values, i, opts);
+      return `<rect class="sl-hit" x="${left.toFixed(2)}" y="0" width="${width.toFixed(2)}" height="${H}" tabindex="0" role="img" aria-label="${esc(tip)}" data-tip="${esc(tip)}"/>`;
+    }).join("");
+  };
 
   // FLOW — plot the change in each 15-minute interval as zero-baseline bars (up/down by sign).
   // A constant stretch reads as a calm zero-line; one real move reads as one bar. Cannot be
@@ -1479,7 +1522,7 @@ function sparkSM(values, opts={}){
     const d=values.map((v,i)=> i===0?0:v-values[i-1]);
     const maxAbs=Math.max(0,...d.map(Math.abs));
     const zero=`<line class="sl-zero" x1="${padL}" y1="${midY.toFixed(2)}" x2="${(padL+innerW).toFixed(2)}" y2="${midY.toFixed(2)}" vector-effect="non-scaling-stroke"/>`;
-    if(!(maxAbs>0)) return wrap(`${zero}<circle class="sl-point flatpt" cx="${(padL+innerW).toFixed(2)}" cy="${midY.toFixed(2)}" r="2.3"/>`);
+    if(!(maxAbs>0)) return wrap(`${zero}<circle class="sl-point flatpt" cx="${(padL+innerW).toFixed(2)}" cy="${midY.toFixed(2)}" r="2.3"/>${hitSlots()}`);
     const half=innerH/2, step=n>1?innerW/(n-1):innerW, bw=Math.max(0.8,Math.min(step*0.62,3));
     let bars="";
     for(let i=1;i<n;i++){
@@ -1488,7 +1531,7 @@ function sparkSM(values, opts={}){
       bars+=`<rect class="sl-bar${up?'':' dn'}" x="${(x(i)-bw/2).toFixed(2)}" y="${(up?midY-h:midY).toFixed(2)}" width="${bw.toFixed(2)}" height="${Math.max(h,0.6).toFixed(2)}"/>`;
     }
     const lh=(Math.abs(d[n-1])/maxAbs)*half, lty=d[n-1]===0?midY:(d[n-1]>0?midY-lh:midY+lh);
-    return wrap(`${zero}${bars}<circle class="sl-point" cx="${x(n-1).toFixed(2)}" cy="${lty.toFixed(2)}" r="2"/>`);
+    return wrap(`${zero}${bars}<circle class="sl-point" cx="${x(n-1).toFixed(2)}" cy="${lty.toFixed(2)}" r="2"/>${hitSlots()}`);
   }
 
   // TREND / ABSOLUTE — level line. Genuinely-constant series render as an honest flat hairline
@@ -1497,7 +1540,7 @@ function sparkSM(values, opts={}){
   const obsMin=Math.min(...values), obsMax=Math.max(...values), range=obsMax-obsMin;
   const lvl=Math.max(Math.abs(obsMax),1e-12);
   if(range/lvl < 1e-7){
-    return wrap(`<line class="sl-line flatln" x1="${padL}" y1="${midY.toFixed(2)}" x2="${(padL+innerW).toFixed(2)}" y2="${midY.toFixed(2)}" vector-effect="non-scaling-stroke"/><circle class="sl-point flatpt" cx="${(padL+innerW).toFixed(2)}" cy="${midY.toFixed(2)}" r="2.3"/>`);
+    return wrap(`<line class="sl-line flatln" x1="${padL}" y1="${midY.toFixed(2)}" x2="${(padL+innerW).toFixed(2)}" y2="${midY.toFixed(2)}" vector-effect="non-scaling-stroke"/><circle class="sl-point flatpt" cx="${(padL+innerW).toFixed(2)}" cy="${midY.toFixed(2)}" r="2.3"/>${hitSlots()}`);
   }
   let dMin, dMax;
   if(mode==="absolute"){ dMin=0; dMax=(opts.absMax!==undefined?opts.absMax:obsMax)||1; }
@@ -1505,7 +1548,7 @@ function sparkSM(values, opts={}){
   const span=(dMax-dMin)||1;
   const y=v=> padT + innerH - ((v-dMin)/span)*innerH;
   const dPath=values.map((v,i)=>`${i?"L":"M"}${x(i).toFixed(2)} ${y(v).toFixed(2)}`).join(" ");
-  return wrap(`<path class="sl-line" d="${dPath}" vector-effect="non-scaling-stroke"/><circle class="sl-point" cx="${x(n-1).toFixed(2)}" cy="${y(values[n-1]).toFixed(2)}" r="2.3"/>`);
+  return wrap(`<path class="sl-line" d="${dPath}" vector-effect="non-scaling-stroke"/><circle class="sl-point" cx="${x(n-1).toFixed(2)}" cy="${y(values[n-1]).toFixed(2)}" r="2.3"/>${hitSlots()}`);
 }
 
 function setupSparkMode(){
@@ -1547,6 +1590,69 @@ function setupSparkWindow(){
 function setupSparkControls(){
   setupSparkMode();
   setupSparkWindow();
+}
+
+let sparkTipNode = null;
+function ensureSparkTooltip(){
+  if(sparkTipNode) return sparkTipNode;
+  sparkTipNode = document.createElement("div");
+  sparkTipNode.className = "spark-tip";
+  sparkTipNode.setAttribute("role", "tooltip");
+  sparkTipNode.setAttribute("aria-hidden", "true");
+  document.body.appendChild(sparkTipNode);
+  return sparkTipNode;
+}
+function placeSparkTooltip(x, y){
+  const tip = ensureSparkTooltip();
+  const pad = 10;
+  const box = tip.getBoundingClientRect();
+  let left = x + 12;
+  let top = y - box.height - 12;
+  if(left + box.width + pad > window.innerWidth) left = x - box.width - 12;
+  if(top < pad) top = y + 14;
+  tip.style.left = `${Math.max(pad, left)}px`;
+  tip.style.top = `${Math.max(pad, top)}px`;
+}
+function showSparkTooltip(hit, x, y){
+  const text = hit?.dataset?.tip || "";
+  if(!text) return;
+  const tip = ensureSparkTooltip();
+  tip.textContent = text;
+  tip.classList.add("show");
+  tip.setAttribute("aria-hidden", "false");
+  placeSparkTooltip(x, y);
+}
+function hideSparkTooltip(){
+  if(!sparkTipNode) return;
+  sparkTipNode.classList.remove("show");
+  sparkTipNode.setAttribute("aria-hidden", "true");
+}
+function setupSparkTooltips(){
+  document.addEventListener("pointerover", (event)=>{
+    const hit = event.target?.closest?.(".sl-hit");
+    if(!hit) return;
+    showSparkTooltip(hit, event.clientX, event.clientY);
+  });
+  document.addEventListener("pointermove", (event)=>{
+    const hit = event.target?.closest?.(".sl-hit");
+    if(!hit || !sparkTipNode?.classList.contains("show")) return;
+    placeSparkTooltip(event.clientX, event.clientY);
+  });
+  document.addEventListener("pointerout", (event)=>{
+    const hit = event.target?.closest?.(".sl-hit");
+    if(!hit) return;
+    const next = event.relatedTarget?.closest?.(".sl-hit");
+    if(next !== hit) hideSparkTooltip();
+  });
+  document.addEventListener("focusin", (event)=>{
+    const hit = event.target?.closest?.(".sl-hit");
+    if(!hit) return;
+    const rect = hit.getBoundingClientRect();
+    showSparkTooltip(hit, rect.left + rect.width / 2, rect.top + rect.height / 2);
+  });
+  document.addEventListener("focusout", (event)=>{
+    if(event.target?.closest?.(".sl-hit")) hideSparkTooltip();
+  });
 }
 
 function historyApiPath(){
@@ -1615,7 +1721,7 @@ function buildState(){
     name:"In circulation", unit:"% of cap",
     value: fmtPct(A.pct.circOfCap)+`<span class="sfx">%</span>`,
     sub: compact(A.raw.inCirc)+" OCT",
-    spark: sparkSM(seriesPctOfCap(COL.INCIRC), {aria:"In circulation, share of cap over the recent snapshot window."}),
+    spark: sparkSM(seriesPctOfCap(COL.INCIRC), {aria:"In circulation, share of cap over the recent snapshot window.", deltaUnit:"pp"}),
     delta: deltaRaw(COL.INCIRC),
     prov: clkO, aria:"In circulation, share of cap."
   }));
@@ -1624,7 +1730,7 @@ function buildState(){
     name:"Burned", unit:"OCT",
     value: fmtPct(A.pct.burnedOfCap)+`<span class="sfx">%</span>`,
     sub: compact(A.raw.burned)+" OCT",
-    spark: sparkSM(seriesPctOfCap(COL.BURN), {aria:"Burned supply, share of cap over the recent snapshot window."}),
+    spark: sparkSM(seriesPctOfCap(COL.BURN), {aria:"Burned supply, share of cap over the recent snapshot window.", deltaUnit:"pp"}),
     delta: deltaRaw(COL.BURN),
     prov: "burn field", aria:"Burned supply."
   }));
@@ -1633,7 +1739,7 @@ function buildState(){
     name:"Encrypted", unit:"% of circ",
     value: fmtPct(A.pct.encOfCirc)+`<span class="sfx">%</span>`,
     sub: compact(A.raw.encrypted)+" OCT · FHE state",
-    spark: sparkSM(seriesPctOfCirc(COL.ENC), {aria:`Encrypted, share of circulating, ${trend}.`}),
+    spark: sparkSM(seriesPctOfCirc(COL.ENC), {aria:`Encrypted, share of circulating, ${trend}.`, deltaUnit:"pp"}),
     delta: deltaRaw(COL.ENC),
     prov: clkO, aria:`Encrypted, share of circulating, ${trend}.`
   }));
@@ -1642,7 +1748,7 @@ function buildState(){
     name:"wOCT coverage", unit:"wOCT ÷ locked",
     value: fmtPct(A.pct.pegFull)+`<span class="sfx">%</span>`,
     sub: "gap = unclaimed + unclassified",
-    spark: sparkSM(seriesPegPct(), {aria:"wOCT coverage, wOCT over locked over the recent snapshot window."}),
+    spark: sparkSM(seriesPegPct(), {aria:"wOCT coverage, wOCT over locked over the recent snapshot window.", deltaUnit:"pp"}),
     delta: deltaPct(seriesPegPct()),
     prov: clkEth, aria:"wOCT coverage, wOCT over locked."
   }));
@@ -1651,7 +1757,7 @@ function buildState(){
     name:"Locked", unit:"OCT · vault",
     value: cp(A.raw.locked),
     sub: "vault holds "+compact(A.raw.vault),
-    spark: sparkSM(seriesOCT(COL.LOCKED), {aria:"Locked OCT in vault over the recent snapshot window."}),
+    spark: sparkSM(seriesOCT(COL.LOCKED), {aria:"Locked OCT in vault over the recent snapshot window.", rawCol:COL.LOCKED}),
     delta: deltaRaw(COL.LOCKED),
     prov: clkRec, aria:"Locked OCT in vault."
   }));
@@ -1660,7 +1766,7 @@ function buildState(){
     name:"wOCT minted", unit:"OCT · eth",
     value: cp(A.raw.woct),
     sub: "claims backed by locked OCT",
-    spark: sparkSM(seriesOCT(COL.WOCT), {aria:"Wrapped OCT on Ethereum over the recent snapshot window."}),
+    spark: sparkSM(seriesOCT(COL.WOCT), {aria:"Wrapped OCT on Ethereum over the recent snapshot window.", rawCol:COL.WOCT}),
     delta: deltaRaw(COL.WOCT),
     prov: clkEth, aria:"Wrapped OCT on Ethereum."
   }));
@@ -1669,7 +1775,7 @@ function buildState(){
     name:"Unclaimed", unit:"OCT · claimable",
     value: cp(A.raw.unclaimed),
     sub: "claimable recovery",
-    spark: sparkSM(seriesOCT(COL.UNCLAIMED), {aria:"Relayer-unclaimed OCT over the observed window."}),
+    spark: sparkSM(seriesOCT(COL.UNCLAIMED), {aria:"Relayer-unclaimed OCT over the observed window.", rawCol:COL.UNCLAIMED}),
     delta: deltaRaw(COL.UNCLAIMED),
     prov: clkRec, aria:"Relayer-unclaimed OCT."
   }));
@@ -1678,7 +1784,7 @@ function buildState(){
     name:"Unclassified", unit:"OCT · remaining",
     value: cp(A.raw.unclassified),
     sub: `derived · ${trend}`,
-    spark: sparkSM(seriesOCT(COL.UNCLASS), {aria:`Unclassified remaining collateral, ${trend}.`}),
+    spark: sparkSM(seriesOCT(COL.UNCLASS), {aria:`Unclassified remaining collateral, ${trend}.`, rawCol:COL.UNCLASS}),
     delta: deltaRaw(COL.UNCLASS),
     prov: clkRec, aria:`Unclassified remaining collateral, ${trend}.`
   }));
@@ -1711,21 +1817,21 @@ function buildLedger(){
 
 /* ledger sparkline wiring */
 const LSPARKS = {
-  "issued":      {data:()=>seriesOCT(COL.INCIRC), aria:"In circulation over the available snapshot history."},
+  "issued":      {data:()=>seriesOCT(COL.INCIRC), aria:"In circulation over the available snapshot history.", rawCol:COL.INCIRC},
   "public":      {data:()=>activeSeries().map(r=>octNum(BigInt(r[COL.INCIRC])-BigInt(r[COL.ENC]))), aria:"Public balance, derived as issued minus encrypted, over the available snapshot history."},
-  "encrypted":   {data:()=>seriesOCT(COL.ENC), aria:"Encrypted balance over the observed window."},
-  "locked":      {data:()=>seriesOCT(COL.LOCKED), aria:"Locked on Octra over the observed window."},
-  "woct":        {data:()=>seriesOCT(COL.WOCT), aria:"wOCT minted over the observed window."},
-  "unclaimed":   {data:()=>seriesOCT(COL.UNCLAIMED), aria:"Relayer-unclaimed OCT over the observed window."},
-  "flat-unclass":{data:()=>seriesOCT(COL.UNCLASS), aria:"Unclassified remaining collateral over the available snapshot history."},
-  "flat-cap":    {data:()=>activeSeries().map(()=>1), aria:"Hard cap is flat by definition."},
-  "flat-burn":   {data:()=>seriesOCT(COL.BURN), aria:"Burned supply over the available snapshot history."}
+  "encrypted":   {data:()=>seriesOCT(COL.ENC), aria:"Encrypted balance over the observed window.", rawCol:COL.ENC},
+  "locked":      {data:()=>seriesOCT(COL.LOCKED), aria:"Locked on Octra over the observed window.", rawCol:COL.LOCKED},
+  "woct":        {data:()=>seriesOCT(COL.WOCT), aria:"wOCT minted over the observed window.", rawCol:COL.WOCT},
+  "unclaimed":   {data:()=>seriesOCT(COL.UNCLAIMED), aria:"Relayer-unclaimed OCT over the observed window.", rawCol:COL.UNCLAIMED},
+  "flat-unclass":{data:()=>seriesOCT(COL.UNCLASS), aria:"Unclassified remaining collateral over the available snapshot history.", rawCol:COL.UNCLASS},
+  "flat-cap":    {data:()=>activeSeries().map(()=>1), aria:"Hard cap is flat by definition.", deltaUnit:"ratio", deltaDp:0},
+  "flat-burn":   {data:()=>seriesOCT(COL.BURN), aria:"Burned supply over the available snapshot history.", rawCol:COL.BURN}
 };
 function buildLedgerSparks(){
   document.querySelectorAll("[data-spark]").forEach(host=>{
     const cfg = LSPARKS[host.getAttribute("data-spark")];
     if(!cfg) return;
-    host.innerHTML = sparkSM(cfg.data(), {aria:cfg.aria});  // same flow/trend lens as the live-state grid
+    host.innerHTML = sparkSM(cfg.data(), {aria:cfg.aria, rawCol:cfg.rawCol, deltaUnit:cfg.deltaUnit, deltaDp:cfg.deltaDp});  // same flow/trend lens as the live-state grid
   });
 }
 
@@ -1983,6 +2089,7 @@ async function boot(){
     renderFirstViewport();
     setupVerifyLazyRender();
     setupSparkControls();
+    setupSparkTooltips();
     perfMark("first_viewport_rendered");
 
     afterFirstPaint(()=>{
