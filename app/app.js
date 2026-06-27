@@ -65,6 +65,7 @@ const EMPTY_DATA = Object.freeze({
 });
 const COL = { T:0, EPOCH:1, INCIRC:2, ENC:3, LOCKED:4, WOCT:5, UNCLAIMED:6, UNCLASS:7, BURN:8 };
 const HISTORY_WINDOWS = Object.freeze({
+  "1h": { label: "1h", ms: 60 * 60 * 1000 },
   "1d": { label: "1d", ms: 24 * 60 * 60 * 1000 },
   "7d": { label: "7d", ms: 7 * 24 * 60 * 60 * 1000 },
   "30d": { label: "30d", ms: 30 * 24 * 60 * 60 * 1000 }

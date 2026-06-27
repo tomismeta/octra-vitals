@@ -39,6 +39,19 @@ test("history API parser accepts known windows and range fields", () => {
   assert.equal(request.to, null);
 });
 
+test("history API supports a 1-hour inspection window", () => {
+  const rows = snapshots(9);
+  const request = parseHistoryApiRequest(new URLSearchParams("window=1h"));
+  const filtered = filterHistorySnapshots(rows, request);
+  const coverage = historyApiCoverage(rows, filtered, request);
+
+  assert.equal(request.window, "1h");
+  assert.deepEqual(filtered.map((row) => row.snapshot_index), [5, 6, 7, 8, 9]);
+  assert.equal(coverage.status, "complete");
+  assert.equal(coverage.requested_window, "1h");
+  assert.equal(coverage.points, 5);
+});
+
 test("history API parser ignores malformed bounds instead of throwing", () => {
   const request = parseHistoryApiRequest(new URLSearchParams("window=all&from_index=-1&to=lol"));
 

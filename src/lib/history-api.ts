@@ -1,7 +1,7 @@
 export const HISTORY_API_SCHEMA = "octra-vitals-history-api-v1";
 export const LEGACY_HISTORY_SCHEMA = "octra-vitals-snapshot-history-v0";
 
-export type HistoryWindowName = "1d" | "7d" | "30d";
+export type HistoryWindowName = "1h" | "1d" | "7d" | "30d";
 export type HistoryCoverageStatus = "complete" | "partial" | "empty" | "invalid_request";
 
 export interface HistoryApiRequest {
@@ -55,6 +55,7 @@ export interface NormalizedHistorySnapshot {
 }
 
 const WINDOW_MS: Record<HistoryWindowName, number> = {
+  "1h": 60 * 60 * 1000,
   "1d": 24 * 60 * 60 * 1000,
   "7d": 7 * 24 * 60 * 60 * 1000,
   "30d": 30 * 24 * 60 * 60 * 1000
@@ -90,7 +91,7 @@ function snapshotIndex(snapshot: NormalizedHistorySnapshot): number | null {
 export function parseHistoryApiRequest(searchParams: URLSearchParams): HistoryApiRequest {
   const rawWindow = searchParams.get("window");
   const errors: string[] = [];
-  const window = rawWindow === null || rawWindow === "" ? null : rawWindow === "1d" || rawWindow === "7d" || rawWindow === "30d" ? rawWindow : null;
+  const window = rawWindow === null || rawWindow === "" ? null : rawWindow === "1h" || rawWindow === "1d" || rawWindow === "7d" || rawWindow === "30d" ? rawWindow : null;
   if (rawWindow && !window) errors.push("invalid_window");
   const fromIndex = parsePositiveInteger(searchParams.get("from_index"));
   const toIndex = parsePositiveInteger(searchParams.get("to_index"));
