@@ -1628,22 +1628,28 @@ function hideSparkTooltip(){
   sparkTipNode.setAttribute("aria-hidden", "true");
 }
 function setupSparkTooltips(){
-  document.addEventListener("pointerover", (event)=>{
+  const over = (event)=>{
     const hit = event.target?.closest?.(".sl-hit");
     if(!hit) return;
     showSparkTooltip(hit, event.clientX, event.clientY);
-  });
-  document.addEventListener("pointermove", (event)=>{
+  };
+  const move = (event)=>{
     const hit = event.target?.closest?.(".sl-hit");
     if(!hit || !sparkTipNode?.classList.contains("show")) return;
     placeSparkTooltip(event.clientX, event.clientY);
-  });
-  document.addEventListener("pointerout", (event)=>{
+  };
+  const out = (event)=>{
     const hit = event.target?.closest?.(".sl-hit");
     if(!hit) return;
     const next = event.relatedTarget?.closest?.(".sl-hit");
     if(next !== hit) hideSparkTooltip();
-  });
+  };
+  document.addEventListener("pointerover", over);
+  document.addEventListener("pointermove", move);
+  document.addEventListener("pointerout", out);
+  document.addEventListener("mouseover", over);
+  document.addEventListener("mousemove", move);
+  document.addEventListener("mouseout", out);
   document.addEventListener("focusin", (event)=>{
     const hit = event.target?.closest?.(".sl-hit");
     if(!hit) return;
