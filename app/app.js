@@ -1582,8 +1582,8 @@ function buildClocks(){
 
 /* ============================================================================
    ACT II · SMALL MULTIPLES — eight live-state panels.
-   Required set: in-circulation %, burned, encrypted, locked, wOCT,
-   wOCT coverage, unclassified, unclaimed.
+   Required set: in-circulation %, burned, encrypted, wOCT coverage,
+   locked, wOCT, unclaimed, unclassified.
    ============================================================================ */
 function panel(cfg){
   const showFlat = cfg.flat && hasCanonicalHistoryWindow();
@@ -1637,25 +1637,7 @@ function buildState(){
     delta: deltaRaw(COL.ENC),
     prov: clkO, aria:`Encrypted, share of circulating, ${trend}.`
   }));
-  // 4) LOCKED — OCT level
-  panels.push(panel({
-    name:"Locked", unit:"OCT · vault",
-    value: cp(A.raw.locked),
-    sub: "vault holds "+compact(A.raw.vault),
-    spark: sparkSM(seriesOCT(COL.LOCKED), {aria:"Locked OCT in vault over the recent snapshot window."}),
-    delta: deltaRaw(COL.LOCKED),
-    prov: clkRec, aria:"Locked OCT in vault."
-  }));
-  // 5) wOCT — OCT level (same scale -> sits just under locked)
-  panels.push(panel({
-    name:"wOCT minted", unit:"OCT · eth",
-    value: cp(A.raw.woct),
-    sub: "claims backed by locked OCT",
-    spark: sparkSM(seriesOCT(COL.WOCT), {aria:"Wrapped OCT on Ethereum over the recent snapshot window."}),
-    delta: deltaRaw(COL.WOCT),
-    prov: clkEth, aria:"Wrapped OCT on Ethereum."
-  }));
-  // 6) wOCT COVERAGE — wOCT / locked, honest 0..100
+  // 4) wOCT COVERAGE — wOCT / locked, honest 0..100
   panels.push(panel({
     name:"wOCT coverage", unit:"wOCT ÷ locked",
     value: fmtPct(A.pct.pegFull)+`<span class="sfx">%</span>`,
@@ -1664,16 +1646,25 @@ function buildState(){
     delta: deltaPct(seriesPegPct()),
     prov: clkEth, aria:"wOCT coverage, wOCT over locked."
   }));
-  // 7) UNCLASSIFIED — real residual series, fixed to the bridge OCT-level scale
+  // 5) LOCKED — OCT level
   panels.push(panel({
-    name:"Unclassified", unit:"OCT · remaining",
-    value: cp(A.raw.unclassified),
-    sub: `derived · ${trend}`,
-    spark: sparkSM(seriesOCT(COL.UNCLASS), {aria:`Unclassified remaining collateral, ${trend}.`}),
-    delta: deltaRaw(COL.UNCLASS),
-    prov: clkRec, aria:`Unclassified remaining collateral, ${trend}.`
+    name:"Locked", unit:"OCT · vault",
+    value: cp(A.raw.locked),
+    sub: "vault holds "+compact(A.raw.vault),
+    spark: sparkSM(seriesOCT(COL.LOCKED), {aria:"Locked OCT in vault over the recent snapshot window."}),
+    delta: deltaRaw(COL.LOCKED),
+    prov: clkRec, aria:"Locked OCT in vault."
   }));
-  // 8) UNCLAIMED — OCT level (has the one real wiggle)
+  // 6) wOCT — OCT level (same scale -> sits next to locked)
+  panels.push(panel({
+    name:"wOCT minted", unit:"OCT · eth",
+    value: cp(A.raw.woct),
+    sub: "claims backed by locked OCT",
+    spark: sparkSM(seriesOCT(COL.WOCT), {aria:"Wrapped OCT on Ethereum over the recent snapshot window."}),
+    delta: deltaRaw(COL.WOCT),
+    prov: clkEth, aria:"Wrapped OCT on Ethereum."
+  }));
+  // 7) UNCLAIMED — OCT level (has the one real wiggle)
   panels.push(panel({
     name:"Unclaimed", unit:"OCT · claimable",
     value: cp(A.raw.unclaimed),
@@ -1681,6 +1672,15 @@ function buildState(){
     spark: sparkSM(seriesOCT(COL.UNCLAIMED), {aria:"Relayer-unclaimed OCT over the observed window."}),
     delta: deltaRaw(COL.UNCLAIMED),
     prov: clkRec, aria:"Relayer-unclaimed OCT."
+  }));
+  // 8) UNCLASSIFIED — real residual series, fixed to the bridge OCT-level scale
+  panels.push(panel({
+    name:"Unclassified", unit:"OCT · remaining",
+    value: cp(A.raw.unclassified),
+    sub: `derived · ${trend}`,
+    spark: sparkSM(seriesOCT(COL.UNCLASS), {aria:`Unclassified remaining collateral, ${trend}.`}),
+    delta: deltaRaw(COL.UNCLASS),
+    prov: clkRec, aria:`Unclassified remaining collateral, ${trend}.`
   }));
 
   document.getElementById("grid-state").innerHTML = panels.join("");
