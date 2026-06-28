@@ -257,6 +257,36 @@ test("operator notifier treats Circle RPC site proof failures as availability wa
   assert.equal(alerts.some((alert) => alert.id === "native_readiness"), false);
 });
 
+test("operator notifier suppresses transient native readiness when other trust signals are healthy", () => {
+  const alerts = detectOperatorAlerts(healthySummary({
+    gateway: {
+      ...healthySummary().gateway,
+      native_status: "program_pending_verification"
+    }
+  }), {
+    max_snapshot_age_ms: 45 * 60_000,
+    disk_used_percent: 75,
+    diagnostic_requests_current_hour: 300
+  });
+  assert.equal(alerts.some((alert) => alert.id === "native_readiness"), false);
+});
+
+test("operator notifier warns on native readiness when another trust signal is degraded", () => {
+  const alerts = detectOperatorAlerts(healthySummary({
+    gateway: {
+      ...healthySummary().gateway,
+      native_status: "program_pending_verification",
+      readback_matches: false
+    }
+  }), {
+    max_snapshot_age_ms: 45 * 60_000,
+    disk_used_percent: 75,
+    diagnostic_requests_current_hour: 300
+  });
+  assert.equal(alerts.some((alert) => alert.id === "gateway_latest_readback"), true);
+  assert.equal(alerts.some((alert) => alert.id === "native_readiness"), true);
+});
+
 test("operator digest is compact and uses aggregate traffic, not raw client details", () => {
   const digest = formatOperatorDigest(healthySummary(), []);
   assert.match(digest, /<b>Octra Vitals digest<\/b> <code>OK<\/code>/);

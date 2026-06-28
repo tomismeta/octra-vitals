@@ -599,6 +599,17 @@ function inferSiteIntegrityStatus(site: any): string | null {
   return null;
 }
 
+function isSoftNativeReadinessWarning(summary: OperatorSummary): boolean {
+  return summary.gateway.native_status === "program_pending_verification" &&
+    summary.gateway.latest_ok === true &&
+    summary.gateway.readback_matches === true &&
+    summary.gateway.conservation_status === "green" &&
+    summary.gateway.site_integrity_ok === true &&
+    summary.gateway.site_integrity_status === "verified" &&
+    summary.snapshots.latest_status === "confirmed" &&
+    summary.snapshots.latest_readback_matches === true;
+}
+
 export function detectOperatorAlerts(summary: OperatorSummary, thresholds: AlertThresholds): OperatorAlert[] {
   const alerts: OperatorAlert[] = [];
   if (!summary.gateway.latest_ok) {
@@ -660,7 +671,8 @@ export function detectOperatorAlerts(summary: OperatorSummary, thresholds: Alert
   if (
     summary.gateway.native_status &&
     summary.gateway.native_status !== "native_ready" &&
-    summary.gateway.site_integrity_status !== "circle_unavailable"
+    summary.gateway.site_integrity_status !== "circle_unavailable" &&
+    !isSoftNativeReadinessWarning(summary)
   ) {
     alerts.push({
       id: "native_readiness",
