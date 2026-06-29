@@ -11,6 +11,9 @@ test("routeGroup avoids query strings and high-cardinality evidence hashes", () 
   assert.equal(routeGroup("/index.html"), "/");
   assert.equal(routeGroup("/api/latest"), "/api/latest");
   assert.equal(routeGroup("/api/evidence/raw/abcdef"), "/api/evidence/raw/:hash");
+  assert.equal(routeGroup("/lab/history"), "/lab/history");
+  assert.equal(routeGroup("/api/lab/query"), "/api/lab/query");
+  assert.equal(routeGroup("/lab-history.js"), "lab_assets");
   assert.equal(routeGroup("/favicon.svg"), "static_assets");
   assert.equal(routeGroup("/strange/path"), "other");
 });

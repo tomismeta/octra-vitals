@@ -123,8 +123,16 @@ export function routeGroup(pathname: string): string {
   if (pathname === "/api/native-readiness") return "/api/native-readiness";
   if (pathname === "/api/site-integrity") return "/api/site-integrity";
   if (pathname === "/api/program/artifacts") return "/api/program/artifacts";
+  if (pathname === "/lab/history") return "/lab/history";
+  if (pathname === "/api/lab/status") return "/api/lab/status";
+  if (pathname === "/api/lab/tables") return "/api/lab/tables";
+  if (pathname === "/api/lab/schema") return "/api/lab/schema";
+  if (pathname === "/api/lab/history") return "/api/lab/history";
+  if (pathname === "/api/lab/query") return "/api/lab/query";
+  if (pathname === "/api/lab/mirror/sync") return "/api/lab/mirror/sync";
   if (pathname.startsWith("/api/evidence/raw/")) return "/api/evidence/raw/:hash";
   if (pathname.startsWith("/api/evidence/")) return "/api/evidence/:hash";
+  if (pathname.startsWith("/lab-history.")) return "lab_assets";
   const ext = extname(pathname).toLowerCase();
   if ([".html", ".js", ".css", ".json", ".webmanifest", ".svg", ".ico", ".png", ".txt", ".xml"].includes(ext)) {
     return "static_assets";
