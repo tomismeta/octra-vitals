@@ -485,10 +485,11 @@ async function writeReport(report: unknown): Promise<void> {
   }));
 }
 
-const [circleConfig, siteManifest, vitalsManifest] = await Promise.all([
+const [circleConfig, siteManifest, vitalsManifest, releaseManifest] = await Promise.all([
   readFile(join(root, "circle.json"), "utf8").then((text) => JSON.parse(text)),
   readFile(join(appDir, "manifest.json"), "utf8").then((text) => JSON.parse(text)),
-  readFile(join(appDir, "vitals.manifest.json"), "utf8").then((text) => JSON.parse(text)).catch(() => ({}))
+  readFile(join(appDir, "vitals.manifest.json"), "utf8").then((text) => JSON.parse(text)).catch(() => ({})),
+  readFile(join(root, "build", "site-circle-release.json"), "utf8").then((text) => JSON.parse(text)).catch(() => null)
 ]);
 
 const wallet = loadWalletFromEnv({
@@ -532,11 +533,19 @@ const circleIdPayload = {
 };
 const deployPayload = circleIdPayload;
 const deployPayloadJson = JSON.stringify(deployPayload);
+if (!releaseManifest || !Array.isArray(releaseManifest.assets) || releaseManifest.assets.length === 0) {
+  throw new Error("build/site-circle-release.json with assets is required before deploying Site Circle assets");
+}
 
 let nonce = deployerAddress ? await nextNonce(deployerAddress) : 0;
 const deployNeeded = !configuredCircleId;
 const circleId = configuredCircleId || (deployerAddress ? circleIdOfDeployPayloadJson(deployerAddress, nonce, deployPayloadJson) : "pending");
-const assets: SiteAsset[] = await Promise.all((siteManifest.assets || []).map(async (assetPath: string) => {
+const releaseAssetPaths = Array.isArray(releaseManifest.assets)
+  ? releaseManifest.assets
+    .map((asset: any) => asset?.path)
+    .filter((assetPath: unknown): assetPath is string => typeof assetPath === "string" && assetPath.startsWith("/"))
+  : [];
+const assets: SiteAsset[] = await Promise.all(releaseAssetPaths.map(async (assetPath: string) => {
   const filePath = join(appDir, assetPath.replace(/^\//, ""));
   const bytes = assetPath === "/vitals.manifest.json"
     ? Buffer.from(stableJson(runtimeVitalsManifest(vitalsManifest, {

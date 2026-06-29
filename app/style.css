@@ -158,16 +158,21 @@ a:focus-visible,[tabindex]:focus-visible,summary:focus-visible{
 }
 .env-banner[hidden]{ display:none; }
 .env-banner-track{
-  display:inline-flex;
-  min-width:max-content;
-  animation:env-scroll 26s linear infinite;
+  display:flex;
+  width:max-content;
+  animation:env-scroll 90s linear infinite;
 }
-.env-banner-track span{
+.env-banner-group{
+  flex:0 0 auto;
+  display:flex;
+  white-space:nowrap;
+}
+.env-banner-group span{
   padding:8px 32px 8px 0;
 }
 @keyframes env-scroll{
   from{ transform:translateX(0); }
-  to{ transform:translateX(-33.333%); }
+  to{ transform:translateX(-50%); }
 }
 @media (prefers-reduced-motion: reduce){
   .env-banner-track{ animation:none; }
@@ -533,7 +538,18 @@ svg text{ font-family:var(--sans); }
 .colophon-row{ display:flex; flex-wrap:wrap; gap:6px 24px; justify-content:space-between; align-items:baseline; max-width:var(--maxw); }
 .colophon .left{ max-width:78ch; }
 .colophon b{ color:var(--muted); font-weight:600; }
-.colophon .brand{ font-size:13px; }
+.colophon .brand{
+  display:inline-flex; align-items:baseline; gap:12px;
+  font-size:13px;
+}
+.lab-footer-link{
+  color:var(--blue); text-decoration:none;
+  border-bottom:1px dotted var(--blue-line);
+  font-family:var(--mono); font-weight:650;
+}
+.lab-footer-link:hover,
+.lab-footer-link:focus-visible{ border-bottom-color:var(--blue); }
+.lab-footer-link[hidden]{ display:none; }
 
 .sr-only{
   position:absolute; width:1px; height:1px; padding:0; margin:-1px; overflow:hidden;

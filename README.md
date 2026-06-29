@@ -93,6 +93,10 @@ Runs as a HTTPS shim for normal browsers. It serves Circle assets, reads program
 
 Renders the accounting view, trend window, provenance links, raw evidence references, and proof references. It re-derives hashes and conservation checks before trusting production values, and it does not use sample values in production mode.
 
+**History Lab**
+
+An optional devnet-only lab can mirror verified AML history into an `octra-sqlite` Circle database for interactive querying at `/lab/history`. The mirror is explicitly derived and non-canonical: AML remains the ledger, and the lab exists to exercise query/discovery patterns without widening the production state model.
+
 ## Trust Model
 
 Octra Vitals is a reconciliation and proof surface, not a consensus light client.
@@ -108,6 +112,14 @@ The fact-ledger model stores one compact core accounting fact per snapshot. Fact
 History can span multiple AML eras. The active era points to its predecessor by program id and commits to the predecessor final root/index. `/api/history` exposes the visible timeline plus proof metadata for each era boundary; continuity is accepted only when the predecessor root and successor anchor verify.
 
 The latest snapshot remains richer than historical rows. Full latest payload, evidence manifest, and source references stay AML-readable. Older raw RPC bodies are linked by hash and served from host/archive storage for forensic inspection, not stored permanently in AML.
+
+## Devnet History Lab
+
+The optional History Lab is a devnet-only query surface at `/lab/history`. It mirrors verified AML readback into an `octra-sqlite` Circle database after a successful AML snapshot write, then exposes bounded read-only SQL for inspection and experimentation.
+
+The lab is deliberately non-canonical. AML remains the ledger of record, and the SQLite Circle is a derived mirror for discoverability, query ergonomics, and `octra-sqlite` evaluation. Lab reads do not require a token; operator repair/backfill syncs do. Vitals does not expose raw JSON-RPC request/response traces from lab queries.
+
+See `docs/lab-history-mirror.md` for schema, deployment, retention, and safety details.
 
 ## Local Development
 
@@ -137,6 +149,7 @@ Useful routes:
 /api/native-readiness
 /api/evidence/<sha256>
 /api/evidence/raw/<sha256>
+/lab/history              optional devnet lab, when enabled
 /health
 ```
 
@@ -227,6 +240,7 @@ bash deploy/mainnet/capture-devnet-rehearsal-report.sh
 See:
 
 - `docs/architecture.md`
+- `docs/lab-history-mirror.md`
 - `docs/schema.md`
 - `docs/ops.md`
 - `docs/release-management.md`

@@ -616,6 +616,22 @@ function setupEnvironmentBanner(config){
   }
 }
 
+async function hydrateLabFooterLink(){
+  const link = document.getElementById("lab-footer-link");
+  if(!link) return;
+  try{
+    const response = await fetch(apiHref("/api/lab/status"), {
+      cache:"no-store",
+      headers:{"Accept":"application/json"}
+    });
+    if(!response.ok) return;
+    const payload = await response.json();
+    link.hidden = payload?.authority?.lab_database_enabled !== true;
+  }catch(_error){
+    link.hidden = true;
+  }
+}
+
 function rawText(value, fallback="0"){
   if(value === undefined || value === null || value === "") return String(fallback);
   return String(value);
@@ -2100,6 +2116,7 @@ async function boot(){
     perfMark("first_viewport_rendered");
 
     afterFirstPaint(()=>{
+      hydrateLabFooterLink();
       try{
         renderSecondaryViews();
         logIdentityCheck();

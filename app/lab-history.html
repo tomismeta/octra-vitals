@@ -1,0 +1,242 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; connect-src 'self'; img-src 'self' data:; object-src 'none'; base-uri 'none'">
+  <title>Octra Vitals</title>
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/style.css">
+  <link rel="stylesheet" href="/lab-history.css">
+  <script defer src="/lab-history.js"></script>
+</head>
+<body>
+  <a class="skip" href="#query">Skip to the query</a>
+
+  <nav class="nav" aria-label="History Lab">
+    <div class="nav-in">
+      <a class="brand" href="/" aria-label="Octra Vitals home">Octra&nbsp;<b>Vitals</b></a>
+      <div class="nav-links">
+        <a href="#status"><span class="nstep">I</span><span class="full">Status</span></a>
+        <a href="#query"><span class="nstep">II</span><span class="full">Query</span></a>
+        <a href="#result"><span class="nstep">III</span><span class="full">Inspect</span></a>
+      </div>
+    </div>
+  </nav>
+
+  <div class="env-banner" aria-live="polite">
+    <div class="env-banner-track">
+      <div class="env-banner-group">
+        <span>DEVNET ENVIRONMENT · OCTRA VITALS DEVNET · LAB MIRROR · </span>
+        <span>DEVNET ENVIRONMENT · OCTRA VITALS DEVNET · LAB MIRROR · </span>
+        <span>DEVNET ENVIRONMENT · OCTRA VITALS DEVNET · LAB MIRROR · </span>
+        <span>DEVNET ENVIRONMENT · OCTRA VITALS DEVNET · LAB MIRROR · </span>
+        <span>DEVNET ENVIRONMENT · OCTRA VITALS DEVNET · LAB MIRROR · </span>
+        <span>DEVNET ENVIRONMENT · OCTRA VITALS DEVNET · LAB MIRROR · </span>
+      </div>
+      <div class="env-banner-group" aria-hidden="true">
+        <span>DEVNET ENVIRONMENT · OCTRA VITALS DEVNET · LAB MIRROR · </span>
+        <span>DEVNET ENVIRONMENT · OCTRA VITALS DEVNET · LAB MIRROR · </span>
+        <span>DEVNET ENVIRONMENT · OCTRA VITALS DEVNET · LAB MIRROR · </span>
+        <span>DEVNET ENVIRONMENT · OCTRA VITALS DEVNET · LAB MIRROR · </span>
+        <span>DEVNET ENVIRONMENT · OCTRA VITALS DEVNET · LAB MIRROR · </span>
+        <span>DEVNET ENVIRONMENT · OCTRA VITALS DEVNET · LAB MIRROR · </span>
+      </div>
+    </div>
+  </div>
+
+  <main class="lab-main">
+    <!-- HERO -->
+    <section class="act lab-hero-act" aria-label="History Lab">
+      <div class="wrap">
+        <div class="act-tag"><span class="step">LAB</span><span class="kicker">Devnet only</span></div>
+        <h2>A queryable mirror of the supply history.</h2>
+        <p class="lede">
+          The canonical record stays the <b>Vitals AML fact ledger</b>. This devnet page
+          reads a real SQLite database stored inside an Octra Circle — written only after
+          AML persistence and verified readback succeed. Edit the SQL, run it, read the rows.
+        </p>
+        <p class="lab-provenance">
+          <span class="prov-step"><b>1</b> AML fact ledger</span>
+          <span class="prov-arrow" aria-hidden="true">→</span>
+          <span class="prov-step"><b>2</b> verified readback</span>
+          <span class="prov-arrow" aria-hidden="true">→</span>
+          <span class="prov-step"><b>3</b> SQLite Circle mirror</span>
+          <a class="github-link" href="https://github.com/tomismeta/octra-sqlite" target="_blank" rel="noopener noreferrer" aria-label="Open octra-sqlite on GitHub"><svg class="github-mark" viewBox="0 0 16 16" aria-hidden="true"><path d="M8 .2a8 8 0 0 0-2.5 15.6c.4.1.5-.2.5-.4v-1.4c-2.2.5-2.7-.9-2.7-.9-.4-.9-.9-1.1-.9-1.1-.7-.5.1-.5.1-.5.8.1 1.2.8 1.2.8.7 1.2 1.8.8 2.3.6.1-.5.3-.8.5-1-1.8-.2-3.6-.9-3.6-3.9 0-.9.3-1.6.8-2.2-.1-.2-.4-1 .1-2.1 0 0 .7-.2 2.2.8A7.7 7.7 0 0 1 8 3.8c.7 0 1.4.1 2 .3 1.5-1 2.2-.8 2.2-.8.5 1.1.2 1.9.1 2.1.5.6.8 1.3.8 2.2 0 3-1.8 3.7-3.6 3.9.3.3.6.8.6 1.6v2.3c0 .2.1.5.5.4A8 8 0 0 0 8 .2Z"/></svg><code>octra-sqlite</code></a>
+        </p>
+      </div>
+    </section>
+
+    <!-- STATUS -->
+    <section class="act lab-section" id="status" aria-label="Mirror status">
+      <div class="wrap">
+        <div class="lab-rule"><span class="step">I</span><span>Status</span></div>
+        <div class="lab-status-grid" id="status-grid"></div>
+      </div>
+    </section>
+
+    <!-- QUERY -->
+    <section class="act lab-section" id="query" aria-label="History query">
+      <div class="wrap">
+        <div class="lab-rule"><span class="step">II</span><span>Query</span></div>
+
+        <div class="lab-query-bar">
+          <div class="lab-toolbar" role="group" aria-label="Canned queries">
+            <button class="lab-button primary" data-canned-query="history" data-tip="Recent mirrored AML snapshots and accounting fields." aria-pressed="true" type="button">History</button>
+            <button class="lab-button" data-canned-query="tables" data-tip="List tables and indexes in the Circle-backed query mirror." aria-pressed="false" type="button">Tables</button>
+            <button class="lab-button" data-canned-query="schema" data-tip="Inspect table and index definitions from the mirror schema." aria-pressed="false" type="button">Schema</button>
+          </div>
+          <div class="lab-window" aria-label="History window">
+            <label for="window-value">Window</label>
+            <input id="window-value" inputmode="numeric" value="1" aria-label="History window value">
+            <select id="window-unit" aria-label="History window unit">
+              <option value="day" selected>days</option>
+              <option value="hour">hours</option>
+            </select>
+          </div>
+        </div>
+
+        <p class="lab-query-description" id="query-description">Recent mirrored AML snapshots and accounting fields.</p>
+
+        <div class="lab-editor">
+          <pre class="lab-sql-hl" aria-hidden="true"><code></code></pre>
+          <textarea id="sql-input" spellcheck="false" autocapitalize="off" autocorrect="off" aria-label="SQL query">with params(window_value, window_unit) as (values (1, 'day')),
+window_seconds(seconds) as (
+  select case window_unit
+    when 'hour' then window_value * 60 * 60
+    else window_value * 24 * 60 * 60
+  end
+  from params
+)
+select
+  s.snapshot_index,
+  s.snapshot_id,
+  c.issued_raw,
+  c.burned_raw,
+  c.encrypted_raw,
+  c.total_locked_raw,
+  c.total_wrapped_raw,
+  c.total_unclaimed_raw,
+  d.raw_value as unclassified_raw
+from snapshots s
+join core_accounting_facts c using(snapshot_index)
+left join derived_snapshot_metrics d
+  on d.snapshot_index = s.snapshot_index
+ and d.metric_key = 'unclassified_raw'
+where s.observed_at_unix >= (
+  select max(s2.observed_at_unix) - window_seconds.seconds
+  from snapshots s2, window_seconds
+)
+order by s.snapshot_index desc</textarea>
+        </div>
+
+        <div class="lab-query-actions">
+          <div class="lab-db-link" id="database-link"></div>
+          <label for="limit-input">Limit <input id="limit-input" inputmode="numeric" value="200"></label>
+          <button class="lab-button primary" id="run-btn" type="button">Run query</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- RESULT -->
+    <section class="act lab-section" id="result" aria-label="Query result">
+      <div class="wrap">
+        <div class="lab-rule"><span class="step">III</span><span>Result</span></div>
+        <div class="lab-message" id="message"></div>
+        <div class="lab-table-wrap" id="result-table"></div>
+      </div>
+    </section>
+
+    <!-- SECONDARY: NOTES + RELATIONS -->
+    <section class="act lab-section lab-reference" aria-label="Reference">
+      <div class="wrap">
+        <div class="lab-rule quiet"><span>Reference</span></div>
+
+        <div class="lab-notes-grid">
+          <div>
+            <h3>Canonical</h3>
+            <p>Vitals AML stays the source of truth. This database is a derived query mirror, not a second canonical ledger.</p>
+          </div>
+          <div>
+            <h3>Circle storage</h3>
+            <p>The mirror uses the real <code>octra-sqlite</code> implementation, with database state stored in an Octra Circle after AML success.</p>
+          </div>
+          <div>
+            <h3>Read surface</h3>
+            <p>Queries are bounded read-only <code>select</code> / <code>with</code> statements. The SQL above is editable for review.</p>
+          </div>
+          <div>
+            <h3>Dual write</h3>
+            <p>New rows are mirrored after confirmed AML persistence. Manual sync remains an operator-only repair / backfill tool.</p>
+          </div>
+        </div>
+
+        <div class="lab-relations">
+          <p class="lab-relation-intro">Hover or focus a table to see how the mirror hangs together. The AML fact ledger remains canonical; this map only describes the query mirror.</p>
+          <div class="lab-relation-map">
+            <button class="lab-relation-node primary" type="button" data-table="snapshots">
+              <span>snapshots</span>
+              <small><b>PK</b> snapshot_index · timeline spine</small>
+            </button>
+            <button class="lab-relation-node" type="button" data-table="core_accounting_facts" data-related="snapshots">
+              <span>core_accounting_facts</span>
+              <small><b>PK/FK</b> snapshot_index · 1:1</small>
+            </button>
+            <button class="lab-relation-node" type="button" data-table="derived_snapshot_metrics" data-related="snapshots">
+              <span>derived_snapshot_metrics</span>
+              <small><b>FK</b> snapshot_index · metric_key</small>
+            </button>
+            <button class="lab-relation-node" type="button" data-table="aux_metric_facts" data-related="snapshots fact_families">
+              <span>aux_metric_facts</span>
+              <small><b>FK</b> snapshot_index · family_id</small>
+            </button>
+            <button class="lab-relation-node" type="button" data-table="bridge_routes" data-related="snapshots">
+              <span>bridge_routes</span>
+              <small><b>FK</b> snapshot_index · route_id</small>
+            </button>
+            <button class="lab-relation-node" type="button" data-table="snapshot_evidence_refs" data-related="snapshots evidence_refs">
+              <span>snapshot_evidence_refs</span>
+              <small><b>FK</b> snapshot_index · evidence_hash</small>
+            </button>
+            <button class="lab-relation-node" type="button" data-table="evidence_refs" data-related="snapshot_evidence_refs">
+              <span>evidence_refs</span>
+              <small><b>PK</b> evidence_hash · pointers</small>
+            </button>
+            <button class="lab-relation-node" type="button" data-table="snapshot_verifications" data-related="snapshots">
+              <span>snapshot_verifications</span>
+              <small><b>FK</b> snapshot_index · check type</small>
+            </button>
+            <button class="lab-relation-node" type="button" data-table="aml_eras" data-related="snapshots fact_families fact_capsules">
+              <span>aml_eras</span>
+              <small><b>PK</b> era_id · program eras</small>
+            </button>
+            <button class="lab-relation-node" type="button" data-table="fact_families" data-related="aml_eras aux_metric_facts fact_capsules">
+              <span>fact_families</span>
+              <small><b>PK</b> era_id + family_id</small>
+            </button>
+            <button class="lab-relation-node" type="button" data-table="fact_capsules" data-related="aml_eras fact_families">
+              <span>fact_capsules</span>
+              <small><b>FK</b> era_id + family_id</small>
+            </button>
+            <button class="lab-relation-node" type="button" data-table="mirror_runs" data-related="snapshots">
+              <span>mirror_runs</span>
+              <small><b>PK</b> run_id · write provenance</small>
+            </button>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="colophon">
+    <div class="wrap colophon-row">
+      <div class="left">
+        <b>Octra Vitals · History Lab</b> · devnet only. Canonical state is the AML fact ledger;
+        this page queries a derived SQLite mirror stored in an Octra Circle. Figures in raw units
+        (1 OCT = 10<sup>6</sup> raw). Not investment advice.
+      </div>
+      <div class="brand">Octra&nbsp;<b>Vitals</b></div>
+    </div>
+  </footer>
+</body>
+</html>

@@ -81,8 +81,10 @@ const fs = require("fs");
 const http = require("http");
 
 const base = new URL(process.argv[2]);
-const manifest = JSON.parse(fs.readFileSync("app/manifest.json", "utf8"));
-const assets = Array.from(new Set([manifest.entry || "/index.html", ...(Array.isArray(manifest.assets) ? manifest.assets : [])]));
+const release = JSON.parse(fs.readFileSync("build/site-circle-release.json", "utf8"));
+const assets = Array.from(new Set((Array.isArray(release.assets) ? release.assets : [])
+  .map((asset) => asset && asset.path)
+  .filter((path) => typeof path === "string" && path.startsWith("/"))));
 
 function getAsset(path) {
   return new Promise((resolve, reject) => {

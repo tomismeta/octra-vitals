@@ -5,8 +5,11 @@ import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { performance } from "node:perf_hooks";
 import { buildLiveSnapshot, writeSnapshotArtifacts } from "../lib/snapshot.js";
+import { mirrorLabSnapshotAfterAmlSuccess } from "../lib/lab-history.js";
+import { octraSqliteConfig } from "../lib/octra-sqlite-client.js";
 import { buildRecordSnapshotCall, writeRecordSnapshotCall } from "./build-record-snapshot-call.js";
 import { submitSnapshotCall, writeJsonAtomic, writeLatestReceipt, writeSubmitSnapshotReport } from "./submit-snapshot.js";
+import { decodeSummaryRow, SUMMARY_ROW_LEN, summaryWindowHash, type ProgramHistoryWindow } from "../lib/summary-window.js";
 
 const root = resolve(new URL("../..", import.meta.url).pathname);
 
@@ -240,6 +243,73 @@ async function collectLiveSnapshotWithRetries(attempts: Array<Record<string, unk
   throw new Error("snapshot collection failed before starting");
 }
 
+function submittedSource(report: Record<string, any>): { target_kind: "circle_program" | "state_program"; target_id: string } | null {
+  if (report.target_kind === "circle_program" && report.programmed_circle_id) {
+    return { target_kind: "circle_program", target_id: String(report.programmed_circle_id) };
+  }
+  if (report.target_kind === "state_program" && report.program_address) {
+    return { target_kind: "state_program", target_id: String(report.program_address) };
+  }
+  return null;
+}
+
+function historyFromVerifiedReadback(report: Record<string, any>): ProgramHistoryWindow | null {
+  const readback = report.readback || {};
+  const encodedRow = String(readback.latest_summary_row || "");
+  if (encodedRow.length !== SUMMARY_ROW_LEN) return null;
+  if (readback.matches_expected !== true) return null;
+  if (report.status !== "confirmed" && report.status !== "already_recorded") return null;
+  const row = decodeSummaryRow(encodedRow);
+  const windowHash = summaryWindowHash(encodedRow);
+  return {
+    first_index: row.snapshot_index,
+    row_count: 1,
+    row_len: SUMMARY_ROW_LEN,
+    window: encodedRow,
+    window_hash: windowHash,
+    rows: [row],
+    history_discovery: "post_aml_success_verified_row",
+    history_root: readback.family_root || readback.history_root || windowHash,
+    capsules_root: readback.family_capsules_root || readback.capsules_root || null,
+    proof: {
+      scope: readback.fact_family_verified === true ? "full_chain" : "tail_window",
+      truncated: readback.fact_family_verified !== true
+    }
+  };
+}
+
+async function mirrorAfterAmlSuccess(report: Record<string, any>, timings: Record<string, number>): Promise<Record<string, unknown>> {
+  const config = octraSqliteConfig();
+  if (!config.enabled) {
+    return {
+      status: "skipped",
+      reason: config.reason || "lab_history_unavailable"
+    };
+  }
+  const source = submittedSource(report);
+  const history = historyFromVerifiedReadback(report);
+  if (!source || !history) {
+    return {
+      status: "skipped",
+      reason: "verified_post_aml_readback_unavailable"
+    };
+  }
+  try {
+    const summary = await timed(timings, "lab_mirror_ms", () => mirrorLabSnapshotAfterAmlSuccess(history, source));
+    return {
+      status: "ok",
+      mode: "post_aml_success_dual_write",
+      summary
+    };
+  } catch (error) {
+    return {
+      status: "failed",
+      mode: "post_aml_success_dual_write",
+      error: errorMessage(error)
+    };
+  }
+}
+
 async function runSnapshotUpdate(): Promise<Record<string, any>> {
   const startedAt = isoNow();
   const runId = process.env.VITALS_UPDATE_RUN_ID || `snapshot-${fileSafe(startedAt)}-${process.pid}`;
@@ -292,6 +362,9 @@ async function runSnapshotUpdate(): Promise<Record<string, any>> {
       paths,
       timings_ms: timings
     };
+    if (report.submit_enabled) {
+      report.lab_mirror = await mirrorAfterAmlSuccess(report, timings);
+    }
     report.retention = await timed(timings, "retention_ms", () => applyRetention(dataDir, runDir, evidenceDir));
     timings.total_ms = ms(performance.now() - totalStarted);
     report.timings_ms = timings;

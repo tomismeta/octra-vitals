@@ -171,6 +171,40 @@ npm run snapshot-runs:summary:dist -- --csv --limit 96
 
 Snapshot run summaries read `runs/*/snapshot_update_report.json` and report status, snapshot id/index, transaction hash, timings, retries, and readback status.
 
+## Devnet History Lab
+
+The optional history lab mirrors verified AML history into an `octra-sqlite` Circle database for query experiments. It is devnet-only and non-canonical.
+
+Enable on devnet gateway hosts only:
+
+```text
+VITALS_LAB_HISTORY_ENABLED=1
+VITALS_LAB_HISTORY_NETWORK=devnet
+VITALS_LAB_HISTORY_DATABASE=vitals_history_lab
+VITALS_LAB_HISTORY_DATABASE_URI=oct://devnet/octBa1SdBvjQ38dJWBwiLByPSQrGTdja2HG15dZCkGJFeJP
+VITALS_LAB_HISTORY_OCTRA_SQLITE_BIN=/opt/octra-sqlite/bin/octra-sqlite
+VITALS_LAB_HISTORY_WRITE_TOKEN=<host-local secret>
+VITALS_INCLUDE_LAB_HISTORY_ASSETS=1
+VITALS_LAB_HISTORY_SYNC_SQL_MAX_BYTES=6000
+VITALS_LAB_HISTORY_SYNC_MAX_ROWS=8
+VITALS_LAB_HISTORY_SYNC_TAIL_ROWS=0
+OCTRA_SQLITE_CONFIG=/etc/octra-vitals/octra-sqlite/config.json
+```
+
+Install or refresh the upstream dependency and database with:
+
+```bash
+sudo VITALS_REPO_DIR=/opt/octra-vitals/current \
+  bash /opt/octra-vitals/current/deploy/devnet/setup-lab-history-db.sh
+```
+
+See `docs/lab-history-mirror.md`.
+
+Fresh snapshots are mirrored automatically by the updater after AML persistence and verified readback succeed: AML first, readback second, SQLite Circle mirror third. A mirror failure does not invalidate the canonical AML snapshot; it is recorded for repair.
+
+The sync endpoint is token-gated, chunked, and completion-last. Repeated sync calls backfill missing rows; a partial write does not advance the mirror watermark to complete. The lab assets are conditional release assets and should only be included on devnet review gateways.
+The lab query endpoint is read-only and does not require the token. `VITALS_LAB_HISTORY_WRITE_TOKEN` is only for admin mirror repair/backfill. The lab page exposes canned `History`, `Tables`, and `Schema` queries, each editable before execution.
+
 ## Telegram Notifications
 
 Telegram notifications are host-local and optional. Configure on the host so bot tokens never pass through chat or git:

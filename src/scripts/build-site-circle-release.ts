@@ -50,8 +50,13 @@ const siteManifest = JSON.parse(await readFile(join(appDir, "manifest.json"), "u
 const manifestAssets = Array.isArray(siteManifest.assets)
   ? siteManifest.assets.filter((asset): asset is string => typeof asset === "string" && asset.startsWith("/"))
   : [];
-const assets: string[] = manifestAssets.length
-  ? manifestAssets
+const labAssets = ["/lab-history.html", "/lab-history.css", "/lab-history.js"];
+const includeLabAssets = process.env.VITALS_LAB_HISTORY_ENABLED === "1" || process.env.VITALS_INCLUDE_LAB_HISTORY_ASSETS === "1";
+const releaseAssets = includeLabAssets
+  ? Array.from(new Set([...manifestAssets, ...labAssets]))
+  : manifestAssets;
+const assets: string[] = releaseAssets.length
+  ? releaseAssets
   : [siteManifest.entry || "/index.html"];
 const siteCircleId = process.env.VITALS_SITE_CIRCLE_ID || vitalsManifest.site_circle_id || "pending";
 const programmedCircleId = process.env.VITALS_PROGRAMMED_CIRCLE_ID || vitalsManifest.programmed_circle_id || "pending";
