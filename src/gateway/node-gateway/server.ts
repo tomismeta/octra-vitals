@@ -6,9 +6,10 @@ import { extname, join, resolve } from "node:path";
 import { buildLiveSnapshot, publicSnapshotArtifact, writeSnapshotArtifacts } from "../../lib/snapshot.js";
 import { FACT_LEDGER_MANIFEST } from "../../lib/aml-fact-ledger.js";
 import { canonicalJson, responseHash, sha256Hex, sha256Tagged } from "../../lib/canonical-json.js";
+import { assertHistoryTailMatchesLatest, configuredStateTarget, readCanonicalHistory as readCanonicalHistoryUncached, type StateTarget } from "../../lib/canonical-history.js";
 import { verifyCircleAssetIntegrity } from "../../lib/circle-asset-integrity.js";
-import { circleProgramViewAtUrl, configuredProgrammedCircleId, stateTargetMode, type StateTargetMode } from "../../lib/circle-program.js";
-import { configuredProgramAddress, readCircleProgramSummaryHistory, readLatestCircleProgramSnapshot, readLatestProgramSnapshot, readProgramSummaryHistory } from "../../lib/program-state.js";
+import { circleProgramViewAtUrl, configuredProgrammedCircleId, stateTargetMode } from "../../lib/circle-program.js";
+import { configuredProgramAddress, readLatestCircleProgramSnapshot, readLatestProgramSnapshot } from "../../lib/program-state.js";
 import { circleInfoAtUrl, circleProgramInfoAtUrl, contractCall, contractReceipt, contractSource, octraProgramRpcUrls, octraRpc, vmContract } from "../../lib/octra-rpc.js";
 import { configuredTrafficRecorder } from "../../lib/traffic.js";
 import { runtimeVitalsManifest, stableJson } from "../../lib/vitals-manifest.js";
@@ -1044,25 +1045,6 @@ async function readLocalAssetBytes(assetPath: string): Promise<Buffer> {
   return readFile(join(appDir, assetPath.replace(/^\//, "")));
 }
 
-interface StateTarget {
-  kind: StateTargetMode;
-  id: string | null;
-}
-
-function configuredStateTarget(manifest: Record<string, any> = {}): StateTarget {
-  const kind = stateTargetMode();
-  if (kind === "circle_program") {
-    return {
-      kind,
-      id: configuredProgrammedCircleId(chooseValue(process.env.VITALS_PROGRAMMED_CIRCLE_ID, manifest.programmed_circle_id))
-    };
-  }
-  return {
-    kind,
-    id: configuredProgramAddress(chooseValue(process.env.VITALS_STATE_PROGRAM_ADDRESS, manifest.state_program_address))
-  };
-}
-
 function targetCacheKey(target: StateTarget): string {
   return `${target.kind}:${target.id || "pending"}`;
 }
@@ -1080,9 +1062,8 @@ async function readCanonicalHistory(target: StateTarget, bypassCache = false): P
   if (historyReadInFlight?.program_address === cacheKey) {
     return historyReadInFlight.promise;
   }
-  let promise: Promise<ProgramHistoryWindow>;
   if (!target.id) throw new Error(`${target.kind === "circle_program" ? "programmed Circle id" : "state program address"} is required`);
-  promise = (target.kind === "circle_program" ? readCircleProgramSummaryHistory(target.id) : readProgramSummaryHistory(target.id))
+  const promise = readCanonicalHistoryUncached(target)
     .then((value) => {
       historyCache = { program_address: cacheKey, checked_at: Date.now(), value };
       historyError = null;
@@ -1093,24 +1074,6 @@ async function readCanonicalHistory(target: StateTarget, bypassCache = false): P
     });
   historyReadInFlight = { program_address: cacheKey, promise };
   return promise;
-}
-
-function assertHistoryTailMatchesLatest(history: ProgramHistoryWindow, latest: SnapshotArtifact): void {
-  const latestSummary = (latest as any).latest_summary;
-  const latestIndex = Number((latest as any).snapshot_index || 0);
-  if (typeof latestSummary !== "string" || !latestSummary) {
-    throw new Error("latest summary unavailable for history verification");
-  }
-  if (history.row_count <= 0 || history.rows.length <= 0) {
-    throw new Error("canonical history window is empty while latest snapshot is available");
-  }
-  if (!history.window.endsWith(latestSummary)) {
-    throw new Error("canonical history tail does not match latest summary row");
-  }
-  const tail = history.rows[history.rows.length - 1];
-  if (!tail || tail.snapshot_index !== latestIndex) {
-    throw new Error(`canonical history tail index mismatch: expected ${latestIndex}, got ${tail?.snapshot_index ?? "missing"}`);
-  }
 }
 
 async function readVerifiedCanonicalHistory(target: StateTarget): Promise<ProgramHistoryWindow> {

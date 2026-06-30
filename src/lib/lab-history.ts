@@ -465,7 +465,7 @@ export async function mirrorLabHistory(history: ProgramHistoryWindow, source: La
   const sourceRows = syncTailRows() > 0 ? history.rows.slice(-syncTailRows()) : history.rows;
   const existing = await existingCompleteSnapshotIndexes(source, sourceRows[0]?.snapshot_index || 0, latestIndex(history));
   const missingRows = sourceRows.filter((row) => !existing.has(row.snapshot_index));
-  const rows = missingRows.slice(-maxSyncRows()).sort((a, b) => a.snapshot_index - b.snapshot_index);
+  const rows = missingRows.slice(0, maxSyncRows()).sort((a, b) => a.snapshot_index - b.snapshot_index);
   const allCompleteAfterRun = new Set([...existing, ...rows.map((row) => row.snapshot_index)]);
   const completeThroughIndex = contiguousCompleteThrough(sourceRows, allCompleteAfterRun);
   const mirroredLatestIndex = Math.max(0, ...Array.from(allCompleteAfterRun));
@@ -490,93 +490,6 @@ export async function mirrorLabHistory(history: ProgramHistoryWindow, source: La
     }
   }
   return summary;
-}
-
-export async function mirrorLabSnapshotAfterAmlSuccess(history: ProgramHistoryWindow, source: LabHistorySource): Promise<LabHistoryMirrorSummary> {
-  const row = history.rows[history.rows.length - 1];
-  if (!row) throw new Error("post-AML lab mirror requires a history row");
-  const now = isoNow();
-  const watermark = await readWatermark(source).catch(() => null);
-  const firstIndex = Math.min(
-    ...[watermark?.source_range_first_index, row.snapshot_index].filter((value): value is number => Boolean(value && value > 0))
-  );
-  const latest = Math.max(watermark?.source_range_latest_index || 0, row.snapshot_index);
-  const completeStart = watermark?.last_complete_snapshot_index || 0;
-  const checkFirst = completeStart > 0 ? completeStart + 1 : firstIndex;
-  const existing = await existingCompleteSnapshotIndexes(source, checkFirst, row.snapshot_index).catch(() => new Set<number>());
-  existing.add(row.snapshot_index);
-  let completeThroughIndex = completeStart;
-  for (let index = Math.max(checkFirst, completeThroughIndex + 1); index <= latest; index += 1) {
-    if (!existing.has(index)) break;
-    completeThroughIndex = index;
-  }
-  const complete = firstIndex > 0 && completeThroughIndex >= latest;
-  const sourceKey = sourceId(source);
-  const runId = `lab.post-aml.${now}.${row.snapshot_index}`;
-  const statements = [
-    ...insertMirrorMeta(),
-    ...rowStatements(history, source, runId, now, [row]),
-    `insert or replace into mirror_runs(
-      run_id, started_at, finished_at, status, source_first_index, source_latest_index,
-      mirrored_through_index, verified_through_index, transform_version, error
-    ) values (
-      ${sqlString(runId)},
-      ${sqlString(now)},
-      ${sqlString(now)},
-      'ok',
-      ${sqlNumber(row.snapshot_index)},
-      ${sqlNumber(row.snapshot_index)},
-      ${sqlNumber(row.snapshot_index)},
-      ${sqlNumber(completeThroughIndex || null)},
-      ${sqlString(LAB_HISTORY_TRANSFORM_VERSION)},
-      null
-    )`,
-    `insert or replace into mirror_watermarks(
-      source_id, source_range_first_index, source_range_latest_index, verified_range_first_index,
-      verified_range_latest_index, last_complete_snapshot_index, latest_verified_root,
-      last_aml_readback_verified_at, last_run_id, transform_version, complete, retention_policy
-    ) values (
-      ${sqlString(sourceKey)},
-      ${sqlNumber(firstIndex || row.snapshot_index)},
-      ${sqlNumber(latest)},
-      ${sqlNumber(firstIndex || row.snapshot_index)},
-      ${sqlNumber(completeThroughIndex || null)},
-      ${sqlNumber(completeThroughIndex || null)},
-      ${sqlString(history.history_root || history.window_hash || null)},
-      ${sqlString(now)},
-      ${sqlString(runId)},
-      ${sqlString(LAB_HISTORY_TRANSFORM_VERSION)},
-      ${complete ? 1 : 0},
-      'post_aml_success_dual_write'
-    )`
-  ];
-  for (const batch of statementBatches(statements)) {
-    try {
-      await octraSqliteOpen(sqlBatch(batch));
-    } catch (error) {
-      const first = compactStatement(batch[0] || "").slice(0, 120);
-      const bytes = Buffer.byteLength(sqlBatch(batch));
-      throw new Error(`post-AML lab mirror batch failed (${batch.length} statements, ${bytes} bytes, first: ${first}): ${error instanceof Error ? error.message : String(error)}`);
-    }
-  }
-  return {
-    schema: LAB_HISTORY_SCHEMA,
-    run_id: runId,
-    mirrored_at: now,
-    source_id: sourceKey,
-    history_model: "post_aml_success_verified_row",
-    first_index: firstIndex || row.snapshot_index,
-    latest_index: latest,
-    complete_through_index: completeThroughIndex,
-    mirrored_latest_index: row.snapshot_index,
-    row_count: 1,
-    source_row_count: 1,
-    pending_row_count: Math.max(0, latest - Math.max(completeThroughIndex, firstIndex - 1)),
-    complete,
-    era_count: 0,
-    proof_scope: proofScope(history),
-    proof_truncated: proofTruncated(history)
-  };
 }
 
 function contiguousCompleteThrough(sourceRows: SummaryRow[], completeIndexes: Set<number>): number {

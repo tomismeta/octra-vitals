@@ -19,5 +19,12 @@ rm -f "${tmp}"
 sudo systemctl enable --now octra-vitals-gateway.service
 sudo systemctl enable --now octra-vitals-updater.timer
 sudo systemctl enable --now octra-vitals-watchdog.timer
+if [ "${VITALS_ENABLE_LAB_HISTORY_TIMER:-0}" = "1" ]; then
+  sudo systemctl enable --now octra-vitals-lab-history-mirror.timer
+fi
 systemctl is-enabled octra-vitals-gateway.service octra-vitals-updater.timer octra-vitals-watchdog.timer
 systemctl is-active octra-vitals-gateway.service octra-vitals-updater.timer octra-vitals-watchdog.timer
+if [ "${VITALS_ENABLE_LAB_HISTORY_TIMER:-0}" = "1" ]; then
+  systemctl is-enabled octra-vitals-lab-history-mirror.timer
+  systemctl is-active octra-vitals-lab-history-mirror.timer
+fi

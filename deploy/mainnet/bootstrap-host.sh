@@ -43,7 +43,7 @@ sudo install -d -m 755 -o root -g root "${APP_ROOT}" "${APP_ROOT}/releases"
 sudo install -d -m 770 -o "${APP_USER}" -g "${APP_USER}" "${DATA_DIR}" "${DATA_DIR}/watchdog"
 sudo install -d -m 755 -o root -g root "${ENV_DIR}"
 
-for name in gateway updater watchdog notify; do
+for name in gateway updater watchdog notify lab-history; do
   file="${ENV_DIR}/${name}.env"
   if [ ! -f "${file}" ]; then
     if [ "${name}" = "updater" ]; then
@@ -66,6 +66,8 @@ if [ -d deploy/systemd ]; then
   sudo cp deploy/systemd/octra-vitals-gateway.service /etc/systemd/system/octra-vitals-gateway.service
   sudo cp deploy/systemd/octra-vitals-updater.service /etc/systemd/system/octra-vitals-updater.service
   sudo cp deploy/systemd/octra-vitals-updater.timer /etc/systemd/system/octra-vitals-updater.timer
+  sudo cp deploy/systemd/octra-vitals-lab-history-mirror.service /etc/systemd/system/octra-vitals-lab-history-mirror.service
+  sudo cp deploy/systemd/octra-vitals-lab-history-mirror.timer /etc/systemd/system/octra-vitals-lab-history-mirror.timer
   sudo cp deploy/systemd/octra-vitals-watchdog.service /etc/systemd/system/octra-vitals-watchdog.service
   sudo cp deploy/systemd/octra-vitals-watchdog.timer /etc/systemd/system/octra-vitals-watchdog.timer
   sudo cp deploy/systemd/octra-vitals-notify-alerts.service /etc/systemd/system/octra-vitals-notify-alerts.service

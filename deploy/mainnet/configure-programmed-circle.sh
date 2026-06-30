@@ -31,7 +31,12 @@ fi
 
 updater_env="${ENV_DIR}/updater.env"
 gateway_env="${ENV_DIR}/gateway.env"
+lab_env="${ENV_DIR}/lab-history.env"
 watchdog_env="${ENV_DIR}/watchdog.env"
+
+if [ ! -f "${lab_env}" ]; then
+  sudo install -m 640 -o root -g "${APP_USER}" /dev/null "${lab_env}"
+fi
 
 if [ -n "${PRIVATE_ENV}" ]; then
   if [ ! -f "${PRIVATE_ENV}" ]; then
@@ -82,6 +87,17 @@ set_env() {
   rm -f "${tmp}"
 }
 
+remove_env() {
+  file="$1"
+  key="$2"
+  mode="${3:-640}"
+  group="${4:-${APP_USER}}"
+  tmp="$(mktemp)"
+  sudo awk -F= -v key="${key}" '$1 != key { print }' "${file}" > "${tmp}"
+  sudo install -m "${mode}" -o root -g "${group}" "${tmp}" "${file}"
+  rm -f "${tmp}"
+}
+
 set_env "${updater_env}" VITALS_GATEWAY_ROLE "${GATEWAY_ROLE}" 600 root
 set_env "${updater_env}" VITALS_DATA_DIR "${DATA_DIR}" 600 root
 set_env "${updater_env}" VITALS_STATE_SOURCE_MODE "${STATE_SOURCE_MODE}" 600 root
@@ -93,6 +109,16 @@ set_env "${updater_env}" VITALS_CIRCLE_OPERATOR_ADDRESS "${operator}" 600 root
 set_env "${updater_env}" VITALS_SITE_CIRCLE_ID "${circle_id}" 600 root
 set_env "${updater_env}" VITALS_STATIC_ASSET_SOURCE "${STATIC_ASSET_SOURCE}" 600 root
 set_env "${updater_env}" VITALS_SUBMIT "${SUBMIT_DEFAULT}" 600 root
+set_env "${lab_env}" VITALS_GATEWAY_ROLE "${GATEWAY_ROLE}"
+set_env "${lab_env}" VITALS_DATA_DIR "${DATA_DIR}"
+set_env "${lab_env}" VITALS_STATE_SOURCE_MODE "${STATE_SOURCE_MODE}"
+set_env "${lab_env}" VITALS_STATE_TARGET_MODE circle_program
+set_env "${lab_env}" VITALS_PROGRAMMED_CIRCLE_ID "${circle_id}"
+set_env "${lab_env}" VITALS_CIRCLE_VIEW_CALLER_ADDRESS "${caller}"
+set_env "${lab_env}" VITALS_CIRCLE_OWNER_ADDRESS "${caller}"
+set_env "${lab_env}" VITALS_CIRCLE_OPERATOR_ADDRESS "${operator}"
+set_env "${lab_env}" VITALS_SITE_CIRCLE_ID "${circle_id}"
+set_env "${lab_env}" VITALS_STATIC_ASSET_SOURCE "${STATIC_ASSET_SOURCE}"
 if [ "${program_kind}" = "fact-ledger" ]; then
   set_env "${updater_env}" VITALS_PROGRAMMED_CIRCLE_PROGRAM fact-ledger 600 root
   set_env "${updater_env}" VITALS_PROGRAMMED_CIRCLE_ARTIFACT_DIR "${artifact_dir:-program-fact-ledger}" 600 root
@@ -102,6 +128,13 @@ if [ "${program_kind}" = "fact-ledger" ]; then
   set_env "${updater_env}" VITALS_FACT_LEDGER_PROGRAMMED_CIRCLE_SOURCE_HASH "${fact_source_hash}" 600 root
   set_env "${updater_env}" VITALS_FACT_LEDGER_PROGRAMMED_CIRCLE_BYTECODE_HASH "${fact_bytecode_hash}" 600 root
   set_env "${updater_env}" VITALS_FACT_LEDGER_PROGRAMMED_CIRCLE_VERIFICATION_HASH "${fact_verification_hash}" 600 root
+  set_env "${lab_env}" VITALS_PROGRAMMED_CIRCLE_PROGRAM fact-ledger
+  set_env "${lab_env}" VITALS_PROGRAMMED_CIRCLE_ARTIFACT_DIR "${artifact_dir:-program-fact-ledger}"
+  set_env "${lab_env}" VITALS_RECORD_SNAPSHOT_VERSION "${record_version:-fact-v2}"
+  set_env "${lab_env}" VITALS_FACT_LEDGER_NETWORK_ID "${fact_network}"
+  set_env "${lab_env}" VITALS_FACT_LEDGER_PROGRAMMED_CIRCLE_SOURCE_HASH "${fact_source_hash}"
+  set_env "${lab_env}" VITALS_FACT_LEDGER_PROGRAMMED_CIRCLE_BYTECODE_HASH "${fact_bytecode_hash}"
+  set_env "${lab_env}" VITALS_FACT_LEDGER_PROGRAMMED_CIRCLE_VERIFICATION_HASH "${fact_verification_hash}"
 fi
 sudo install -d -m 770 -o "${APP_USER}" -g "${APP_USER}" "${DATA_DIR}/watchdog"
 
@@ -167,6 +200,9 @@ optional_env_value() {
   if [ -z "${value}" ] && [ -f "${updater_env}" ]; then
     value="$(sudo grep -E "^${key}=" "${updater_env}" | tail -n1 | cut -d= -f2- || true)"
   fi
+  if [ -z "${value}" ] && [ -f "${lab_env}" ]; then
+    value="$(sudo grep -E "^${key}=" "${lab_env}" | tail -n1 | cut -d= -f2- || true)"
+  fi
   printf '%s' "${value}"
 }
 
@@ -187,9 +223,19 @@ for key in \
   VITALS_LAB_HISTORY_RPC \
   OCTRA_SQLITE_CONFIG; do
   value="$(optional_env_value "${key}")"
+  remove_env "${updater_env}" "${key}" 600 root
   if [ -n "${value}" ]; then
-    set_env "${updater_env}" "${key}" "${value}" 600 root
     set_env "${gateway_env}" "${key}" "${value}" 640 "${APP_USER}"
+    if [ "${key}" != "VITALS_LAB_HISTORY_WRITE_TOKEN" ] && [ "${key}" != "VITALS_INCLUDE_LAB_HISTORY_ASSETS" ]; then
+      set_env "${lab_env}" "${key}" "${value}"
+    fi
+  fi
+done
+
+for key in OCTRA_PROGRAM_RPC_URL OCTRA_PROGRAM_RPC_URLS OCTRA_OBSERVATION_RPC_URL OCTRA_RPC_URL VITALS_APP_VERSION; do
+  value="$(sudo grep -E "^${key}=" "${updater_env}" | tail -n1 | cut -d= -f2- || true)"
+  if [ -n "${value}" ]; then
+    set_env "${lab_env}" "${key}" "${value}"
   fi
 done
 
@@ -209,8 +255,8 @@ rm -f "${tmp_watchdog}"
 
 sudo chown root:root "${updater_env}"
 sudo chmod 600 "${updater_env}"
-sudo chown root:"${APP_USER}" "${gateway_env}" "${watchdog_env}"
-sudo chmod 640 "${gateway_env}" "${watchdog_env}"
+sudo chown root:"${APP_USER}" "${gateway_env}" "${lab_env}" "${watchdog_env}"
+sudo chmod 640 "${gateway_env}" "${lab_env}" "${watchdog_env}"
 
 if [ "${VITALS_DISABLE_PARKING_SERVICE_ON_CUTOVER:-1}" = "1" ] && systemctl list-unit-files octra-vitals-parking.service >/dev/null 2>&1; then
   sudo systemctl disable --now octra-vitals-parking.service >/dev/null 2>&1 || sudo systemctl stop octra-vitals-parking.service >/dev/null 2>&1 || true

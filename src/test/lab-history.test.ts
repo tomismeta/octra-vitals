@@ -1,5 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { readFile } from "node:fs/promises";
+import { resolve } from "node:path";
 
 import { buildLabHistoryMirrorSql } from "../lib/lab-history.js";
 import { normalizeReadOnlySql, octraSqliteConfig, octraSqliteQueryProof, parseOctraSqliteOutput } from "../lib/octra-sqlite-client.js";
@@ -237,4 +239,12 @@ test("lab mirror SQL preserves AML authority and derived query fields", () => {
   assert.match(sql, /public_balance_raw/);
   assert.match(sql, /unclassified_raw/);
   assert.match(sql, /woct_coverage_ppm/);
+});
+
+test("core snapshot updater does not depend on the optional Lab mirror", async () => {
+  const source = await readFile(resolve("src/scripts/run-snapshot-update.ts"), "utf8");
+
+  assert.doesNotMatch(source, /lab-history/);
+  assert.doesNotMatch(source, /octra-sqlite/);
+  assert.doesNotMatch(source, /lab_mirror/);
 });

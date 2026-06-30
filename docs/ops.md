@@ -189,6 +189,7 @@ VITALS_INCLUDE_LAB_HISTORY_ASSETS=1
 VITALS_LAB_HISTORY_SYNC_SQL_MAX_BYTES=6000
 VITALS_LAB_HISTORY_SYNC_MAX_ROWS=8
 VITALS_LAB_HISTORY_SYNC_TAIL_ROWS=0
+VITALS_LAB_HISTORY_REPORT_PATH=/var/lib/octra-vitals/latest_lab_history_mirror_report.json
 OCTRA_SQLITE_CONFIG=/etc/octra-vitals/octra-sqlite/config.json
 ```
 
@@ -201,12 +202,20 @@ sudo VITALS_REPO_DIR=/opt/octra-vitals/current \
 
 See `docs/lab-history-mirror.md`.
 
-Fresh snapshots are mirrored automatically by the updater after AML persistence and verified readback succeed: AML first, readback second, SQLite Circle mirror third. A mirror failure does not invalidate the canonical AML snapshot; it is recorded for repair.
+The Lab mirror is intentionally outside the core snapshot updater. The mirror worker reads verified AML history, writes bounded missing chunks into the SQLite Circle, and records its own report at `latest_lab_history_mirror_report.json`. A mirror failure or lag does not invalidate the canonical AML snapshot and should not page as a core Vitals failure.
 
-The sync endpoint is token-gated, chunked, and completion-last. Repeated sync calls backfill missing rows; a partial write does not advance the mirror watermark to complete. The lab assets are conditional release assets and should only be included on devnet review gateways.
+The mirror worker and sync endpoint are chunked and completion-last. Repeated runs backfill missing rows; a partial write does not advance the mirror watermark to complete. The lab assets are conditional release assets and should only be included on explicit review gateways.
 The lab query endpoint is read-only and does not require the token. `VITALS_LAB_HISTORY_WRITE_TOKEN` is only for admin mirror repair/backfill. The lab page exposes canned `History`, `Tables`, and `Schema` queries, each editable before execution.
 
 Production Lab exposure must be explicit. For mainnet, use an `oct://mainnet/<circle>` database URI, set `VITALS_LAB_HISTORY_NETWORK=mainnet`, and set `VITALS_LAB_HISTORY_ALLOW_MAINNET=1` only after a stage rehearsal passes.
+
+Useful Lab mirror commands:
+
+```bash
+sudo systemctl start octra-vitals-lab-history-mirror.service
+sudo systemctl enable --now octra-vitals-lab-history-mirror.timer
+sudo cat /var/lib/octra-vitals/latest_lab_history_mirror_report.json
+```
 
 ## Telegram Notifications
 

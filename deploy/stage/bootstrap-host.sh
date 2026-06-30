@@ -41,11 +41,19 @@ else
   sudo chown root:"${APP_USER}" "${ENV_DIR}/notify.env"
   sudo chmod 640 "${ENV_DIR}/notify.env"
 fi
+if [ ! -f "${ENV_DIR}/lab-history.env" ]; then
+  sudo install -m 640 -o root -g "${APP_USER}" /dev/null "${ENV_DIR}/lab-history.env"
+else
+  sudo chown root:"${APP_USER}" "${ENV_DIR}/lab-history.env"
+  sudo chmod 640 "${ENV_DIR}/lab-history.env"
+fi
 
 if [ -d deploy/systemd ]; then
   sudo cp deploy/systemd/octra-vitals-gateway.service /etc/systemd/system/octra-vitals-gateway.service
   sudo cp deploy/systemd/octra-vitals-updater.service /etc/systemd/system/octra-vitals-updater.service
   sudo cp deploy/systemd/octra-vitals-updater.timer /etc/systemd/system/octra-vitals-updater.timer
+  sudo cp deploy/systemd/octra-vitals-lab-history-mirror.service /etc/systemd/system/octra-vitals-lab-history-mirror.service
+  sudo cp deploy/systemd/octra-vitals-lab-history-mirror.timer /etc/systemd/system/octra-vitals-lab-history-mirror.timer
   sudo cp deploy/systemd/octra-vitals-watchdog.service /etc/systemd/system/octra-vitals-watchdog.service
   sudo cp deploy/systemd/octra-vitals-watchdog.timer /etc/systemd/system/octra-vitals-watchdog.timer
   sudo cp deploy/systemd/octra-vitals-notify-alerts.service /etc/systemd/system/octra-vitals-notify-alerts.service

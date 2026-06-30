@@ -67,14 +67,15 @@ VITALS_INCLUDE_LAB_HISTORY_ASSETS=1
 VITALS_LAB_HISTORY_SYNC_SQL_MAX_BYTES=6000
 VITALS_LAB_HISTORY_SYNC_MAX_ROWS=8
 VITALS_LAB_HISTORY_SYNC_TAIL_ROWS=0
+VITALS_LAB_HISTORY_REPORT_PATH=/var/lib/octra-vitals/latest_lab_history_mirror_report.json
 OCTRA_SQLITE_CONFIG=/etc/octra-vitals/octra-sqlite/config.json
 ```
 
 The gateway refuses lab page, asset, query, and sync calls unless the lab feature is enabled and the database URI network matches the configured network. Mainnet lab databases are refused unless `VITALS_LAB_HISTORY_ALLOW_MAINNET=1`. Disabled lab routes return `404`, including `/api/lab/status`.
 
-Fresh snapshot rows are dual-written automatically after AML success: AML write first, verified AML readback second, SQLite Circle mirror third. If the mirror write fails, the canonical AML snapshot remains valid and the updater records the lab mirror failure for repair.
+The Lab mirror is decoupled from the core snapshot updater. The core updater collects data, writes AML, verifies readback, and updates the public Vitals receipt. A separate `octra-vitals-lab-history-mirror` worker reads verified AML history and mirrors missing rows into the SQLite Circle. If the mirror fails or lags, the canonical AML snapshot and public site remain valid.
 
-Manual mirror sync is intentionally incremental and exists for repair/backfill. Each sync reads verified AML history, skips snapshots already present as complete rows in the lab database, writes a bounded newest-missing chunk, and writes the completion watermark last. This avoids giant Circle writes and prevents a failed partial sync from being reported as complete. Newest-first syncs may show a recent `mirror_runs.mirrored_through_index` while `mirror_watermarks.last_complete_snapshot_index` remains empty until the contiguous prefix has been mirrored. `VITALS_LAB_HISTORY_SYNC_TAIL_ROWS` can limit the mirrored range to a recent tail; `0` means the available verified AML history range.
+Mirror runs are intentionally incremental and exist for regular catch-up plus repair/backfill. Each run reads verified AML history, skips snapshots already present as complete rows in the lab database, writes a bounded oldest-missing chunk, and writes the completion watermark last. This avoids giant Circle writes and prevents a failed partial sync from being reported as complete. `VITALS_LAB_HISTORY_SYNC_TAIL_ROWS` can limit the mirrored range to a recent tail; `0` means the available verified AML history range.
 
 Lab reads do not require a token. The query endpoint accepts bounded read-only `select` / `with` SQL so reviewers can inspect the derived mirror without wallet or operator access. Each query response includes a proof envelope with the database Circle, RPC URL, JSON-RPC method, Circle method, normalized SQL, limit, and normalized SQL hash. Vitals does not expose raw JSON-RPC request/response traces from lab queries. Admin mirror repair/backfill is the only token-gated path: `VITALS_LAB_HISTORY_WRITE_TOKEN` protects `/api/lab/mirror/sync`. Keep this host-local and out of git/chat; it is an operator secret, not a wallet key or OCT token.
 
@@ -100,7 +101,15 @@ POST /api/lab/mirror/sync  # X-Octra-Lab-Token required
 
 Only `select` / `with` statements are accepted. Mutating statements, comments, multiple statements, and PRAGMA-style access are rejected before calling `octra-sqlite`.
 
-`/api/lab/mirror/sync` reads canonical AML history through the same verified path as `/api/history`, then writes derived rows into the lab database. This endpoint is an operator repair/backfill tool; normal fresh rows are mirrored directly by the snapshot updater after successful AML readback. The response includes `row_count`, `pending_row_count`, and `complete` so operators can tell whether more sync passes are needed.
+`/api/lab/mirror/sync` reads canonical AML history through the same verified path as `/api/history`, then writes derived rows into the lab database. This endpoint is an operator repair/backfill tool; the primary automated path is the separate Lab mirror worker. The response includes `row_count`, `pending_row_count`, and `complete` so operators can tell whether more sync passes are needed.
+
+The preferred operator path is the worker:
+
+```bash
+sudo systemctl start octra-vitals-lab-history-mirror.service
+sudo systemctl enable --now octra-vitals-lab-history-mirror.timer
+sudo cat /var/lib/octra-vitals/latest_lab_history_mirror_report.json
+```
 
 ## Page
 
@@ -116,15 +125,15 @@ It is intentionally not linked from the primary product navigation. The page is 
 - `Tables`: a read-only list of mirror tables and indexes.
 - `Schema`: a read-only view of mirror table and index definitions.
 
-The SQL remains editable for review, but every browser query still goes through the gateway read-only guard. Fresh successful AML writes are mirrored automatically when lab mirroring is enabled; sync remains a separate operator repair/backfill action.
+The SQL remains editable for review, but every browser query still goes through the gateway read-only guard. Successful AML writes are mirrored by the separate Lab worker; the page can honestly show lag until the worker catches up.
 
 ## Review Checklist
 
-1. Set `VITALS_LAB_HISTORY_ENABLED=1`, `VITALS_LAB_HISTORY_DATABASE_URI=oct://devnet/<circle>`, and `VITALS_LAB_HISTORY_WRITE_TOKEN=<host-local secret>` on the devnet gateway.
+1. Set `VITALS_LAB_HISTORY_ENABLED=1`, `VITALS_LAB_HISTORY_DATABASE_URI=oct://devnet/<circle>`, and `VITALS_LAB_HISTORY_WRITE_TOKEN=<host-local secret>` on the devnet gateway/Lab env.
 2. Build/publish the devnet site with `VITALS_LAB_HISTORY_ENABLED=1` or `VITALS_INCLUDE_LAB_HISTORY_ASSETS=1` so the three lab assets are included in the Circle release.
 3. Restart the gateway and verify `GET /api/lab/status` reports `enabled` with `lab_read_token_required: false` and `lab_admin_sync_token_configured: true`.
-4. Make sure the updater service has the same lab database environment so fresh successful AML writes are mirrored automatically.
-5. If needed, run `POST /api/lab/mirror/sync` with `X-Octra-Lab-Token` until any older desired range is backfilled.
+4. Make sure `octra-vitals-lab-history-mirror.service` has the Lab database environment and the core updater does not need Lab variables.
+5. Run `sudo systemctl start octra-vitals-lab-history-mirror.service` repeatedly, or enable the timer, until any older desired range is backfilled.
 6. Open `/lab/history` and verify the devnet banner, default `1d` result, tables/schema buttons, public read-only query, DB Circle link, and relationship join-key highlighting.
 7. Confirm disabled gateways return `404` for `/lab/history`, `/lab-history.js`, and `/api/lab/status`.
 8. Before enabling on mainnet, rehearse the same commit on stage using devnet and then set `VITALS_LAB_HISTORY_NETWORK=mainnet`, `VITALS_LAB_HISTORY_DATABASE_URI=oct://mainnet/<circle>`, and `VITALS_LAB_HISTORY_ALLOW_MAINNET=1` only for the production cutover.

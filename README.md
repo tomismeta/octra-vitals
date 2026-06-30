@@ -115,9 +115,9 @@ The latest snapshot remains richer than historical rows. Full latest payload, ev
 
 ## History Lab
 
-The optional History Lab is a query surface at `/lab/history`. It mirrors verified AML readback into an `octra-sqlite` Circle database after a successful AML snapshot write, then exposes bounded read-only SQL for inspection and experimentation.
+The optional History Lab is a query surface at `/lab/history`. A separate mirror worker reads verified AML history and writes missing rows into an `octra-sqlite` Circle database, then the gateway exposes bounded read-only SQL for inspection and experimentation.
 
-The lab is deliberately non-canonical. AML remains the ledger of record, and the SQLite Circle is a derived mirror for discoverability, query ergonomics, and `octra-sqlite` evaluation. Lab reads do not require a token; operator repair/backfill syncs do. Vitals does not expose raw JSON-RPC request/response traces from lab queries. Mainnet Lab exposure is opt-in and requires `VITALS_LAB_HISTORY_ALLOW_MAINNET=1`.
+The lab is deliberately non-canonical and can lag or fail without affecting snapshot collection or the public Vitals page. AML remains the ledger of record, and the SQLite Circle is a derived mirror for discoverability, query ergonomics, and `octra-sqlite` evaluation. Lab reads do not require a token; operator repair/backfill syncs do. Vitals does not expose raw JSON-RPC request/response traces from lab queries. Mainnet Lab exposure is opt-in and requires `VITALS_LAB_HISTORY_ALLOW_MAINNET=1`.
 
 See `docs/lab-history-mirror.md` for schema, deployment, retention, and safety details.
 
