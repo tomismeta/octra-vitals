@@ -7,7 +7,12 @@ import { runtimeVitalsManifest, stableJson } from "../lib/vitals-manifest.js";
 
 const root = resolve(new URL("../..", import.meta.url).pathname);
 const appDir = join(root, "app");
-const outPath = process.argv[2] || join(root, "build", "site-circle-release.json");
+const args = process.argv.slice(2);
+const releaseKind = process.env.VITALS_SITE_RELEASE_KIND === "lab" || args.includes("--lab")
+  ? "lab"
+  : "core";
+const outPathArg = args.find((arg) => arg !== "--lab" && !arg.startsWith("--"));
+const outPath = outPathArg || join(root, "build", releaseKind === "lab" ? "lab-site-circle-release.json" : "site-circle-release.json");
 
 const contentTypes: Record<string, string> = {
   ".html": "text/html; charset=utf-8",
@@ -24,6 +29,11 @@ const contentTypes: Record<string, string> = {
 
 function octUri(path: string): string {
   return siteCircleId === "pending" ? "pending" : `oct://${siteCircleId}${path}`;
+}
+
+function circleIdFromOctUri(uri: string | undefined): string | null {
+  const match = uri?.match(/^oct:\/\/[^/]+\/([^/?#]+)/);
+  return match?.[1] || null;
 }
 
 function gitText(args: string[]): string | null {
@@ -51,14 +61,18 @@ const manifestAssets = Array.isArray(siteManifest.assets)
   ? siteManifest.assets.filter((asset): asset is string => typeof asset === "string" && asset.startsWith("/"))
   : [];
 const labAssets = ["/lab-history.html", "/lab-history.css", "/lab-history.js"];
-const includeLabAssets = process.env.VITALS_LAB_HISTORY_ENABLED === "1" || process.env.VITALS_INCLUDE_LAB_HISTORY_ASSETS === "1";
-const releaseAssets = includeLabAssets
-  ? Array.from(new Set([...manifestAssets, ...labAssets]))
-  : manifestAssets;
+const releaseAssets = releaseKind === "lab" ? labAssets : manifestAssets;
 const assets: string[] = releaseAssets.length
   ? releaseAssets
   : [siteManifest.entry || "/index.html"];
-const siteCircleId = process.env.VITALS_SITE_CIRCLE_ID || vitalsManifest.site_circle_id || "pending";
+const siteCircleId = releaseKind === "lab"
+  ? process.env.VITALS_LAB_SITE_CIRCLE_CREATE === "1"
+    ? process.env.VITALS_LAB_SITE_CIRCLE_ID || "pending"
+    : process.env.VITALS_LAB_SITE_CIRCLE_ID
+      || circleIdFromOctUri(process.env.VITALS_LAB_HISTORY_DATABASE_URI)
+      || process.env.VITALS_SITE_CIRCLE_ID
+      || "pending"
+  : process.env.VITALS_SITE_CIRCLE_ID || vitalsManifest.site_circle_id || "pending";
 const programmedCircleId = process.env.VITALS_PROGRAMMED_CIRCLE_ID || vitalsManifest.programmed_circle_id || "pending";
 const stateTargetMode = process.env.VITALS_STATE_TARGET_MODE === "circle_program" ? "circle_program" : "state_program";
 const stateProgramAddress = stateTargetMode === "circle_program"
@@ -107,16 +121,17 @@ const entries = await Promise.all(assets.map(async (assetPath) => {
 
 const release = {
   schema: "octra-vitals-site-circle-release-v0",
+  release_kind: releaseKind,
   generated_at: new Date().toISOString().replace(/\.\d{3}Z$/, "Z"),
-  app_name: "Octra Vitals",
+  app_name: releaseKind === "lab" ? "Octra Vitals Lab" : "Octra Vitals",
   app_version: process.env.VITALS_APP_VERSION || "0.1.0",
   release_git_commit: releaseGitCommit,
   release_git_dirty: releaseGitDirty,
   circle_config: "circle.json",
   circle_manifest: "app/manifest.json",
   site_circle_id: siteCircleId,
-  entry: "/index.html",
-  entry_uri: octUri("/index.html"),
+  entry: releaseKind === "lab" ? "/lab-history.html" : "/index.html",
+  entry_uri: octUri(releaseKind === "lab" ? "/lab-history.html" : "/index.html"),
   state_target_mode: stateTargetMode,
   programmed_circle_id: programmedCircleId,
   state_program_address: stateProgramAddress,
@@ -124,9 +139,10 @@ const release = {
   state_program_bytecode_hash: expectedProgramHashes.bytecode,
   state_program_verification_hash: expectedProgramHashes.verification,
   authority: {
-    canonical_app: "site-circle",
+    canonical_app: releaseKind === "lab" ? "vitals-lab-circle" : "site-circle",
     canonical_state: stateTargetMode === "circle_program" ? "vitals-circle-program" : "vitals-state-program",
-    gateway_role: "https-transport-adapter"
+    gateway_role: "https-transport-adapter",
+    lab_role: releaseKind === "lab" ? "derived-history-mirror" : null
   },
   assets: entries
 };

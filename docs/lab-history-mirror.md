@@ -61,9 +61,9 @@ VITALS_LAB_HISTORY_NETWORK=devnet
 VITALS_LAB_HISTORY_ALLOW_MAINNET=0
 VITALS_LAB_HISTORY_DATABASE=vitals_history_lab
 VITALS_LAB_HISTORY_DATABASE_URI=oct://devnet/octBa1SdBvjQ38dJWBwiLByPSQrGTdja2HG15dZCkGJFeJP
+VITALS_LAB_SITE_CIRCLE_ID=octBa1SdBvjQ38dJWBwiLByPSQrGTdja2HG15dZCkGJFeJP
 VITALS_LAB_HISTORY_OCTRA_SQLITE_BIN=/opt/octra-sqlite/bin/octra-sqlite
 VITALS_LAB_HISTORY_WRITE_TOKEN=<host-local secret>
-VITALS_INCLUDE_LAB_HISTORY_ASSETS=1
 VITALS_LAB_HISTORY_SYNC_SQL_MAX_BYTES=6000
 VITALS_LAB_HISTORY_SYNC_MAX_ROWS=8
 VITALS_LAB_HISTORY_SYNC_TAIL_ROWS=0
@@ -72,6 +72,13 @@ OCTRA_SQLITE_CONFIG=/etc/octra-vitals/octra-sqlite/config.json
 ```
 
 The gateway refuses lab page, asset, query, and sync calls unless the lab feature is enabled and the database URI network matches the configured network. Mainnet lab databases are refused unless `VITALS_LAB_HISTORY_ALLOW_MAINNET=1`. Disabled lab routes return `404`, including `/api/lab/status`.
+
+The production deployment boundary is two Circles:
+
+- Vitals Circle: AML fact ledger plus core web assets.
+- Vitals Lab Circle: lab web assets plus the `octra-sqlite` database.
+
+`VITALS_LAB_SITE_CIRCLE_ID` can be set explicitly. If omitted, the gateway derives the Lab Circle id from `VITALS_LAB_HISTORY_DATABASE_URI`, which is the preferred shape when the lab web assets and SQLite database share one Circle. If the SQLite Circle is `sealed_read`, Octra rejects plain public asset uploads; in that case keep the SQLite database Circle intact and use a separate public Lab Web Circle via `VITALS_LAB_SITE_CIRCLE_ID`.
 
 The Lab mirror is decoupled from the core snapshot updater. The core updater collects data, writes AML, verifies readback, and updates the public Vitals receipt. A separate `octra-vitals-lab-history-mirror` worker reads verified AML history and mirrors missing rows into the SQLite Circle. If the mirror fails or lags, the canonical AML snapshot and public site remain valid.
 
@@ -127,10 +134,26 @@ It is intentionally not linked from the primary product navigation. The page is 
 
 The SQL remains editable for review, but every browser query still goes through the gateway read-only guard. Successful AML writes are mirrored by the separate Lab worker; the page can honestly show lag until the worker catches up.
 
+## Lab Asset Release
+
+Core releases never include Lab assets. Build the Lab release separately:
+
+```bash
+npm run circle:release:lab
+```
+
+Publish Lab assets to the existing Lab SQLite Circle:
+
+```bash
+sudo bash /opt/octra-vitals/current/deploy/mainnet/publish-lab-assets.sh
+```
+
+The script derives the Circle id from `VITALS_LAB_HISTORY_DATABASE_URI` unless `VITALS_LAB_SITE_CIRCLE_ID` is set, uses changed-only asset uploads, and verifies `/lab/history`, `/lab-history.css`, and `/lab-history.js` are served from that Lab Circle. To create a separate public Lab Web Circle for a sealed SQLite database, run it once with `VITALS_LAB_SITE_CIRCLE_CREATE=1`; the script writes the created Circle id back to `gateway.env` and `lab-history.env`.
+
 ## Review Checklist
 
 1. Set `VITALS_LAB_HISTORY_ENABLED=1`, `VITALS_LAB_HISTORY_DATABASE_URI=oct://devnet/<circle>`, and `VITALS_LAB_HISTORY_WRITE_TOKEN=<host-local secret>` on the devnet gateway/Lab env.
-2. Build/publish the devnet site with `VITALS_LAB_HISTORY_ENABLED=1` or `VITALS_INCLUDE_LAB_HISTORY_ASSETS=1` so the three lab assets are included in the Circle release.
+2. Build/publish the core site without Lab assets, then run `publish-lab-assets.sh` so the three Lab assets are uploaded to the Lab Circle.
 3. Restart the gateway and verify `GET /api/lab/status` reports `enabled` with `lab_read_token_required: false` and `lab_admin_sync_token_configured: true`.
 4. Make sure `octra-vitals-lab-history-mirror.service` has the Lab database environment and the core updater does not need Lab variables.
 5. Run `sudo systemctl start octra-vitals-lab-history-mirror.service` repeatedly, or enable the timer, until any older desired range is backfilled.

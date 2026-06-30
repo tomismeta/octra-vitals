@@ -1,11 +1,16 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { execFile } from "node:child_process";
 import { readFile } from "node:fs/promises";
-import { resolve } from "node:path";
+import { tmpdir } from "node:os";
+import { join, resolve } from "node:path";
+import { promisify } from "node:util";
 
 import { buildLabHistoryMirrorSql, planLabHistoryMirrorRows } from "../lib/lab-history.js";
 import { normalizeReadOnlySql, octraSqliteConfig, octraSqliteQueryProof, parseOctraSqliteOutput } from "../lib/octra-sqlite-client.js";
 import type { ProgramHistoryWindow, SummaryRow } from "../lib/summary-window.js";
+
+const execFileAsync = promisify(execFile);
 
 function sampleHistory(): ProgramHistoryWindow {
   return {
@@ -269,4 +274,31 @@ test("core snapshot updater does not depend on the optional Lab mirror", async (
   assert.doesNotMatch(source, /lab-history/);
   assert.doesNotMatch(source, /octra-sqlite/);
   assert.doesNotMatch(source, /lab_mirror/);
+});
+
+test("site release keeps Lab assets out of the core Circle and builds a separate Lab release", async () => {
+  const coreOut = join(tmpdir(), `octra-vitals-core-release-${process.pid}.json`);
+  const labOut = join(tmpdir(), `octra-vitals-lab-release-${process.pid}.json`);
+  const env = {
+    ...process.env,
+    VITALS_STATE_TARGET_MODE: "circle_program",
+    VITALS_LAB_HISTORY_ENABLED: "1",
+    VITALS_INCLUDE_LAB_HISTORY_ASSETS: "1",
+    VITALS_LAB_HISTORY_DATABASE_URI: "oct://devnet/octLabDatabaseCircle"
+  };
+
+  await execFileAsync(process.execPath, ["dist/scripts/build-site-circle-release.js", coreOut], { env });
+  await execFileAsync(process.execPath, ["dist/scripts/build-site-circle-release.js", "--lab", labOut], { env });
+
+  const coreRelease = JSON.parse(await readFile(coreOut, "utf8"));
+  const labRelease = JSON.parse(await readFile(labOut, "utf8"));
+  const corePaths = coreRelease.assets.map((asset: any) => asset.path);
+  const labPaths = labRelease.assets.map((asset: any) => asset.path);
+
+  assert.equal(coreRelease.release_kind, "core");
+  assert.doesNotMatch(corePaths.join("\n"), /lab-history/);
+  assert.equal(labRelease.release_kind, "lab");
+  assert.deepEqual(labPaths, ["/lab-history.html", "/lab-history.css", "/lab-history.js"]);
+  assert.equal(labRelease.site_circle_id, "octLabDatabaseCircle");
+  assert.equal(labRelease.entry, "/lab-history.html");
 });

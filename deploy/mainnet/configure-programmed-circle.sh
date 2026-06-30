@@ -212,9 +212,9 @@ for key in \
   VITALS_LAB_HISTORY_ALLOW_MAINNET \
   VITALS_LAB_HISTORY_DATABASE \
   VITALS_LAB_HISTORY_DATABASE_URI \
+  VITALS_LAB_SITE_CIRCLE_ID \
   VITALS_LAB_HISTORY_OCTRA_SQLITE_BIN \
   VITALS_LAB_HISTORY_WRITE_TOKEN \
-  VITALS_INCLUDE_LAB_HISTORY_ASSETS \
   VITALS_LAB_HISTORY_SQL_TIMEOUT_MS \
   VITALS_LAB_HISTORY_SQL_MAX_BUFFER_BYTES \
   VITALS_LAB_HISTORY_SYNC_SQL_MAX_BYTES \
@@ -226,11 +226,15 @@ for key in \
   remove_env "${updater_env}" "${key}" 600 root
   if [ -n "${value}" ]; then
     set_env "${gateway_env}" "${key}" "${value}" 640 "${APP_USER}"
-    if [ "${key}" != "VITALS_LAB_HISTORY_WRITE_TOKEN" ] && [ "${key}" != "VITALS_INCLUDE_LAB_HISTORY_ASSETS" ]; then
+    if [ "${key}" != "VITALS_LAB_HISTORY_WRITE_TOKEN" ]; then
       set_env "${lab_env}" "${key}" "${value}"
     fi
   fi
 done
+
+remove_env "${gateway_env}" VITALS_INCLUDE_LAB_HISTORY_ASSETS 640 "${APP_USER}"
+remove_env "${lab_env}" VITALS_INCLUDE_LAB_HISTORY_ASSETS
+remove_env "${updater_env}" VITALS_INCLUDE_LAB_HISTORY_ASSETS 600 root
 
 for key in OCTRA_PROGRAM_RPC_URL OCTRA_PROGRAM_RPC_URLS OCTRA_OBSERVATION_RPC_URL OCTRA_RPC_URL VITALS_APP_VERSION; do
   value="$(sudo grep -E "^${key}=" "${updater_env}" | tail -n1 | cut -d= -f2- || true)"

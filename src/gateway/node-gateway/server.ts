@@ -39,6 +39,7 @@ const allowedHostValues = (process.env.VITALS_ALLOWED_HOSTS || "")
   .filter(Boolean);
 const EVIDENCE_HASH_DOMAIN = process.env.VITALS_EVIDENCE_HASH_DOMAIN || "octra-vitals:evidence:v0";
 const SOURCE_REFS_HASH_DOMAIN = process.env.VITALS_SOURCE_REFS_HASH_DOMAIN || "octra-vitals:source-refs:v0";
+const labStaticAssets = new Set(["/lab-history.html", "/lab-history.css", "/lab-history.js"]);
 
 type StateSourceMode = "program_required" | "program_preferred" | "bootstrap_live";
 type SnapshotSource = "program" | "bootstrap_live" | "sample_fallback";
@@ -311,6 +312,11 @@ function chooseValue(...values: Array<string | null | undefined>): string {
     if (value && value !== "pending") return value;
   }
   return "pending";
+}
+
+function circleIdFromOctUri(uri: string | null | undefined): string | null {
+  const match = uri?.match(/^oct:\/\/[^/]+\/([^/?#]+)/);
+  return match?.[1] || null;
 }
 
 function prefixHash(value: unknown): string {
@@ -1133,17 +1139,12 @@ async function loadSiteManifest(): Promise<{ entry: string; assets: Set<string> 
       }
     }
   }
-  if (octraSqliteConfig().enabled) {
-    assets.add("/lab-history.html");
-    assets.add("/lab-history.css");
-    assets.add("/lab-history.js");
-  }
   assets.add(entry);
   return { entry, assets };
 }
 
-async function loadReleaseAssets(): Promise<Map<string, Record<string, any>>> {
-  const release = await readJsonIfExists<Record<string, any>>(join(root, "build", "site-circle-release.json"));
+async function loadReleaseAssets(releasePath = join(root, "build", "site-circle-release.json")): Promise<Map<string, Record<string, any>>> {
+  const release = await readJsonIfExists<Record<string, any>>(releasePath);
   const assets = new Map<string, Record<string, any>>();
   if (!Array.isArray(release?.assets)) return assets;
   for (const asset of release.assets as Array<Record<string, any>>) {
@@ -1163,6 +1164,16 @@ function normalizeAssetPath(pathname: string, entry: string): string | null {
 async function configuredSiteCircleId(): Promise<string | null> {
   const manifest = await readJsonIfExists<Record<string, any>>(join(appDir, "vitals.manifest.json"));
   const circleId = chooseValue(process.env.VITALS_SITE_CIRCLE_ID, manifest?.site_circle_id);
+  return circleId && circleId !== "pending" ? circleId : null;
+}
+
+function configuredLabSiteCircleId(): string | null {
+  const config = octraSqliteConfig();
+  const circleId = chooseValue(
+    process.env.VITALS_LAB_SITE_CIRCLE_ID,
+    circleIdFromOctUri(config.databaseUri),
+    circleIdFromOctUri(config.database)
+  );
   return circleId && circleId !== "pending" ? circleId : null;
 }
 
@@ -2086,14 +2097,71 @@ async function serveEvidence(res: http.ServerResponse, url: URL, head = false): 
   }
 }
 
-async function serveStatic(res: http.ServerResponse, pathname: string, head = false, labCircleRequired = false): Promise<void> {
+function writeStaticAssetResponse(
+  res: http.ServerResponse,
+  assetPath: string,
+  asset: Awaited<ReturnType<typeof readLocalStaticAsset>> | Awaited<ReturnType<typeof readCircleStaticAsset>>,
+  head = false
+): void {
+  const headers: Record<string, string | number> = {
+    "Content-Type": asset.contentType,
+    "Cache-Control": staticCacheControl(assetPath),
+    "Content-Length": asset.bytes.length,
+    "Content-Security-Policy": "default-src 'self'; script-src 'self'; style-src 'self'; connect-src 'self'; img-src 'self' data:; object-src 'none'; base-uri 'none'",
+    "X-Content-Type-Options": "nosniff",
+    "Referrer-Policy": "no-referrer",
+    "X-Octra-Asset-Source": asset.source,
+    "X-Octra-Asset-SHA256": asset.sha256
+  };
+  if (asset.circleId) headers["X-Octra-Circle-ID"] = asset.circleId;
+  if (asset.circleResourceKey) headers["X-Octra-Circle-Resource-Key"] = asset.circleResourceKey;
+  if (asset.circleBlobHash) headers["X-Octra-Circle-Blob-Hash"] = asset.circleBlobHash;
+  if (asset.circleStableRoot) headers["X-Octra-Circle-Stable-Root"] = asset.circleStableRoot;
+  if (asset.circleAssetsRoot) headers["X-Octra-Circle-Assets-Root"] = asset.circleAssetsRoot;
+  if (asset.circleIntegrityChecksPassed !== null) {
+    headers["X-Octra-Circle-Consistency"] = asset.circleIntegrityChecksPassed ? "verified" : "failed";
+  }
+  res.writeHead(200, headers);
+  res.end(head ? undefined : asset.bytes);
+}
+
+async function serveLabStatic(res: http.ServerResponse, pathname: string, head = false): Promise<void> {
+  const config = octraSqliteConfig();
+  if (!config.enabled) return notFound(res, head);
+  const assetPath = pathname === "/lab/history" || pathname === "/lab/history/" ? "/lab-history.html" : pathname;
+  if (!labStaticAssets.has(assetPath)) return notFound(res, head);
+  const releaseAssets = await loadReleaseAssets(join(root, "build", "lab-site-circle-release.json"));
+  const releaseAsset = releaseAssets.get(assetPath);
+  if (!releaseAsset || !normalizeHash(releaseAsset.sha256)) {
+    return json(res, 503, {
+      error: "lab_pinned_asset_hash_missing",
+      path: assetPath
+    }, {}, head);
+  }
+  const circleId = configuredLabSiteCircleId();
+  if (!circleId) {
+    return json(res, 503, { error: "lab_circle_unavailable" }, {}, head);
+  }
+  try {
+    const asset = await readCircleStaticAsset(assetPath, circleId, releaseAsset);
+    return writeStaticAssetResponse(res, assetPath, asset, head);
+  } catch (error) {
+    return json(res, 502, {
+      error: "lab_circle_asset_unavailable",
+      path: assetPath,
+      message: publicError(error instanceof Error ? error : new Error(String(error)), "lab_circle_asset_unavailable")
+    }, {}, head);
+  }
+}
+
+async function serveStatic(res: http.ServerResponse, pathname: string, head = false): Promise<void> {
   const siteManifest = await loadSiteManifest();
   const assetPath = normalizeAssetPath(pathname, siteManifest.entry);
   if (!assetPath || !siteManifest.assets.has(assetPath)) return notFound(res, head);
 
   const releaseAssets = await loadReleaseAssets();
   const releaseAsset = releaseAssets.get(assetPath);
-  const sourceMode = labCircleRequired ? "circle_required" : staticAssetSource();
+  const sourceMode = staticAssetSource();
   let asset: Awaited<ReturnType<typeof readLocalStaticAsset>> | Awaited<ReturnType<typeof readCircleStaticAsset>>;
 
   if (sourceMode === "local") {
@@ -2131,30 +2199,7 @@ async function serveStatic(res: http.ServerResponse, pathname: string, head = fa
     }
   }
 
-  const headers: Record<string, string | number> = {
-    "Content-Type": asset.contentType,
-    "Cache-Control": staticCacheControl(assetPath),
-    "Content-Length": asset.bytes.length,
-    "Content-Security-Policy": "default-src 'self'; script-src 'self'; style-src 'self'; connect-src 'self'; img-src 'self' data:; object-src 'none'; base-uri 'none'",
-    "X-Content-Type-Options": "nosniff",
-    "Referrer-Policy": "no-referrer",
-    "X-Octra-Asset-Source": asset.source,
-    "X-Octra-Asset-SHA256": asset.sha256
-  };
-  if (asset.circleId) headers["X-Octra-Circle-ID"] = asset.circleId;
-  if (asset.circleResourceKey) headers["X-Octra-Circle-Resource-Key"] = asset.circleResourceKey;
-  if (asset.circleBlobHash) headers["X-Octra-Circle-Blob-Hash"] = asset.circleBlobHash;
-  if (asset.circleStableRoot) headers["X-Octra-Circle-Stable-Root"] = asset.circleStableRoot;
-  if (asset.circleAssetsRoot) headers["X-Octra-Circle-Assets-Root"] = asset.circleAssetsRoot;
-  if (asset.circleIntegrityChecksPassed !== null) {
-    headers["X-Octra-Circle-Consistency"] = asset.circleIntegrityChecksPassed ? "verified" : "failed";
-  }
-  res.writeHead(200, headers);
-  if (head) {
-    res.end();
-    return;
-  }
-  res.end(asset.bytes);
+  return writeStaticAssetResponse(res, assetPath, asset, head);
 }
 
 async function route(req: http.IncomingMessage, res: http.ServerResponse): Promise<void> {
@@ -2173,13 +2218,9 @@ async function route(req: http.IncomingMessage, res: http.ServerResponse): Promi
   if (url.pathname === "/api/program/artifacts") return serveProgramArtifacts(res, head);
   if (url.pathname === "/health") return json(res, 200, { ok: true, service: "octra-vitals-gateway" }, {}, head);
   if (url.pathname.startsWith("/api/evidence/")) return serveEvidence(res, url, head);
-  if (url.pathname === "/lab/history") {
-    if (!octraSqliteConfig().enabled) return notFound(res, head);
-    return serveStatic(res, "/lab-history.html", head, true);
-  }
+  if (url.pathname === "/lab/history" || url.pathname === "/lab/history/") return serveLabStatic(res, url.pathname, head);
   if (url.pathname.startsWith("/lab-history.")) {
-    if (!octraSqliteConfig().enabled) return notFound(res, head);
-    return serveStatic(res, url.pathname, head, true);
+    return serveLabStatic(res, url.pathname, head);
   }
   return serveStatic(res, url.pathname, head);
 }

@@ -183,9 +183,9 @@ VITALS_LAB_HISTORY_NETWORK=devnet
 VITALS_LAB_HISTORY_ALLOW_MAINNET=0
 VITALS_LAB_HISTORY_DATABASE=vitals_history_lab
 VITALS_LAB_HISTORY_DATABASE_URI=oct://devnet/octBa1SdBvjQ38dJWBwiLByPSQrGTdja2HG15dZCkGJFeJP
+VITALS_LAB_SITE_CIRCLE_ID=octBa1SdBvjQ38dJWBwiLByPSQrGTdja2HG15dZCkGJFeJP
 VITALS_LAB_HISTORY_OCTRA_SQLITE_BIN=/opt/octra-sqlite/bin/octra-sqlite
 VITALS_LAB_HISTORY_WRITE_TOKEN=<host-local secret>
-VITALS_INCLUDE_LAB_HISTORY_ASSETS=1
 VITALS_LAB_HISTORY_SYNC_SQL_MAX_BYTES=6000
 VITALS_LAB_HISTORY_SYNC_MAX_ROWS=8
 VITALS_LAB_HISTORY_SYNC_TAIL_ROWS=0
@@ -204,8 +204,16 @@ See `docs/lab-history-mirror.md`.
 
 The Lab mirror is intentionally outside the core snapshot updater. The mirror worker reads verified AML history, writes bounded missing chunks into the SQLite Circle, and records its own report at `latest_lab_history_mirror_report.json`. A mirror failure or lag does not invalidate the canonical AML snapshot and should not page as a core Vitals failure.
 
-The mirror worker and sync endpoint are chunked and completion-last. Repeated runs backfill missing rows; a partial write does not advance the mirror watermark to complete. The lab assets are conditional release assets and should only be included on explicit review gateways.
+The mirror worker and sync endpoint are chunked and completion-last. Repeated runs backfill missing rows; a partial write does not advance the mirror watermark to complete. The lab web assets are published as a separate Lab release to the Lab SQLite Circle, not bundled into the canonical Vitals Circle.
 The lab query endpoint is read-only and does not require the token. `VITALS_LAB_HISTORY_WRITE_TOKEN` is only for admin mirror repair/backfill. The lab page exposes canned `History`, `Tables`, and `Schema` queries, each editable before execution.
+
+Publish or refresh Lab assets with:
+
+```bash
+sudo bash /opt/octra-vitals/current/deploy/mainnet/publish-lab-assets.sh
+```
+
+The script derives the Lab Circle from `VITALS_LAB_HISTORY_DATABASE_URI`, uploads only changed Lab assets, and verifies the gateway serves them from that Circle. If the SQLite database Circle is `sealed_read`, create a separate public Lab Web Circle once with `VITALS_LAB_SITE_CIRCLE_CREATE=1`; the SQLite history stays in place and only the web assets move to the new public Lab Web Circle.
 
 Production Lab exposure must be explicit. For mainnet, use an `oct://mainnet/<circle>` database URI, set `VITALS_LAB_HISTORY_NETWORK=mainnet`, and set `VITALS_LAB_HISTORY_ALLOW_MAINNET=1` only after a stage rehearsal passes.
 

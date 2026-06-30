@@ -13,6 +13,7 @@ const appDir = join(root, "app");
 const args = process.argv.slice(2);
 const dryRunOnly = args.includes("--dry-run");
 const outPath = args.find((arg) => arg !== "--dry-run") || join(root, "build", "site_circle_deploy.json");
+const releasePath = process.env.VITALS_SITE_RELEASE_PATH || join(root, "build", "site-circle-release.json");
 const deployEnabled = !dryRunOnly && process.env.VITALS_DEPLOY_SITE_CIRCLE === "1";
 const waitForConfirmations = process.env.VITALS_DEPLOY_WAIT !== "0";
 const batchAssets = process.env.VITALS_SITE_ASSET_SUBMIT_BATCH === "1";
@@ -489,7 +490,7 @@ const [circleConfig, siteManifest, vitalsManifest, releaseManifest] = await Prom
   readFile(join(root, "circle.json"), "utf8").then((text) => JSON.parse(text)),
   readFile(join(appDir, "manifest.json"), "utf8").then((text) => JSON.parse(text)),
   readFile(join(appDir, "vitals.manifest.json"), "utf8").then((text) => JSON.parse(text)).catch(() => ({})),
-  readFile(join(root, "build", "site-circle-release.json"), "utf8").then((text) => JSON.parse(text)).catch(() => null)
+  readFile(releasePath, "utf8").then((text) => JSON.parse(text)).catch(() => null)
 ]);
 
 const wallet = loadWalletFromEnv({
@@ -498,8 +499,15 @@ const wallet = loadWalletFromEnv({
   label: "site circle deployer"
 });
 const deployerAddress = wallet?.address || process.env.VITALS_DEPLOYER_ADDRESS || process.env.VITALS_OPERATOR_ADDRESS || null;
-const configuredCircleId = [process.env.VITALS_SITE_CIRCLE_ID, vitalsManifest.site_circle_id]
+const releaseKind = typeof releaseManifest?.release_kind === "string" ? releaseManifest.release_kind : "core";
+const configuredCircleIdCandidates = releaseKind === "lab"
+  ? [process.env.VITALS_SITE_CIRCLE_ID, releaseManifest?.site_circle_id]
+  : [process.env.VITALS_SITE_CIRCLE_ID, releaseManifest?.site_circle_id, vitalsManifest.site_circle_id];
+const configuredCircleId = configuredCircleIdCandidates
   .find((value) => typeof value === "string" && value.length > 0 && value !== "pending") || null;
+const releaseEntry = typeof releaseManifest?.entry === "string" && releaseManifest.entry.startsWith("/")
+  ? releaseManifest.entry
+  : siteManifest.entry || "/index.html";
 const assetMode = String(circleConfig.assets?.mode || siteManifest.mode || "plain");
 const sealedAssets = assetMode === "sealed" || payloadMode(siteManifest.mode) === "sealed_read";
 const sealedKeyId = String(circleConfig.assets?.key_id || "octra-vitals-site");
@@ -534,7 +542,7 @@ const circleIdPayload = {
 const deployPayload = circleIdPayload;
 const deployPayloadJson = JSON.stringify(deployPayload);
 if (!releaseManifest || !Array.isArray(releaseManifest.assets) || releaseManifest.assets.length === 0) {
-  throw new Error("build/site-circle-release.json with assets is required before deploying Site Circle assets");
+  throw new Error(`${releasePath} with assets is required before deploying Site Circle assets`);
 }
 
 let nonce = deployerAddress ? await nextNonce(deployerAddress) : 0;
@@ -591,7 +599,7 @@ if (!deployEnabled) {
     deploy_enabled: false,
     deployer_address: deployerAddress || "pending",
     circle_id: circleId,
-    entry_uri: circleId === "pending" ? "pending" : `oct://${circleId}${siteManifest.entry || "/index.html"}`,
+    entry_uri: circleId === "pending" ? "pending" : `oct://${circleId}${releaseEntry}`,
     deploy_action: deployNeeded ? "create" : "update_existing",
     asset_submission_mode: batchAssets ? "batch" : "single",
     asset_upload_mode: assetSelection.mode,
@@ -737,7 +745,7 @@ if (!deployEnabled) {
     deploy_enabled: true,
     deployer_address: wallet.address,
     circle_id: circleId,
-    entry_uri: `oct://${circleId}${siteManifest.entry || "/index.html"}`,
+    entry_uri: `oct://${circleId}${releaseEntry}`,
     deploy_action: deployNeeded ? "create" : "update_existing",
     asset_submission_mode: batchAssets ? "batch" : "single",
     asset_upload_mode: assetSelection.mode,
