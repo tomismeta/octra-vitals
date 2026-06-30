@@ -1983,8 +1983,11 @@ async function serveLabApi(req: http.IncomingMessage, res: http.ServerResponse, 
       });
     } catch (error) {
       return json(res, 400, {
-        error: "lab_query_rejected",
-        message: publicError(error instanceof Error ? error : new Error(String(error)), "lab_query_rejected")
+        error: "lab_query_result_too_large_or_unsupported",
+        message: publicError(
+          error instanceof Error ? error : new Error(String(error)),
+          "Result is too large for one Circle read, or the query is unsupported. Lower the limit or select fewer columns."
+        )
       }, {}, head);
     }
   }

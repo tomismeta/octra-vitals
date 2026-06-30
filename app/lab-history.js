@@ -210,7 +210,7 @@ order by s.snapshot_index desc`;
   async function getJson(path){
     const res = await fetch(path, {headers:{"Accept":"application/json"}});
     const body = await res.json().catch(()=>({error:"invalid_json"}));
-    if(!res.ok) throw new Error(body.error || `${path} returned ${res.status}`);
+    if(!res.ok) throw new Error(body.message || body.error || `${path} returned ${res.status}`);
     return body;
   }
 
@@ -222,7 +222,7 @@ order by s.snapshot_index desc`;
       body:JSON.stringify(body)
     });
     const payload = await res.json().catch(()=>({error:"invalid_json"}));
-    if(!res.ok) throw new Error(payload.error || `${path} returned ${res.status}`);
+    if(!res.ok) throw new Error(payload.message || payload.error || `${path} returned ${res.status}`);
     return payload;
   }
 
