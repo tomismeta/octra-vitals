@@ -150,7 +150,7 @@ test("lab query proof describes Circle read without exposing auth material", asy
   ]);
 });
 
-test("lab database config requires an explicit devnet oct URI", () => {
+test("lab database config requires an explicit oct URI and explicit mainnet enable", () => {
   const plain = octraSqliteConfig({
     VITALS_LAB_HISTORY_ENABLED: "1",
     VITALS_LAB_HISTORY_DATABASE: "vitals_history_lab",
@@ -169,14 +169,31 @@ test("lab database config requires an explicit devnet oct URI", () => {
   assert.equal(mismatch.enabled, false);
   assert.equal(mismatch.reason, "lab_history_network_mismatch");
 
-  const mainnetOverride = octraSqliteConfig({
+  const mainnetWithoutEnable = octraSqliteConfig({
     VITALS_LAB_HISTORY_ENABLED: "1",
     VITALS_LAB_HISTORY_DATABASE_URI: "oct://mainnet/octExample",
-    VITALS_LAB_HISTORY_ALLOW_NON_DEVNET: "1"
   } as NodeJS.ProcessEnv);
 
-  assert.equal(mainnetOverride.enabled, false);
-  assert.equal(mainnetOverride.reason, "lab_history_devnet_only");
+  assert.equal(mainnetWithoutEnable.enabled, false);
+  assert.equal(mainnetWithoutEnable.reason, "lab_history_mainnet_requires_explicit_enable");
+
+  const mainnetWithEnable = octraSqliteConfig({
+    VITALS_LAB_HISTORY_ENABLED: "1",
+    VITALS_LAB_HISTORY_DATABASE_URI: "oct://mainnet/octExample",
+    VITALS_LAB_HISTORY_NETWORK: "mainnet",
+    VITALS_LAB_HISTORY_ALLOW_MAINNET: "1"
+  } as NodeJS.ProcessEnv);
+
+  assert.equal(mainnetWithEnable.enabled, true);
+  assert.equal(mainnetWithEnable.network, "mainnet");
+
+  const unsupported = octraSqliteConfig({
+    VITALS_LAB_HISTORY_ENABLED: "1",
+    VITALS_LAB_HISTORY_DATABASE_URI: "oct://stage/octExample"
+  } as NodeJS.ProcessEnv);
+
+  assert.equal(unsupported.enabled, false);
+  assert.equal(unsupported.reason, "lab_history_network_unsupported");
 
   const devnet = octraSqliteConfig({
     VITALS_LAB_HISTORY_ENABLED: "1",

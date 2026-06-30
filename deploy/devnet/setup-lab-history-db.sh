@@ -11,7 +11,19 @@ OCTRA_SQLITE_GROUP="${OCTRA_SQLITE_GROUP:-octra-vitals}"
 VITALS_REPO_DIR="${VITALS_REPO_DIR:-/opt/octra-vitals}"
 LAB_SCHEMA="${LAB_SCHEMA:-$VITALS_REPO_DIR/ops/octra-sqlite/history-lab-schema.sql}"
 LAB_DATABASE="${VITALS_LAB_HISTORY_DATABASE:-vitals_history_lab}"
-LAB_RPC="${VITALS_LAB_HISTORY_RPC:-https://devnet.octrascan.io/rpc}"
+LAB_NETWORK="${VITALS_LAB_HISTORY_NETWORK:-devnet}"
+case "$LAB_NETWORK" in
+  devnet)
+    LAB_RPC="${VITALS_LAB_HISTORY_RPC:-https://devnet.octrascan.io/rpc}"
+    ;;
+  mainnet)
+    LAB_RPC="${VITALS_LAB_HISTORY_RPC:-https://octra.network/rpc}"
+    ;;
+  *)
+    echo "unsupported lab network: $LAB_NETWORK" >&2
+    exit 1
+    ;;
+esac
 
 if [[ ! -s "$OCTRA_SQLITE_WALLET" ]]; then
   echo "missing wallet file: $OCTRA_SQLITE_WALLET" >&2
@@ -50,7 +62,7 @@ fi
 sudo env OCTRA_SQLITE_CONFIG="$OCTRA_SQLITE_CONFIG" \
   "$OCTRA_SQLITE_PREFIX/bin/octra-sqlite" init \
   --wallet "$OCTRA_SQLITE_WALLET" \
-  --network devnet \
+  --network "$LAB_NETWORK" \
   --rpc "$LAB_RPC"
 
 if sudo env OCTRA_SQLITE_CONFIG="$OCTRA_SQLITE_CONFIG" \
@@ -60,7 +72,7 @@ else
   sudo env OCTRA_SQLITE_CONFIG="$OCTRA_SQLITE_CONFIG" \
     "$OCTRA_SQLITE_PREFIX/bin/octra-sqlite" new "$LAB_DATABASE" \
     --read "$LAB_SCHEMA" \
-    --network devnet \
+    --network "$LAB_NETWORK" \
     --rpc "$LAB_RPC"
 fi
 

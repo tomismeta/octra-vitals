@@ -1,6 +1,6 @@
-# Devnet History Lab Mirror
+# History Lab Mirror
 
-The history lab is an optional devnet proving surface for querying Vitals history through `octra-sqlite`.
+The history lab is an optional proving surface for querying Vitals history through `octra-sqlite`.
 
 It is not canonical state. The canonical ledger remains the Vitals AML fact ledger in the programmed Circle. The lab database is a derived readback cache populated only after the updater has successfully persisted a snapshot to AML and verified the AML readback.
 
@@ -16,7 +16,7 @@ commit: 73472497b35f7dfe79506e8b8a13a7f73bd3f917
 binary: /opt/octra-sqlite/bin/octra-sqlite
 ```
 
-Install or refresh it on devnet with:
+Install or refresh it on a gateway host with:
 
 ```bash
 sudo VITALS_REPO_DIR=/opt/octra-vitals/current \
@@ -53,11 +53,12 @@ Raw RPC evidence bodies are not copied into the lab database.
 
 ## Gateway Config
 
-Enable only on devnet:
+The lab is disabled by default. Devnet and staging can enable it with an `oct://devnet/...` database URI. Mainnet additionally requires `VITALS_LAB_HISTORY_ALLOW_MAINNET=1` so production exposure is explicit.
 
 ```text
 VITALS_LAB_HISTORY_ENABLED=1
 VITALS_LAB_HISTORY_NETWORK=devnet
+VITALS_LAB_HISTORY_ALLOW_MAINNET=0
 VITALS_LAB_HISTORY_DATABASE=vitals_history_lab
 VITALS_LAB_HISTORY_DATABASE_URI=oct://devnet/octBa1SdBvjQ38dJWBwiLByPSQrGTdja2HG15dZCkGJFeJP
 VITALS_LAB_HISTORY_OCTRA_SQLITE_BIN=/opt/octra-sqlite/bin/octra-sqlite
@@ -69,7 +70,7 @@ VITALS_LAB_HISTORY_SYNC_TAIL_ROWS=0
 OCTRA_SQLITE_CONFIG=/etc/octra-vitals/octra-sqlite/config.json
 ```
 
-The gateway refuses lab page, asset, query, and sync calls unless the lab feature is enabled and the configured database network is `devnet`. Disabled lab routes return `404`, including `/api/lab/status`.
+The gateway refuses lab page, asset, query, and sync calls unless the lab feature is enabled and the database URI network matches the configured network. Mainnet lab databases are refused unless `VITALS_LAB_HISTORY_ALLOW_MAINNET=1`. Disabled lab routes return `404`, including `/api/lab/status`.
 
 Fresh snapshot rows are dual-written automatically after AML success: AML write first, verified AML readback second, SQLite Circle mirror third. If the mirror write fails, the canonical AML snapshot remains valid and the updater records the lab mirror failure for repair.
 
@@ -117,7 +118,7 @@ It is intentionally not linked from the primary product navigation. The page is 
 
 The SQL remains editable for review, but every browser query still goes through the gateway read-only guard. Fresh successful AML writes are mirrored automatically when lab mirroring is enabled; sync remains a separate operator repair/backfill action.
 
-## Devnet Review Checklist
+## Review Checklist
 
 1. Set `VITALS_LAB_HISTORY_ENABLED=1`, `VITALS_LAB_HISTORY_DATABASE_URI=oct://devnet/<circle>`, and `VITALS_LAB_HISTORY_WRITE_TOKEN=<host-local secret>` on the devnet gateway.
 2. Build/publish the devnet site with `VITALS_LAB_HISTORY_ENABLED=1` or `VITALS_INCLUDE_LAB_HISTORY_ASSETS=1` so the three lab assets are included in the Circle release.
@@ -125,4 +126,5 @@ The SQL remains editable for review, but every browser query still goes through 
 4. Make sure the updater service has the same lab database environment so fresh successful AML writes are mirrored automatically.
 5. If needed, run `POST /api/lab/mirror/sync` with `X-Octra-Lab-Token` until any older desired range is backfilled.
 6. Open `/lab/history` and verify the devnet banner, default `1d` result, tables/schema buttons, public read-only query, DB Circle link, and relationship join-key highlighting.
-7. Confirm disabled/mainnet gateways return `404` for `/lab/history`, `/lab-history.js`, and `/api/lab/status`.
+7. Confirm disabled gateways return `404` for `/lab/history`, `/lab-history.js`, and `/api/lab/status`.
+8. Before enabling on mainnet, rehearse the same commit on stage using devnet and then set `VITALS_LAB_HISTORY_NETWORK=mainnet`, `VITALS_LAB_HISTORY_DATABASE_URI=oct://mainnet/<circle>`, and `VITALS_LAB_HISTORY_ALLOW_MAINNET=1` only for the production cutover.

@@ -116,7 +116,8 @@ export function octraSqliteConfig(env = process.env): OctraSqliteConfig {
   else if (!database) reason = "lab_history_database_unconfigured";
   else if (!databaseNetwork) reason = "lab_history_database_uri_required";
   else if (configuredNetwork && configuredNetwork !== databaseNetwork) reason = "lab_history_network_mismatch";
-  else if (network !== "devnet") reason = "lab_history_devnet_only";
+  else if (network === "mainnet" && env.VITALS_LAB_HISTORY_ALLOW_MAINNET !== "1") reason = "lab_history_mainnet_requires_explicit_enable";
+  else if (!["devnet", "mainnet"].includes(network)) reason = "lab_history_network_unsupported";
   return {
     enabled: enabled && !reason,
     reason,

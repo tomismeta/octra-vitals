@@ -95,7 +95,7 @@ Renders the accounting view, trend window, provenance links, raw evidence refere
 
 **History Lab**
 
-An optional devnet-only lab can mirror verified AML history into an `octra-sqlite` Circle database for interactive querying at `/lab/history`. The mirror is explicitly derived and non-canonical: AML remains the ledger, and the lab exists to exercise query/discovery patterns without widening the production state model.
+An optional lab can mirror verified AML history into an `octra-sqlite` Circle database for interactive querying at `/lab/history`. The mirror is explicitly derived and non-canonical: AML remains the ledger, and the lab exists to exercise query/discovery patterns without widening the production state model. It is disabled by default; mainnet enablement requires an explicit production flag.
 
 ## Trust Model
 
@@ -113,11 +113,11 @@ History can span multiple AML eras. The active era points to its predecessor by 
 
 The latest snapshot remains richer than historical rows. Full latest payload, evidence manifest, and source references stay AML-readable. Older raw RPC bodies are linked by hash and served from host/archive storage for forensic inspection, not stored permanently in AML.
 
-## Devnet History Lab
+## History Lab
 
-The optional History Lab is a devnet-only query surface at `/lab/history`. It mirrors verified AML readback into an `octra-sqlite` Circle database after a successful AML snapshot write, then exposes bounded read-only SQL for inspection and experimentation.
+The optional History Lab is a query surface at `/lab/history`. It mirrors verified AML readback into an `octra-sqlite` Circle database after a successful AML snapshot write, then exposes bounded read-only SQL for inspection and experimentation.
 
-The lab is deliberately non-canonical. AML remains the ledger of record, and the SQLite Circle is a derived mirror for discoverability, query ergonomics, and `octra-sqlite` evaluation. Lab reads do not require a token; operator repair/backfill syncs do. Vitals does not expose raw JSON-RPC request/response traces from lab queries.
+The lab is deliberately non-canonical. AML remains the ledger of record, and the SQLite Circle is a derived mirror for discoverability, query ergonomics, and `octra-sqlite` evaluation. Lab reads do not require a token; operator repair/backfill syncs do. Vitals does not expose raw JSON-RPC request/response traces from lab queries. Mainnet Lab exposure is opt-in and requires `VITALS_LAB_HISTORY_ALLOW_MAINNET=1`.
 
 See `docs/lab-history-mirror.md` for schema, deployment, retention, and safety details.
 
