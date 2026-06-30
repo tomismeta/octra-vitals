@@ -107,6 +107,17 @@ test("octra-sqlite output parser accepts query and write envelopes", () => {
 
   assert.deepEqual(write, { columns: [], ok: true, row_count: 0, rows: [] });
 
+  const writeScript = parseOctraSqliteOutput(JSON.stringify({
+    ok: true,
+    type: "write_script",
+    schema: "octra-sqlite.cli.v1",
+    statements: 14,
+    batches: 1,
+    writes: [{ status: "confirmed" }]
+  }));
+
+  assert.deepEqual(writeScript, { columns: [], ok: true, row_count: 0, rows: [] });
+
   const restore = parseOctraSqliteOutput(JSON.stringify({
     ok: true,
     type: "restore",

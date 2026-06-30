@@ -181,7 +181,7 @@ function successfulOctraSqliteWrite(parsed: OctraSqliteWriteReceipt): boolean {
   const status = parsed.status || parsed.result?.status;
   if (status && ["accepted", "confirmed", "submitted"].includes(status)) return true;
 
-  if ((parsed.type === "write" || parsed.type === "exec") && parsed.ok === true) {
+  if ((parsed.type === "write" || parsed.type === "exec" || parsed.type === "write_script") && parsed.ok === true) {
     return parsed.receipt?.success !== false && status !== "rejected";
   }
 

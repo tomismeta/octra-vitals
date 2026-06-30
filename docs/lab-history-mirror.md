@@ -12,7 +12,7 @@ Pinned build:
 
 ```text
 repo: https://github.com/tomismeta/octra-sqlite
-commit: 73472497b35f7dfe79506e8b8a13a7f73bd3f917
+commit: 95105c57a2949f0ae03a71907f2da20d23f415f0
 binary: /opt/octra-sqlite/bin/octra-sqlite
 ```
 
