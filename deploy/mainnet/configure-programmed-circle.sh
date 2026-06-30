@@ -158,6 +158,41 @@ fi
 sudo install -m 640 -o root -g "${APP_USER}" "${tmp_gateway}" "${gateway_env}"
 rm -f "${tmp_gateway}"
 
+optional_env_value() {
+  key="$1"
+  value="${!key:-}"
+  if [ -z "${value}" ] && [ -f "${gateway_env}" ]; then
+    value="$(sudo grep -E "^${key}=" "${gateway_env}" | tail -n1 | cut -d= -f2- || true)"
+  fi
+  if [ -z "${value}" ] && [ -f "${updater_env}" ]; then
+    value="$(sudo grep -E "^${key}=" "${updater_env}" | tail -n1 | cut -d= -f2- || true)"
+  fi
+  printf '%s' "${value}"
+}
+
+for key in \
+  VITALS_LAB_HISTORY_ENABLED \
+  VITALS_LAB_HISTORY_NETWORK \
+  VITALS_LAB_HISTORY_ALLOW_MAINNET \
+  VITALS_LAB_HISTORY_DATABASE \
+  VITALS_LAB_HISTORY_DATABASE_URI \
+  VITALS_LAB_HISTORY_OCTRA_SQLITE_BIN \
+  VITALS_LAB_HISTORY_WRITE_TOKEN \
+  VITALS_INCLUDE_LAB_HISTORY_ASSETS \
+  VITALS_LAB_HISTORY_SQL_TIMEOUT_MS \
+  VITALS_LAB_HISTORY_SQL_MAX_BUFFER_BYTES \
+  VITALS_LAB_HISTORY_SYNC_SQL_MAX_BYTES \
+  VITALS_LAB_HISTORY_SYNC_MAX_ROWS \
+  VITALS_LAB_HISTORY_SYNC_TAIL_ROWS \
+  VITALS_LAB_HISTORY_RPC \
+  OCTRA_SQLITE_CONFIG; do
+  value="$(optional_env_value "${key}")"
+  if [ -n "${value}" ]; then
+    set_env "${updater_env}" "${key}" "${value}" 600 root
+    set_env "${gateway_env}" "${key}" "${value}" 640 "${APP_USER}"
+  fi
+done
+
 tmp_watchdog="$(mktemp)"
 cat >> "${tmp_watchdog}" <<EOF
 VITALS_WATCH_DATA_DIR=${DATA_DIR}
