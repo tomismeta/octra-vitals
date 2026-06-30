@@ -67,6 +67,7 @@
     "circle:deploy:lab": "npm run build && VITALS_SITE_RELEASE_KIND=lab node dist/scripts/build-site-circle-release.js && VITALS_SITE_RELEASE_PATH=build/lab-site-circle-release.json node dist/scripts/deploy-site-circle.js",
     "circle:verify": "npm run build && node dist/scripts/build-producer-audit-manifest.js && node dist/scripts/deploy-site-circle.js --dry-run",
     "circle:verify:lab": "npm run build && VITALS_SITE_RELEASE_KIND=lab node dist/scripts/build-site-circle-release.js && VITALS_SITE_RELEASE_PATH=build/lab-site-circle-release.json node dist/scripts/deploy-site-circle.js --dry-run",
+    "lab:verify-runtime": "bash deploy/mainnet/verify-lab-runtime.sh",
     "circle:programmed:deploy": "npm run program-circle:compile && npm run program-circle:verify && node dist/scripts/deploy-programmed-circle.js",
     "circle:programmed:deploy:dist": "node dist/scripts/deploy-programmed-circle.js",
     "circle:programmed:update-code": "npm run build && node dist/scripts/update-programmed-circle-code.js",

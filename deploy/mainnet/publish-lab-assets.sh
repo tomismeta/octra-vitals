@@ -22,17 +22,22 @@ set -a
 set +a
 
 LAB_CIRCLE_ID="${VITALS_LAB_SITE_CIRCLE_ID:-}"
-if [ -z "${LAB_CIRCLE_ID}" ] && [ "${CREATE_LAB_SITE_CIRCLE}" != "1" ] && [ -n "${VITALS_LAB_HISTORY_DATABASE_URI:-}" ]; then
-  LAB_CIRCLE_ID="$(node -e '
+
+if [ -z "${LAB_CIRCLE_ID}" ] && [ "${CREATE_LAB_SITE_CIRCLE}" != "1" ]; then
+  echo "VITALS_LAB_SITE_CIRCLE_ID is required unless VITALS_LAB_SITE_CIRCLE_CREATE=1" >&2
+  exit 1
+fi
+
+if [ -n "${LAB_CIRCLE_ID}" ] && [ -n "${VITALS_LAB_HISTORY_DATABASE_URI:-}" ]; then
+  DB_CIRCLE_ID="$(node -e '
 const uri = process.env.VITALS_LAB_HISTORY_DATABASE_URI || "";
 const match = uri.match(/^oct:\/\/[^/]+\/([^/?#]+)/);
 if (match) process.stdout.write(match[1]);
 ')"
-fi
-
-if [ -z "${LAB_CIRCLE_ID}" ] && [ "${CREATE_LAB_SITE_CIRCLE}" != "1" ]; then
-  echo "VITALS_LAB_SITE_CIRCLE_ID or VITALS_LAB_HISTORY_DATABASE_URI is required" >&2
-  exit 1
+  if [ -n "${DB_CIRCLE_ID}" ] && [ "${LAB_CIRCLE_ID}" = "${DB_CIRCLE_ID}" ]; then
+    echo "VITALS_LAB_SITE_CIRCLE_ID must be a public Lab Web Circle distinct from the sealed Lab DB Circle" >&2
+    exit 1
+  fi
 fi
 
 export VITALS_SITE_RELEASE_KIND=lab
@@ -83,6 +88,18 @@ try {
 if [ -z "${LAB_CIRCLE_ID}" ]; then
   echo "Lab asset deploy report did not contain circle_id" >&2
   exit 1
+fi
+
+if [ -n "${VITALS_LAB_HISTORY_DATABASE_URI:-}" ]; then
+  DB_CIRCLE_ID="$(node -e '
+const uri = process.env.VITALS_LAB_HISTORY_DATABASE_URI || "";
+const match = uri.match(/^oct:\/\/[^/]+\/([^/?#]+)/);
+if (match) process.stdout.write(match[1]);
+')"
+  if [ -n "${DB_CIRCLE_ID}" ] && [ "${LAB_CIRCLE_ID}" = "${DB_CIRCLE_ID}" ]; then
+    echo "Lab asset deploy resolved to the sealed Lab DB Circle; refusing mixed boundary" >&2
+    exit 1
+  fi
 fi
 
 set_env() {

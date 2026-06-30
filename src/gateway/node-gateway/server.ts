@@ -30,6 +30,9 @@ const port = Number(process.env.PORT || 4173);
 const staleAfterMs = Number(process.env.VITALS_STALE_AFTER_MS || 20 * 60_000);
 const latestReadTtlMs = Number(process.env.VITALS_LATEST_READ_TTL_MS || 15_000);
 const historyReadTtlMs = Number(process.env.VITALS_HISTORY_READ_TTL_MS || 60_000);
+const labQueryMaxConcurrent = Math.max(1, Number(process.env.VITALS_LAB_QUERY_MAX_CONCURRENT || 2));
+const labQueryRateWindowMs = Math.max(1_000, Number(process.env.VITALS_LAB_QUERY_RATE_WINDOW_MS || 60_000));
+const labQueryRateMax = Math.max(1, Number(process.env.VITALS_LAB_QUERY_RATE_MAX || 30));
 const gatewayRole = process.env.VITALS_GATEWAY_ROLE || "dev";
 const exposeErrors = process.env.VITALS_EXPOSE_ERRORS === "1";
 const corsAllowOrigin = process.env.VITALS_CORS_ALLOW_ORIGIN || "*";
@@ -88,6 +91,8 @@ let liveVerificationCache: { address: string; checked_at: string; value: Record<
 let circleProgramVerificationCache: { circle_id: string; checked_at: string; value: Record<string, any> } | null = null;
 let circleMetadataCache: { circle_id: string; checked_at: number; value: CircleMetadata } | null = null;
 let circleMetadataReadInFlight: { circle_id: string; promise: Promise<CircleMetadata> } | null = null;
+let activeLabQueries = 0;
+const labQueryRates = new Map<string, { startedAt: number; count: number }>();
 let siteIntegrityCache: { circle_id: string; checked_at: string; value: Record<string, any> } | null = null;
 let siteIntegrityReadInFlight: { circle_id: string; promise: Promise<Record<string, any> | null> } | null = null;
 let nativeReceiptProofCache = new Map<string, {
@@ -1899,6 +1904,37 @@ function labWriteRequired(res: http.ServerResponse, head = false): void {
   }, {}, head);
 }
 
+function labQueryClientKey(req: http.IncomingMessage): string {
+  const forwarded = labHeaderValue(req, "x-forwarded-for")?.split(",")[0]?.trim();
+  return forwarded || req.socket.remoteAddress || "unknown";
+}
+
+function labQueryRateAllowed(req: http.IncomingMessage): boolean {
+  const now = Date.now();
+  const key = labQueryClientKey(req);
+  for (const [client, bucket] of labQueryRates.entries()) {
+    if (now - bucket.startedAt > labQueryRateWindowMs * 2) labQueryRates.delete(client);
+  }
+  const bucket = labQueryRates.get(key);
+  if (!bucket || now - bucket.startedAt >= labQueryRateWindowMs) {
+    labQueryRates.set(key, { startedAt: now, count: 1 });
+    return true;
+  }
+  if (bucket.count >= labQueryRateMax) return false;
+  bucket.count += 1;
+  return true;
+}
+
+function acquireLabQuerySlot(): boolean {
+  if (activeLabQueries >= labQueryMaxConcurrent) return false;
+  activeLabQueries += 1;
+  return true;
+}
+
+function releaseLabQuerySlot(): void {
+  activeLabQueries = Math.max(0, activeLabQueries - 1);
+}
+
 async function serveLabApi(req: http.IncomingMessage, res: http.ServerResponse, url: URL, head = false): Promise<void> {
   const config = octraSqliteConfig();
   if (!config.enabled) return notFound(res, head);
@@ -1940,10 +1976,23 @@ async function serveLabApi(req: http.IncomingMessage, res: http.ServerResponse, 
     }, {}, head);
   }
   if (url.pathname === "/api/lab/query" && req.method === "POST") {
+    if (!labQueryRateAllowed(req)) {
+      return json(res, 429, {
+        error: "lab_query_rate_limited",
+        message: "Too many Lab queries. Wait a moment and retry."
+      }, { "Retry-After": String(Math.ceil(labQueryRateWindowMs / 1000)) }, head);
+    }
+    if (!acquireLabQuerySlot()) {
+      return json(res, 503, {
+        error: "lab_query_busy",
+        message: "Lab query capacity is busy. Retry shortly."
+      }, {}, head);
+    }
     let body: Record<string, any>;
     try {
       body = await readRequestJson(req);
     } catch {
+      releaseLabQuerySlot();
       return json(res, 400, {
         error: "invalid_json_body",
         message: "Expected a JSON body with sql and optional limit."
@@ -1963,6 +2012,8 @@ async function serveLabApi(req: http.IncomingMessage, res: http.ServerResponse, 
           "Result is too large for one Circle read, or the query is unsupported. Lower the limit or select fewer columns."
         )
       }, {}, head);
+    } finally {
+      releaseLabQuerySlot();
     }
   }
   if (url.pathname === "/api/lab/mirror/sync" && req.method === "POST") {

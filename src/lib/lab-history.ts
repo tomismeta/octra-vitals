@@ -1,5 +1,5 @@
 import { encodeSummaryRow, summaryHash, type ProgramHistoryEra, type ProgramHistoryWindow, type SummaryRow } from "./summary-window.js";
-import { octraSqliteOpen, sqlJson, sqlNumber, sqlString, type OctraSqliteQueryResult, rowsAsObjects } from "./octra-sqlite-client.js";
+import { octraSqliteConfig, octraSqliteOpen, sqlJson, sqlNumber, sqlString, type OctraSqliteQueryResult, rowsAsObjects } from "./octra-sqlite-client.js";
 
 export const LAB_HISTORY_SCHEMA = "octra-vitals-lab-history-v0";
 export const LAB_HISTORY_TRANSFORM_VERSION = "octra-vitals-lab-history-transform-v0";
@@ -98,12 +98,15 @@ function proofTruncated(history: ProgramHistoryWindow): boolean {
 }
 
 function insertMirrorMeta(): string[] {
+  const config = octraSqliteConfig();
   return [
+    "delete from mirror_meta where key = 'devnet_only'",
     `insert or replace into mirror_meta(key, value) values ('schema', ${sqlString(LAB_HISTORY_SCHEMA)})`,
     "insert or replace into mirror_meta(key, value) values ('canonical_state_source', 'aml_fact_ledger')",
     "insert or replace into mirror_meta(key, value) values ('mirror_role', 'derived_readback_cache')",
     "insert or replace into mirror_meta(key, value) values ('mirror_canonical', 'false')",
-    "insert or replace into mirror_meta(key, value) values ('devnet_only', 'true')"
+    `insert or replace into mirror_meta(key, value) values ('mirror_network', ${sqlString(config.network)})`,
+    `insert or replace into mirror_meta(key, value) values ('mainnet_explicitly_enabled', ${sqlString(config.network === "mainnet" && process.env.VITALS_LAB_HISTORY_ALLOW_MAINNET === "1" ? "true" : "false")})`
   ];
 }
 

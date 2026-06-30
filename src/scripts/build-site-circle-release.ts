@@ -31,11 +31,6 @@ function octUri(path: string): string {
   return siteCircleId === "pending" ? "pending" : `oct://${siteCircleId}${path}`;
 }
 
-function circleIdFromOctUri(uri: string | undefined): string | null {
-  const match = uri?.match(/^oct:\/\/[^/]+\/([^/?#]+)/);
-  return match?.[1] || null;
-}
-
 function gitText(args: string[]): string | null {
   try {
     return execFileSync("git", args, { cwd: root, encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] }).trim();
@@ -68,10 +63,7 @@ const assets: string[] = releaseAssets.length
 const siteCircleId = releaseKind === "lab"
   ? process.env.VITALS_LAB_SITE_CIRCLE_CREATE === "1"
     ? process.env.VITALS_LAB_SITE_CIRCLE_ID || "pending"
-    : process.env.VITALS_LAB_SITE_CIRCLE_ID
-      || circleIdFromOctUri(process.env.VITALS_LAB_HISTORY_DATABASE_URI)
-      || process.env.VITALS_SITE_CIRCLE_ID
-      || "pending"
+    : process.env.VITALS_LAB_SITE_CIRCLE_ID || "pending"
   : process.env.VITALS_SITE_CIRCLE_ID || vitalsManifest.site_circle_id || "pending";
 const programmedCircleId = process.env.VITALS_PROGRAMMED_CIRCLE_ID || vitalsManifest.programmed_circle_id || "pending";
 const stateTargetMode = process.env.VITALS_STATE_TARGET_MODE === "circle_program" ? "circle_program" : "state_program";

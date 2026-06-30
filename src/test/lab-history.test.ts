@@ -238,6 +238,8 @@ test("lab mirror SQL preserves AML authority and derived query fields", () => {
   assert.match(sql, /insert or replace into mirror_meta/);
   assert.match(sql, /canonical_state_source/);
   assert.match(sql, /aml_fact_ledger/);
+  assert.match(sql, /mirror_network/);
+  assert.doesNotMatch(sql, /values \('devnet_only'/);
   assert.match(sql, /insert or replace into snapshots/);
   assert.match(sql, /circle_program:octDevCircle/);
   assert.match(sql, /insert or replace into core_accounting_facts/);
@@ -284,7 +286,8 @@ test("site release keeps Lab assets out of the core Circle and builds a separate
     VITALS_STATE_TARGET_MODE: "circle_program",
     VITALS_LAB_HISTORY_ENABLED: "1",
     VITALS_INCLUDE_LAB_HISTORY_ASSETS: "1",
-    VITALS_LAB_HISTORY_DATABASE_URI: "oct://devnet/octLabDatabaseCircle"
+    VITALS_LAB_HISTORY_DATABASE_URI: "oct://devnet/octLabDatabaseCircle",
+    VITALS_LAB_SITE_CIRCLE_ID: "octLabWebCircle"
   };
 
   await execFileAsync(process.execPath, ["dist/scripts/build-site-circle-release.js", coreOut], { env });
@@ -299,6 +302,6 @@ test("site release keeps Lab assets out of the core Circle and builds a separate
   assert.doesNotMatch(corePaths.join("\n"), /lab-history/);
   assert.equal(labRelease.release_kind, "lab");
   assert.deepEqual(labPaths, ["/lab-history.html", "/lab-history.css", "/lab-history.js"]);
-  assert.equal(labRelease.site_circle_id, "octLabDatabaseCircle");
+  assert.equal(labRelease.site_circle_id, "octLabWebCircle");
   assert.equal(labRelease.entry, "/lab-history.html");
 });
