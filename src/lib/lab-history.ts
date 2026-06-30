@@ -299,6 +299,15 @@ interface BuildLabHistoryMirrorOptions {
   mirroredLatestIndex?: number;
 }
 
+interface LabHistoryMirrorPlan {
+  sourceRows: SummaryRow[];
+  rows: SummaryRow[];
+  completeThroughIndex: number;
+  mirroredLatestIndex: number;
+  complete: boolean;
+  pendingRowCount: number;
+}
+
 function completionStatements(
   history: ProgramHistoryWindow,
   source: LabHistorySource,
@@ -443,6 +452,28 @@ function syncTailRows(): number {
   return Number.isFinite(configured) && configured > 0 ? Math.trunc(configured) : 0;
 }
 
+export function planLabHistoryMirrorRows(
+  history: ProgramHistoryWindow,
+  completeBeforeRun: number,
+  maxRows: number,
+  tailRows = 0
+): LabHistoryMirrorPlan {
+  const sourceRows = tailRows > 0 ? history.rows.slice(-tailRows) : history.rows;
+  const missingRows = sourceRows.filter((row) => row.snapshot_index > completeBeforeRun);
+  const rows = missingRows.slice(0, maxRows).sort((a, b) => a.snapshot_index - b.snapshot_index);
+  const completeThroughIndex = contiguousCompleteThrough(sourceRows, completeBeforeRun, rows);
+  const mirroredLatestIndex = Math.max(completeBeforeRun, rows[rows.length - 1]?.snapshot_index || 0);
+  const complete = sourceRows.length > 0 && completeThroughIndex === latestIndex(history);
+  return {
+    sourceRows,
+    rows,
+    completeThroughIndex,
+    mirroredLatestIndex,
+    complete,
+    pendingRowCount: sourceRows.filter((row) => row.snapshot_index > completeThroughIndex).length
+  };
+}
+
 function statementBatches(statements: string[], maxBytes = maxSyncSqlBytes()): string[][] {
   const batches: string[][] = [];
   let current: string[] = [];
@@ -462,23 +493,18 @@ function statementBatches(statements: string[], maxBytes = maxSyncSqlBytes()): s
 }
 
 export async function mirrorLabHistory(history: ProgramHistoryWindow, source: LabHistorySource): Promise<LabHistoryMirrorSummary> {
-  const sourceRows = syncTailRows() > 0 ? history.rows.slice(-syncTailRows()) : history.rows;
-  const existing = await existingCompleteSnapshotIndexes(source, sourceRows[0]?.snapshot_index || 0, latestIndex(history));
-  const missingRows = sourceRows.filter((row) => !existing.has(row.snapshot_index));
-  const rows = missingRows.slice(0, maxSyncRows()).sort((a, b) => a.snapshot_index - b.snapshot_index);
-  const allCompleteAfterRun = new Set([...existing, ...rows.map((row) => row.snapshot_index)]);
-  const completeThroughIndex = contiguousCompleteThrough(sourceRows, allCompleteAfterRun);
-  const mirroredLatestIndex = Math.max(0, ...Array.from(allCompleteAfterRun));
-  const complete = sourceRows.length > 0 && completeThroughIndex === latestIndex(history);
-  const includeCatalog = existing.size === 0;
+  const watermark = await readWatermark(source);
+  const completeBeforeRun = watermark?.last_complete_snapshot_index || 0;
+  const plan = planLabHistoryMirrorRows(history, completeBeforeRun, maxSyncRows(), syncTailRows());
+  const includeCatalog = completeBeforeRun === 0;
   const { statements, summary } = buildLabHistoryMirrorStatements(history, source, isoNow(), {
-    rows,
-    sourceRows,
-    complete,
+    rows: plan.rows,
+    sourceRows: plan.sourceRows,
+    complete: plan.complete,
     includeCatalog,
-    pendingRowCount: Math.max(0, sourceRows.length - allCompleteAfterRun.size),
-    completeThroughIndex,
-    mirroredLatestIndex
+    pendingRowCount: plan.pendingRowCount,
+    completeThroughIndex: plan.completeThroughIndex,
+    mirroredLatestIndex: plan.mirroredLatestIndex
   });
   for (const batch of statementBatches(statements)) {
     try {
@@ -492,32 +518,17 @@ export async function mirrorLabHistory(history: ProgramHistoryWindow, source: La
   return summary;
 }
 
-function contiguousCompleteThrough(sourceRows: SummaryRow[], completeIndexes: Set<number>): number {
+function contiguousCompleteThrough(sourceRows: SummaryRow[], completeBeforeRun: number, rowsWritten: SummaryRow[]): number {
   let through = 0;
+  const written = new Set(rowsWritten.map((row) => row.snapshot_index));
   for (const row of sourceRows) {
-    if (!completeIndexes.has(row.snapshot_index)) break;
-    through = row.snapshot_index;
+    if (row.snapshot_index <= completeBeforeRun || written.has(row.snapshot_index)) {
+      through = row.snapshot_index;
+      continue;
+    }
+    break;
   }
   return through;
-}
-
-async function existingCompleteSnapshotIndexes(source: LabHistorySource, firstIndex: number, latestIndexValue: number): Promise<Set<number>> {
-  if (!firstIndex || !latestIndexValue || latestIndexValue < firstIndex) return new Set();
-  const result = rowsAsObjects(await octraSqliteOpen(`
-    select s.snapshot_index
-    from snapshots s
-    join core_accounting_facts c on c.snapshot_index = s.snapshot_index
-    join snapshot_verifications v on v.snapshot_index = s.snapshot_index and v.verification_type = 'aml_history_readback' and v.status = 'verified'
-    where s.snapshot_index between ${sqlNumber(firstIndex)} and ${sqlNumber(latestIndexValue)}
-      and s.source_id = ${sqlString(sourceId(source))}
-      and (
-        select count(*)
-        from derived_snapshot_metrics d
-        where d.snapshot_index = s.snapshot_index
-          and d.metric_key in ('public_balance_raw', 'bridge_gap_raw', 'unclassified_raw', 'woct_coverage_ppm')
-      ) = 4
-  `));
-  return new Set(result.rows.map((row) => Number(row.snapshot_index)).filter((value) => Number.isInteger(value)));
 }
 
 export async function labTables(): Promise<OctraSqliteQueryResult> {

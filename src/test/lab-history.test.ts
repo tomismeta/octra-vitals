@@ -3,9 +3,9 @@ import test from "node:test";
 import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
 
-import { buildLabHistoryMirrorSql } from "../lib/lab-history.js";
+import { buildLabHistoryMirrorSql, planLabHistoryMirrorRows } from "../lib/lab-history.js";
 import { normalizeReadOnlySql, octraSqliteConfig, octraSqliteQueryProof, parseOctraSqliteOutput } from "../lib/octra-sqlite-client.js";
-import type { ProgramHistoryWindow } from "../lib/summary-window.js";
+import type { ProgramHistoryWindow, SummaryRow } from "../lib/summary-window.js";
 
 function sampleHistory(): ProgramHistoryWindow {
   return {
@@ -239,6 +239,28 @@ test("lab mirror SQL preserves AML authority and derived query fields", () => {
   assert.match(sql, /public_balance_raw/);
   assert.match(sql, /unclassified_raw/);
   assert.match(sql, /woct_coverage_ppm/);
+});
+
+test("lab mirror planner advances from completion watermark without enumerating old rows", () => {
+  const history = sampleHistory();
+  const base: SummaryRow = history.rows[1]!;
+  history.rows = [history.rows[0]!, history.rows[1]!, 12, 13, 14].map((index, offset) => {
+    if (typeof index !== "number") return index;
+    return {
+      ...base,
+      snapshot_index: index,
+      observed_at_unix: 1_798_001_800 + (offset - 2) * 900,
+      octra_epoch: 113 + index
+    };
+  });
+
+  const plan = planLabHistoryMirrorRows(history, 11, 2);
+
+  assert.deepEqual(plan.rows.map((row) => row.snapshot_index), [12, 13]);
+  assert.equal(plan.completeThroughIndex, 13);
+  assert.equal(plan.mirroredLatestIndex, 13);
+  assert.equal(plan.pendingRowCount, 1);
+  assert.equal(plan.complete, false);
 });
 
 test("core snapshot updater does not depend on the optional Lab mirror", async () => {
