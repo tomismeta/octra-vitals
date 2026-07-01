@@ -8,7 +8,7 @@ import { promisify } from "node:util";
 
 import { buildLabHistoryMirrorSql, mirrorLabHistory, planLabHistoryMirrorRows } from "../lib/lab-history.js";
 import { normalizeReadOnlySql, octraSqliteConfig, octraSqliteQueryProof, parseOctraSqliteOutput } from "../lib/octra-sqlite-client.js";
-import { runLabHistoryMirror } from "../scripts/run-lab-history-mirror.js";
+import { acquireLock, runLabHistoryMirror } from "../scripts/run-lab-history-mirror.js";
 import type { ProgramHistoryWindow, SummaryRow } from "../lib/summary-window.js";
 
 const execFileAsync = promisify(execFile);
@@ -131,6 +131,13 @@ test("lab query guard rejects mutating SQL", () => {
   assert.throws(() => normalizeReadOnlySql("delete from snapshots"), /only_select_queries_allowed/);
   assert.throws(() => normalizeReadOnlySql("select 1; drop table snapshots"), /only_one_read_only_statement_allowed/);
   assert.throws(() => normalizeReadOnlySql("select * from snapshots -- nope"), /sql_comments_not_allowed/);
+});
+
+test("lab query guard rejects unsafe SQLite extension functions", () => {
+  assert.throws(() => normalizeReadOnlySql("select load_extension('x')"), /unsafe_sql_function_not_allowed/);
+  assert.throws(() => normalizeReadOnlySql("select readfile('/etc/passwd')"), /unsafe_sql_function_not_allowed/);
+  assert.throws(() => normalizeReadOnlySql("select writefile('/tmp/x', 'x')"), /unsafe_sql_function_not_allowed/);
+  assert.throws(() => normalizeReadOnlySql("select fileio_write('/tmp/x', 'x')"), /unsafe_sql_function_not_allowed/);
 });
 
 test("octra-sqlite output parser accepts query and write envelopes", () => {
@@ -365,6 +372,26 @@ test("lab mirror replaces a dead-pid lock instead of skipping", async () => {
 
     assert.equal(report.status, "skipped");
     assert.notEqual(report.reason, "mirror_already_running");
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("lab mirror stale-lock reclaim does not steal the fresh active lock", async () => {
+  const dir = await mkdtemp(join(tmpdir(), `octra-vitals-lab-lock-reclaim-${process.pid}-`));
+  const lockPath = join(dir, "lab-history-mirror.lock");
+  await writeFile(lockPath, JSON.stringify({
+    run_id: "dead-run",
+    pid: 999_999_999,
+    created_at: "2026-01-01T00:00:00Z"
+  }, null, 2));
+
+  try {
+    const first = await acquireLock(lockPath, "first-reclaimer", 0);
+    assert.ok(first);
+    const second = await acquireLock(lockPath, "second-reclaimer", 10 * 60_000);
+    assert.equal(second, null);
+    await first.release();
   } finally {
     await rm(dir, { recursive: true, force: true });
   }

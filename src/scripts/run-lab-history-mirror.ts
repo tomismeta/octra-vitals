@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { mkdir, readFile, readdir, rm, stat, unlink, writeFile } from "node:fs/promises";
+import { mkdir, readFile, readdir, rename, rm, stat, unlink, writeFile } from "node:fs/promises";
 import { realpathSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -76,7 +76,7 @@ function processIsRunning(pid: unknown): boolean {
   }
 }
 
-async function acquireLock(lockPath: string, runId: string, staleMs: number): Promise<MirrorLock | null> {
+export async function acquireLock(lockPath: string, runId: string, staleMs: number): Promise<MirrorLock | null> {
   const payload = JSON.stringify({ run_id: runId, pid: process.pid, created_at: isoNow() }, null, 2);
   try {
     await mkdir(dirname(lockPath), { recursive: true });
@@ -93,8 +93,21 @@ async function acquireLock(lockPath: string, runId: string, staleMs: number): Pr
       stale = true;
     }
     if (!stale) return null;
-    await unlink(lockPath).catch(() => undefined);
-    await writeFile(lockPath, `${payload}\n`, { flag: "wx" });
+    const reclaimedPath = `${lockPath}.reclaimed.${fileSafe(runId)}`;
+    try {
+      await rename(lockPath, reclaimedPath);
+    } catch (reclaimError: any) {
+      if (reclaimError?.code === "ENOENT" || reclaimError?.code === "EEXIST") return null;
+      throw reclaimError;
+    }
+    try {
+      await writeFile(lockPath, `${payload}\n`, { flag: "wx" });
+    } catch (writeError: any) {
+      if (writeError?.code === "EEXIST") return null;
+      throw writeError;
+    } finally {
+      await rm(reclaimedPath, { force: true });
+    }
   }
   return {
     path: lockPath,

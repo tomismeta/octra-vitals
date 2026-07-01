@@ -252,6 +252,8 @@ function requestedLimit(limit: unknown): number {
   return Math.min(parsed, MAX_LIMIT);
 }
 
+const unsafeSqlFunctions = /\b(load_extension|readfile|writefile|fileio_[a-z0-9_]*|fsdir|lsmode)\s*\(/i;
+
 export function normalizeReadOnlySql(sql: string, limit?: unknown): { sql: string; limit: number } {
   const trimmed = sql.trim().replace(/;+\s*$/, "");
   const cappedLimit = requestedLimit(limit);
@@ -262,6 +264,7 @@ export function normalizeReadOnlySql(sql: string, limit?: unknown): { sql: strin
   if (/\b(insert|update|delete|drop|alter|create|replace|attach|detach|vacuum|reindex|pragma|begin|commit|rollback)\b/i.test(trimmed)) {
     throw new Error("only_read_only_queries_allowed");
   }
+  if (unsafeSqlFunctions.test(trimmed)) throw new Error("unsafe_sql_function_not_allowed");
   return {
     sql: `select * from (${trimmed}) limit ${cappedLimit}`,
     limit: cappedLimit
