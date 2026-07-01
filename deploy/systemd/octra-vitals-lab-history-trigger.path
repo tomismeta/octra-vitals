@@ -1,0 +1,10 @@
+[Unit]
+Description=Wake Octra Vitals Lab history mirror after confirmed AML writes
+
+[Path]
+PathModified=/var/lib/octra-vitals/lab-history-trigger
+PathChanged=/var/lib/octra-vitals/lab-history-trigger/latest.json
+Unit=octra-vitals-lab-history-mirror.service
+
+[Install]
+WantedBy=multi-user.target

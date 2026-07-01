@@ -50,6 +50,42 @@ function envInt(name: string, fallback: number): number {
   return Math.max(0, Math.floor(value));
 }
 
+function confirmedAmlWrite(report: Record<string, any>): boolean {
+  return report.submit_enabled === true &&
+    report.status === "confirmed" &&
+    typeof report.tx_hash === "string" &&
+    report.tx_hash.length > 0 &&
+    report.readback &&
+    Number(report.readback.latest_snapshot_index || 0) === Number(report.snapshot_index || 0);
+}
+
+async function writePostAmlWriteTrigger(report: Record<string, any>, triggerPath: string | null): Promise<Record<string, unknown>> {
+  if (!triggerPath) {
+    return { enabled: false, reason: "trigger_path_not_configured" };
+  }
+  if (!confirmedAmlWrite(report)) {
+    return { enabled: true, written: false, reason: "snapshot_write_not_confirmed" };
+  }
+  const path = resolve(triggerPath);
+  const payload = {
+    schema: "octra-vitals-post-aml-write-trigger-v0",
+    generated_at: isoNow(),
+    run_id: report.run_id,
+    snapshot_id: report.snapshot_id,
+    snapshot_index: report.snapshot_index,
+    tx_hash: report.tx_hash,
+    status: report.status,
+    target_kind: report.target_kind || null,
+    target_id: report.target_id || report.program_address || report.circle_id || null
+  };
+  try {
+    await writeJsonAtomic(path, payload);
+    return { enabled: true, written: true, path, snapshot_index: report.snapshot_index };
+  } catch (error) {
+    return { enabled: true, written: false, path, error: errorMessage(error) };
+  }
+}
+
 interface RetentionResult {
   path: string;
   removed: string[];
@@ -254,6 +290,7 @@ async function runSnapshotUpdate(): Promise<Record<string, any>> {
   const pendingSubmissionPath = join(runDir, "pending_submission.json");
   const runReportPath = join(runDir, "snapshot_update_report.json");
   const latestRunReportPath = join(dataDir, "latest_snapshot_update_report.json");
+  const labHistoryTriggerPath = process.env.VITALS_LAB_HISTORY_TRIGGER_PATH || join(dataDir, "lab-history-trigger", "latest.json");
   const timings: Record<string, number> = {};
   let collectAttempts: Array<Record<string, unknown>> = [];
   const totalStarted = performance.now();
@@ -266,6 +303,7 @@ async function runSnapshotUpdate(): Promise<Record<string, any>> {
     submit_report: submitReportPath,
     run_report: runReportPath,
     latest_run_report: latestRunReportPath,
+    lab_history_trigger: labHistoryTriggerPath,
     lock: lockPath
   };
 
@@ -293,6 +331,7 @@ async function runSnapshotUpdate(): Promise<Record<string, any>> {
       timings_ms: timings
     };
     report.retention = await timed(timings, "retention_ms", () => applyRetention(dataDir, runDir, evidenceDir));
+    report.lab_history_trigger = await timed(timings, "post_aml_write_trigger_ms", () => writePostAmlWriteTrigger(report, labHistoryTriggerPath));
     timings.total_ms = ms(performance.now() - totalStarted);
     report.timings_ms = timings;
     await writeSubmitSnapshotReport(report, submitReportPath);

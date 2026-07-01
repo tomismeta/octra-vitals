@@ -109,6 +109,7 @@ set_env "${updater_env}" VITALS_CIRCLE_OPERATOR_ADDRESS "${operator}" 600 root
 set_env "${updater_env}" VITALS_SITE_CIRCLE_ID "${circle_id}" 600 root
 set_env "${updater_env}" VITALS_STATIC_ASSET_SOURCE "${STATIC_ASSET_SOURCE}" 600 root
 set_env "${updater_env}" VITALS_SUBMIT "${SUBMIT_DEFAULT}" 600 root
+set_env "${updater_env}" VITALS_LAB_HISTORY_TRIGGER_PATH "${DATA_DIR}/lab-history-trigger/latest.json" 600 root
 set_env "${lab_env}" VITALS_GATEWAY_ROLE "${GATEWAY_ROLE}"
 set_env "${lab_env}" VITALS_DATA_DIR "${DATA_DIR}"
 set_env "${lab_env}" VITALS_STATE_SOURCE_MODE "${STATE_SOURCE_MODE}"

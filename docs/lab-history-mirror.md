@@ -81,9 +81,9 @@ The production deployment boundary is three Circles:
 
 `VITALS_LAB_SITE_CIRCLE_ID` is required for lab asset publishing unless `VITALS_LAB_SITE_CIRCLE_CREATE=1` is set for the one-time Lab Web Circle creation. It must be distinct from the Circle id in `VITALS_LAB_HISTORY_DATABASE_URI`; the SQLite database Circle stays sealed and is not used as a static asset host.
 
-The Lab mirror is decoupled from the core snapshot updater. The core updater collects data, writes AML, verifies readback, and updates the public Vitals receipt. A separate `octra-vitals-lab-history-mirror` worker reads verified AML history and mirrors missing rows into the SQLite Circle. If the mirror fails or lags, the canonical AML snapshot and public site remain valid.
+The Lab mirror is decoupled from the core snapshot updater. The core updater collects data, writes AML, verifies readback, and updates the public Vitals receipt. After a confirmed AML write, it writes a small local marker at `VITALS_LAB_HISTORY_TRIGGER_PATH`; `octra-vitals-lab-history-trigger.path` wakes the separate `octra-vitals-lab-history-mirror` worker. The worker reads verified AML history and mirrors missing rows into the SQLite Circle. If the mirror fails or lags, the canonical AML snapshot and public site remain valid.
 
-Mirror runs are intentionally incremental and exist for regular catch-up plus repair/backfill. Each run reads verified AML history, skips snapshots already present as complete rows in the lab database, writes a bounded oldest-missing chunk, and writes the completion watermark last. This avoids giant Circle writes and prevents a failed partial sync from being reported as complete. `VITALS_LAB_HISTORY_SYNC_TAIL_ROWS` can limit the mirrored range to a recent tail; `0` means the available verified AML history range.
+Mirror runs are intentionally incremental and exist for post-AML-write follow-up plus repair/backfill. Each run reads verified AML history, exits before any Circle write when the mirror is already complete, writes a bounded oldest-missing chunk when rows are missing, and writes the completion watermark last. This avoids giant Circle writes, prevents a failed partial sync from being reported as complete, and prevents empty catch-up runs from spending OCT. `VITALS_LAB_HISTORY_SYNC_TAIL_ROWS` can limit the mirrored range to a recent tail; `0` means the available verified AML history range.
 
 Lab reads do not require a token. The query endpoint accepts bounded read-only `select` / `with` SQL so reviewers can inspect the derived mirror without wallet or operator access, and the gateway applies a small concurrency/rate guard before spawning `octra-sqlite`. Each query response includes a proof envelope with the database Circle, RPC URL, JSON-RPC method, Circle method, normalized SQL, limit, and normalized SQL hash. Vitals does not expose raw JSON-RPC request/response traces from lab queries. Admin mirror repair/backfill is the only token-gated path: `VITALS_LAB_HISTORY_WRITE_TOKEN` protects `/api/lab/mirror/sync`. Keep this host-local and out of git/chat; it is an operator secret, not a wallet key or OCT token.
 
@@ -111,11 +111,17 @@ Only `select` / `with` statements are accepted. Mutating statements, comments, m
 
 `/api/lab/mirror/sync` reads canonical AML history through the same verified path as `/api/history`, then writes derived rows into the lab database. This endpoint is an operator repair/backfill tool; the primary automated path is the separate Lab mirror worker. The response includes `row_count`, `pending_row_count`, and `complete` so operators can tell whether more sync passes are needed.
 
-The preferred operator path is the worker:
+The preferred automated path is the post-AML-write trigger:
+
+```bash
+sudo systemctl enable --now octra-vitals-lab-history-trigger.path
+sudo systemctl disable --now octra-vitals-lab-history-mirror.timer
+```
+
+The timer is only a repair/backfill lane:
 
 ```bash
 sudo systemctl start octra-vitals-lab-history-mirror.service
-sudo systemctl enable --now octra-vitals-lab-history-mirror.timer
 sudo cat /var/lib/octra-vitals/latest_lab_history_mirror_report.json
 ```
 

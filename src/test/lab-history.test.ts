@@ -302,6 +302,31 @@ test("lab mirror confirms post-write readback before reporting success", async (
   assert.equal(summary.complete, true);
 });
 
+test("lab mirror performs no Circle writes when already complete", async () => {
+  const history = sampleHistory();
+  let writes = 0;
+  const open = async (sql: string) => {
+    if (/select\s+source_range_first_index/i.test(sql)) {
+      return sqliteResult(
+        ["source_range_first_index", "source_range_latest_index", "last_complete_snapshot_index"],
+        [[10, 11, 11]]
+      );
+    }
+    writes += 1;
+    return sqliteResult([]);
+  };
+
+  const summary = await mirrorLabHistory(history, {
+    target_kind: "circle_program",
+    target_id: "octDevCircle"
+  }, open);
+
+  assert.equal(writes, 0);
+  assert.equal(summary.row_count, 0);
+  assert.equal(summary.complete, true);
+  assert.equal(summary.complete_through_index, 11);
+});
+
 test("lab mirror waits for post-write readback to become visible", async () => {
   const history = sampleHistory();
   let watermarkChecks = 0;
@@ -382,9 +407,9 @@ test("lab mirror planner advances from completion watermark without enumerating 
 test("core snapshot updater does not depend on the optional Lab mirror", async () => {
   const source = await readFile(resolve("src/scripts/run-snapshot-update.ts"), "utf8");
 
-  assert.doesNotMatch(source, /lab-history/);
+  assert.doesNotMatch(source, /from\s+["'][^"']*lab-history/);
   assert.doesNotMatch(source, /octra-sqlite/);
-  assert.doesNotMatch(source, /lab_mirror/);
+  assert.match(source, /confirmedAmlWrite/);
 });
 
 test("site release keeps Lab assets out of the core Circle and builds a separate Lab release", async () => {

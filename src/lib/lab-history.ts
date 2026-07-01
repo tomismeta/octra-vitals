@@ -456,8 +456,8 @@ function buildLabHistoryMirrorStatements(
   const latest = latestIndex(history);
   const sourceKey = sourceId(source);
   const statements = [
-    ...insertMirrorMeta(),
-    ...insertEraStatements(history, now, source.target_id),
+    ...(includeCatalog ? insertMirrorMeta() : []),
+    ...(includeCatalog ? insertEraStatements(history, now, source.target_id) : []),
     ...(includeCatalog ? insertFamilyStatements(history) : []),
     ...(includeCatalog ? insertCapsuleStatements(history, now) : []),
     ...rowStatements(history, source, runId, now, rows),
@@ -600,6 +600,9 @@ export async function mirrorLabHistory(history: ProgramHistoryWindow, source: La
     completeThroughIndex: plan.completeThroughIndex,
     mirroredLatestIndex: plan.mirroredLatestIndex
   });
+  if (!includeCatalog && plan.rows.length === 0 && plan.pendingRowCount === 0) {
+    return summary;
+  }
   for (const batch of statementBatches(statements)) {
     try {
       await open(sqlBatch(batch));

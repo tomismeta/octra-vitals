@@ -1,10 +1,10 @@
 [Unit]
-Description=Run Octra Vitals optional Lab history mirror
+Description=Repair Octra Vitals optional Lab history mirror
 
 [Timer]
-OnBootSec=3min
-OnUnitActiveSec=5min
-RandomizedDelaySec=30s
+OnBootSec=15min
+OnUnitActiveSec=1h
+RandomizedDelaySec=5min
 Persistent=true
 
 [Install]
