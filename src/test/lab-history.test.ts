@@ -458,6 +458,8 @@ test("core snapshot updater does not depend on the optional Lab mirror", async (
 test("site release keeps Lab assets out of the core Circle and builds a separate Lab release", async () => {
   const coreOut = join(tmpdir(), `octra-vitals-core-release-${process.pid}.json`);
   const labOut = join(tmpdir(), `octra-vitals-lab-release-${process.pid}.json`);
+  const auditPath = resolve("app/producer.audit.json");
+  let previousAudit: string | null = null;
   const env = {
     ...process.env,
     VITALS_STATE_TARGET_MODE: "circle_program",
@@ -467,18 +469,35 @@ test("site release keeps Lab assets out of the core Circle and builds a separate
     VITALS_LAB_SITE_CIRCLE_ID: "octLabWebCircle"
   };
 
-  await execFileAsync(process.execPath, ["dist/scripts/build-site-circle-release.js", coreOut], { env });
-  await execFileAsync(process.execPath, ["dist/scripts/build-site-circle-release.js", "--lab", labOut], { env });
+  try {
+    try {
+      previousAudit = await readFile(auditPath, "utf8");
+    } catch {
+      previousAudit = null;
+    }
 
-  const coreRelease = JSON.parse(await readFile(coreOut, "utf8"));
-  const labRelease = JSON.parse(await readFile(labOut, "utf8"));
-  const corePaths = coreRelease.assets.map((asset: any) => asset.path);
-  const labPaths = labRelease.assets.map((asset: any) => asset.path);
+    await execFileAsync(process.execPath, ["dist/scripts/build-producer-audit-manifest.js"], { env });
+    await execFileAsync(process.execPath, ["dist/scripts/build-site-circle-release.js", coreOut], { env });
+    await execFileAsync(process.execPath, ["dist/scripts/build-site-circle-release.js", "--lab", labOut], { env });
 
-  assert.equal(coreRelease.release_kind, "core");
-  assert.doesNotMatch(corePaths.join("\n"), /lab-history/);
-  assert.equal(labRelease.release_kind, "lab");
-  assert.deepEqual(labPaths, ["/lab-history.html", "/lab-history.css", "/lab-history.js"]);
-  assert.equal(labRelease.site_circle_id, "octLabWebCircle");
-  assert.equal(labRelease.entry, "/lab-history.html");
+    const coreRelease = JSON.parse(await readFile(coreOut, "utf8"));
+    const labRelease = JSON.parse(await readFile(labOut, "utf8"));
+    const corePaths = coreRelease.assets.map((asset: any) => asset.path);
+    const labPaths = labRelease.assets.map((asset: any) => asset.path);
+
+    assert.equal(coreRelease.release_kind, "core");
+    assert.doesNotMatch(corePaths.join("\n"), /lab-history/);
+    assert.equal(labRelease.release_kind, "lab");
+    assert.deepEqual(labPaths, ["/lab-history.html", "/lab-history.css", "/lab-history.js"]);
+    assert.equal(labRelease.site_circle_id, "octLabWebCircle");
+    assert.equal(labRelease.entry, "/lab-history.html");
+  } finally {
+    await rm(coreOut, { force: true });
+    await rm(labOut, { force: true });
+    if (previousAudit === null) {
+      await rm(auditPath, { force: true });
+    } else {
+      await writeFile(auditPath, previousAudit);
+    }
+  }
 });
