@@ -13,6 +13,7 @@ Environment=VITALS_GATEWAY_ROLE=production
 Environment=VITALS_STATE_SOURCE_MODE=program_required
 Environment=VITALS_LAB_HISTORY_READBACK_RETRY_ATTEMPTS=12
 Environment=VITALS_LAB_HISTORY_READBACK_RETRY_DELAY_MS=10000
+Environment=VITALS_LAB_HISTORY_START_DELAY_MS=0
 Environment=NPM_CONFIG_CACHE=/var/lib/octra-vitals/npm-cache
 EnvironmentFile=-/etc/octra-vitals/lab-history.env
 ExecStart=/usr/bin/node /opt/octra-vitals/current/dist/scripts/run-lab-history-mirror.js

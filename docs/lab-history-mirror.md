@@ -67,6 +67,7 @@ VITALS_LAB_HISTORY_WRITE_TOKEN=<host-local secret>
 VITALS_LAB_HISTORY_SYNC_SQL_MAX_BYTES=6000
 VITALS_LAB_HISTORY_SYNC_MAX_ROWS=8
 VITALS_LAB_HISTORY_SYNC_TAIL_ROWS=0
+VITALS_LAB_HISTORY_START_DELAY_MS=90000
 VITALS_LAB_HISTORY_REPORT_PATH=/var/lib/octra-vitals/latest_lab_history_mirror_report.json
 OCTRA_SQLITE_CONFIG=/etc/octra-vitals/octra-sqlite/config.json
 ```
@@ -81,7 +82,7 @@ The production deployment boundary is three Circles:
 
 `VITALS_LAB_SITE_CIRCLE_ID` is required for lab asset publishing unless `VITALS_LAB_SITE_CIRCLE_CREATE=1` is set for the one-time Lab Web Circle creation. It must be distinct from the Circle id in `VITALS_LAB_HISTORY_DATABASE_URI`; the SQLite database Circle stays sealed and is not used as a static asset host.
 
-The Lab mirror is decoupled from the core snapshot updater. The core updater collects data, writes AML, verifies readback, and updates the public Vitals receipt. After a confirmed AML write, it writes a small local marker at `VITALS_LAB_HISTORY_TRIGGER_PATH`; `octra-vitals-lab-history-trigger.path` wakes the separate `octra-vitals-lab-history-mirror` worker. The worker reads verified AML history and mirrors missing rows into the SQLite Circle. If the mirror fails or lags, the canonical AML snapshot and public site remain valid.
+The Lab mirror is decoupled from the core snapshot updater. The core updater collects data, writes AML, verifies readback, and updates the public Vitals receipt. After a confirmed AML write, it writes a small local marker at `VITALS_LAB_HISTORY_TRIGGER_PATH`; `octra-vitals-lab-history-trigger.path` wakes the separate `octra-vitals-lab-history-mirror` worker. The worker reads verified AML history and mirrors missing rows into the SQLite Circle. `VITALS_LAB_HISTORY_START_DELAY_MS` can add a short quiet period before the mirror reads the Circle again, which is useful on mainnet because the updater has just performed a write/readback burst. If the mirror fails or lags, the canonical AML snapshot and public site remain valid.
 
 Mirror runs are intentionally incremental and exist for post-AML-write follow-up plus repair/backfill. Each run reads verified AML history, exits before any Circle write when the mirror is already complete, writes a bounded oldest-missing chunk when rows are missing, and writes the completion watermark last. This avoids giant Circle writes, prevents a failed partial sync from being reported as complete, and prevents empty catch-up runs from spending OCT. The systemd service does not auto-restart on failure; a stale post-write readback should wait for the next confirmed AML trigger or an explicit operator repair run, not loop and spend. `VITALS_LAB_HISTORY_SYNC_TAIL_ROWS` can limit the mirrored range to a recent tail; `0` means the available verified AML history range.
 

@@ -51,6 +51,10 @@ function ms(value: number): number {
   return Math.round(value);
 }
 
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 function parseLockPayload(text: string): MirrorLockPayload | null {
   try {
     const parsed = JSON.parse(text) as MirrorLockPayload;
@@ -174,6 +178,7 @@ export async function runLabHistoryMirror(): Promise<Record<string, any>> {
   const manifestPath = resolve(process.env.VITALS_LAB_HISTORY_MANIFEST_PATH || join(root, "app", "vitals.manifest.json"));
   const runReportPath = join(runDir, "lab_history_mirror_report.json");
   const latestReportPath = resolve(process.env.VITALS_LAB_HISTORY_REPORT_PATH || join(dataDir, "latest_lab_history_mirror_report.json"));
+  const startDelayMs = Number(process.env.VITALS_LAB_HISTORY_START_DELAY_MS || 0);
   const timings: Record<string, number> = {};
   const totalStarted = performance.now();
   const paths = {
@@ -183,6 +188,10 @@ export async function runLabHistoryMirror(): Promise<Record<string, any>> {
     lock: lockPath,
     manifest: manifestPath
   };
+
+  if (startDelayMs > 0) {
+    await timed(timings, "start_delay_ms", () => sleep(startDelayMs));
+  }
 
   const lock = await acquireLock(lockPath, runId, lockStaleMs);
   if (!lock) {
