@@ -333,6 +333,7 @@ test("lab mirror confirms post-write readback before reporting success", async (
   assert.ok(writes > 0);
   assert.equal(summary.complete_through_index, 11);
   assert.equal(summary.complete, true);
+  assert.equal(summary.readback_status, "verified");
 });
 
 test("lab mirror performs no Circle writes when already complete", async () => {
@@ -431,9 +432,10 @@ test("lab mirror waits for post-write readback to become visible", async () => {
 
   assert.equal(watermarkChecks, 2);
   assert.equal(summary.complete_through_index, 11);
+  assert.equal(summary.readback_status, "verified");
 });
 
-test("lab mirror rejects optimistic write success when readback is stale", async () => {
+test("lab mirror marks delayed readback pending without failing the optional worker", async () => {
   const history = sampleHistory();
   const open = async (sql: string) => {
     if (/select\s+source_range_first_index/i.test(sql)) {
@@ -451,13 +453,14 @@ test("lab mirror rejects optimistic write success when readback is stale", async
     return sqliteResult([]);
   };
 
-  await assert.rejects(
-    () => withLabReadbackRetryEnv(1, 0, () => mirrorLabHistory(history, {
+  const summary = await withLabReadbackRetryEnv(1, 0, () => mirrorLabHistory(history, {
       target_kind: "circle_program",
       target_id: "octDevCircle"
-    }, open)),
-    /lab mirror readback mismatch/
-  );
+    }, open));
+
+  assert.equal(summary.readback_status, "pending");
+  assert.match(summary.readback_error || "", /lab mirror readback mismatch/);
+  assert.equal(summary.complete_through_index, 11);
 });
 
 test("lab mirror planner advances from completion watermark without enumerating old rows", () => {

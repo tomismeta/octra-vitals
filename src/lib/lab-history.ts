@@ -26,6 +26,8 @@ export interface LabHistoryMirrorSummary {
   era_count: number;
   proof_scope: string;
   proof_truncated: boolean;
+  readback_status?: "verified" | "pending";
+  readback_error?: string;
 }
 
 export interface LabHistoryWatermark {
@@ -529,21 +531,21 @@ async function verifyMirrorReadbackWithRetry(
   summary: LabHistoryMirrorSummary,
   rows: SummaryRow[],
   open: LabHistorySqlOpen
-): Promise<void> {
+): Promise<Error | null> {
   const attempts = readbackRetryAttempts();
   const delayMs = readbackRetryDelayMs();
   let lastError: unknown = null;
   for (let attempt = 1; attempt <= attempts; attempt += 1) {
     try {
       await verifyMirrorReadback(source, summary, rows, open);
-      return;
+      return null;
     } catch (error) {
       lastError = error;
       if (attempt >= attempts) break;
       await sleep(delayMs);
     }
   }
-  throw lastError instanceof Error ? lastError : new Error(String(lastError || "lab mirror readback mismatch"));
+  return lastError instanceof Error ? lastError : new Error(String(lastError || "lab mirror readback mismatch"));
 }
 
 export function planLabHistoryMirrorRows(
@@ -612,7 +614,13 @@ export async function mirrorLabHistory(history: ProgramHistoryWindow, source: La
       throw new Error(`lab mirror batch failed (${batch.length} statements, ${bytes} bytes, first: ${first}): ${error instanceof Error ? error.message : String(error)}`);
     }
   }
-  await verifyMirrorReadbackWithRetry(source, summary, plan.rows, open);
+  const readbackError = await verifyMirrorReadbackWithRetry(source, summary, plan.rows, open);
+  if (readbackError) {
+    summary.readback_status = "pending";
+    summary.readback_error = readbackError.message;
+  } else {
+    summary.readback_status = "verified";
+  }
   return summary;
 }
 
