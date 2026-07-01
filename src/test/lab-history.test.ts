@@ -86,6 +86,21 @@ function sqliteResult(columns: string[], rows: unknown[][] = []) {
   };
 }
 
+async function withLabReadbackRetryEnv<T>(attempts: number, delayMs: number, fn: () => Promise<T>): Promise<T> {
+  const previousAttempts = process.env.VITALS_LAB_HISTORY_READBACK_RETRY_ATTEMPTS;
+  const previousDelay = process.env.VITALS_LAB_HISTORY_READBACK_RETRY_DELAY_MS;
+  process.env.VITALS_LAB_HISTORY_READBACK_RETRY_ATTEMPTS = String(attempts);
+  process.env.VITALS_LAB_HISTORY_READBACK_RETRY_DELAY_MS = String(delayMs);
+  try {
+    return await fn();
+  } finally {
+    if (previousAttempts === undefined) delete process.env.VITALS_LAB_HISTORY_READBACK_RETRY_ATTEMPTS;
+    else process.env.VITALS_LAB_HISTORY_READBACK_RETRY_ATTEMPTS = previousAttempts;
+    if (previousDelay === undefined) delete process.env.VITALS_LAB_HISTORY_READBACK_RETRY_DELAY_MS;
+    else process.env.VITALS_LAB_HISTORY_READBACK_RETRY_DELAY_MS = previousDelay;
+  }
+}
+
 test("lab query guard wraps bounded read-only select SQL", () => {
   const normalized = normalizeReadOnlySql("select snapshot_index from snapshots order by snapshot_index desc", 25);
 
@@ -287,6 +302,34 @@ test("lab mirror confirms post-write readback before reporting success", async (
   assert.equal(summary.complete, true);
 });
 
+test("lab mirror waits for post-write readback to become visible", async () => {
+  const history = sampleHistory();
+  let watermarkChecks = 0;
+  const open = async (sql: string) => {
+    if (/select\s+source_range_first_index/i.test(sql)) {
+      return sqliteResult(["source_range_first_index", "source_range_latest_index", "last_complete_snapshot_index"]);
+    }
+    if (/select\s+source_range_latest_index,\s*last_complete_snapshot_index,\s*complete/i.test(sql)) {
+      watermarkChecks += 1;
+      return watermarkChecks === 1
+        ? sqliteResult(["source_range_latest_index", "last_complete_snapshot_index", "complete"], [[10, 10, 0]])
+        : sqliteResult(["source_range_latest_index", "last_complete_snapshot_index", "complete"], [[11, 11, 1]]);
+    }
+    if (/select count\(\*\) as row_count\s+from snapshots/i.test(sql)) {
+      return sqliteResult(["row_count"], [[2]]);
+    }
+    return sqliteResult([]);
+  };
+
+  const summary = await withLabReadbackRetryEnv(3, 0, () => mirrorLabHistory(history, {
+    target_kind: "circle_program",
+    target_id: "octDevCircle"
+  }, open));
+
+  assert.equal(watermarkChecks, 2);
+  assert.equal(summary.complete_through_index, 11);
+});
+
 test("lab mirror rejects optimistic write success when readback is stale", async () => {
   const history = sampleHistory();
   const open = async (sql: string) => {
@@ -306,10 +349,10 @@ test("lab mirror rejects optimistic write success when readback is stale", async
   };
 
   await assert.rejects(
-    () => mirrorLabHistory(history, {
+    () => withLabReadbackRetryEnv(1, 0, () => mirrorLabHistory(history, {
       target_kind: "circle_program",
       target_id: "octDevCircle"
-    }, open),
+    }, open)),
     /lab mirror readback mismatch/
   );
 });
