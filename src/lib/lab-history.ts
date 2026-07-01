@@ -1,5 +1,5 @@
 import { encodeSummaryRow, summaryHash, type ProgramHistoryEra, type ProgramHistoryWindow, type SummaryRow } from "./summary-window.js";
-import { octraSqliteConfig, octraSqliteOpen, sqlJson, sqlNumber, sqlString, type OctraSqliteQueryResult, rowsAsObjects } from "./octra-sqlite-client.js";
+import { octraSqliteConfig, octraSqliteOpen, sqlJson, sqlNumber, sqlString, type OctraSqliteQueryResult, type OctraSqliteResult, rowsAsObjects } from "./octra-sqlite-client.js";
 
 export const LAB_HISTORY_SCHEMA = "octra-vitals-lab-history-v0";
 export const LAB_HISTORY_TRANSFORM_VERSION = "octra-vitals-lab-history-transform-v0";
@@ -33,6 +33,8 @@ export interface LabHistoryWatermark {
   source_range_latest_index: number;
   last_complete_snapshot_index: number;
 }
+
+type LabHistorySqlOpen = (sql: string) => Promise<OctraSqliteResult>;
 
 function isoNow(): string {
   return new Date().toISOString().replace(/\.\d{3}Z$/, "Z");
@@ -365,8 +367,8 @@ function completionStatements(
   ];
 }
 
-async function readWatermark(source: LabHistorySource): Promise<LabHistoryWatermark | null> {
-  const result = rowsAsObjects(await octraSqliteOpen(`
+async function readWatermark(source: LabHistorySource, open: LabHistorySqlOpen = octraSqliteOpen): Promise<LabHistoryWatermark | null> {
+  const result = rowsAsObjects(await open(`
     select
       source_range_first_index,
       source_range_latest_index,
@@ -382,6 +384,58 @@ async function readWatermark(source: LabHistorySource): Promise<LabHistoryWaterm
     source_range_latest_index: Number(row.source_range_latest_index || 0),
     last_complete_snapshot_index: Number(row.last_complete_snapshot_index || 0)
   };
+}
+
+async function verifyMirrorReadback(
+  source: LabHistorySource,
+  summary: LabHistoryMirrorSummary,
+  rows: SummaryRow[],
+  open: LabHistorySqlOpen
+): Promise<void> {
+  const sourceKey = sourceId(source);
+  const watermark = rowsAsObjects(await open(`
+    select
+      source_range_latest_index,
+      last_complete_snapshot_index,
+      complete
+    from mirror_watermarks
+    where source_id = ${sqlString(sourceKey)}
+    limit 1
+  `)).rows[0];
+  const problems: string[] = [];
+  if (!watermark) {
+    problems.push("watermark_missing");
+  } else {
+    const sourceLatest = Number(watermark.source_range_latest_index || 0);
+    const completeThrough = Number(watermark.last_complete_snapshot_index || 0);
+    const complete = Number(watermark.complete || 0) === 1;
+    if (sourceLatest !== summary.latest_index) {
+      problems.push(`source_latest ${sourceLatest} != ${summary.latest_index}`);
+    }
+    if (completeThrough !== summary.complete_through_index) {
+      problems.push(`complete_through ${completeThrough} != ${summary.complete_through_index}`);
+    }
+    if (complete !== summary.complete) {
+      problems.push(`complete ${complete} != ${summary.complete}`);
+    }
+  }
+
+  const indices = [...new Set(rows.map((row) => row.snapshot_index))].sort((a, b) => a - b);
+  if (indices.length) {
+    const rowCheck = rowsAsObjects(await open(`
+      select count(*) as row_count
+      from snapshots
+      where snapshot_index in (${indices.map(sqlNumber).join(", ")})
+    `)).rows[0];
+    const observedRows = Number(rowCheck?.row_count || 0);
+    if (observedRows !== indices.length) {
+      problems.push(`mirrored_rows ${observedRows} != ${indices.length}`);
+    }
+  }
+
+  if (problems.length) {
+    throw new Error(`lab mirror readback mismatch: ${problems.join("; ")}`);
+  }
 }
 
 function buildLabHistoryMirrorStatements(
@@ -495,8 +549,8 @@ function statementBatches(statements: string[], maxBytes = maxSyncSqlBytes()): s
   return batches;
 }
 
-export async function mirrorLabHistory(history: ProgramHistoryWindow, source: LabHistorySource): Promise<LabHistoryMirrorSummary> {
-  const watermark = await readWatermark(source);
+export async function mirrorLabHistory(history: ProgramHistoryWindow, source: LabHistorySource, open: LabHistorySqlOpen = octraSqliteOpen): Promise<LabHistoryMirrorSummary> {
+  const watermark = await readWatermark(source, open);
   const completeBeforeRun = watermark?.last_complete_snapshot_index || 0;
   const plan = planLabHistoryMirrorRows(history, completeBeforeRun, maxSyncRows(), syncTailRows());
   const includeCatalog = completeBeforeRun === 0;
@@ -511,13 +565,14 @@ export async function mirrorLabHistory(history: ProgramHistoryWindow, source: La
   });
   for (const batch of statementBatches(statements)) {
     try {
-      await octraSqliteOpen(sqlBatch(batch));
+      await open(sqlBatch(batch));
     } catch (error) {
       const first = compactStatement(batch[0] || "").slice(0, 120);
       const bytes = Buffer.byteLength(sqlBatch(batch));
       throw new Error(`lab mirror batch failed (${batch.length} statements, ${bytes} bytes, first: ${first}): ${error instanceof Error ? error.message : String(error)}`);
     }
   }
+  await verifyMirrorReadback(source, summary, plan.rows, open);
   return summary;
 }
 

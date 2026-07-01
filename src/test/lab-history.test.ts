@@ -6,7 +6,7 @@ import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { promisify } from "node:util";
 
-import { buildLabHistoryMirrorSql, planLabHistoryMirrorRows } from "../lib/lab-history.js";
+import { buildLabHistoryMirrorSql, mirrorLabHistory, planLabHistoryMirrorRows } from "../lib/lab-history.js";
 import { normalizeReadOnlySql, octraSqliteConfig, octraSqliteQueryProof, parseOctraSqliteOutput } from "../lib/octra-sqlite-client.js";
 import type { ProgramHistoryWindow, SummaryRow } from "../lib/summary-window.js";
 
@@ -74,6 +74,15 @@ function sampleHistory(): ProgramHistoryWindow {
       proof_scope: "full_chain",
       proof_truncated: false
     }]
+  };
+}
+
+function sqliteResult(columns: string[], rows: unknown[][] = []) {
+  return {
+    columns,
+    rows,
+    row_count: rows.length,
+    ok: true
   };
 }
 
@@ -246,6 +255,63 @@ test("lab mirror SQL preserves AML authority and derived query fields", () => {
   assert.match(sql, /public_balance_raw/);
   assert.match(sql, /unclassified_raw/);
   assert.match(sql, /woct_coverage_ppm/);
+});
+
+test("lab mirror confirms post-write readback before reporting success", async () => {
+  const history = sampleHistory();
+  let writes = 0;
+  const open = async (sql: string) => {
+    if (/select\s+source_range_first_index/i.test(sql)) {
+      return sqliteResult(["source_range_first_index", "source_range_latest_index", "last_complete_snapshot_index"]);
+    }
+    if (/select\s+source_range_latest_index,\s*last_complete_snapshot_index,\s*complete/i.test(sql)) {
+      return sqliteResult(
+        ["source_range_latest_index", "last_complete_snapshot_index", "complete"],
+        [[11, 11, 1]]
+      );
+    }
+    if (/select count\(\*\) as row_count\s+from snapshots/i.test(sql)) {
+      return sqliteResult(["row_count"], [[2]]);
+    }
+    writes += 1;
+    return sqliteResult([]);
+  };
+
+  const summary = await mirrorLabHistory(history, {
+    target_kind: "circle_program",
+    target_id: "octDevCircle"
+  }, open);
+
+  assert.ok(writes > 0);
+  assert.equal(summary.complete_through_index, 11);
+  assert.equal(summary.complete, true);
+});
+
+test("lab mirror rejects optimistic write success when readback is stale", async () => {
+  const history = sampleHistory();
+  const open = async (sql: string) => {
+    if (/select\s+source_range_first_index/i.test(sql)) {
+      return sqliteResult(["source_range_first_index", "source_range_latest_index", "last_complete_snapshot_index"]);
+    }
+    if (/select\s+source_range_latest_index,\s*last_complete_snapshot_index,\s*complete/i.test(sql)) {
+      return sqliteResult(
+        ["source_range_latest_index", "last_complete_snapshot_index", "complete"],
+        [[10, 10, 0]]
+      );
+    }
+    if (/select count\(\*\) as row_count\s+from snapshots/i.test(sql)) {
+      return sqliteResult(["row_count"], [[1]]);
+    }
+    return sqliteResult([]);
+  };
+
+  await assert.rejects(
+    () => mirrorLabHistory(history, {
+      target_kind: "circle_program",
+      target_id: "octDevCircle"
+    }, open),
+    /lab mirror readback mismatch/
+  );
 });
 
 test("lab mirror planner advances from completion watermark without enumerating old rows", () => {
