@@ -121,6 +121,12 @@ The lab is deliberately non-canonical and can lag or fail without affecting snap
 
 See `docs/lab-history-mirror.md` for schema, deployment, retention, and safety details.
 
+## Operator Diagnostics
+
+The host can send Telegram digests and alerts without changing the canonical data model. Digests summarize the last hour and last 24 hours: snapshot cadence, latest program-backed state, conservation status, site integrity, native readiness, traffic, diagnostic noise, raw-evidence growth, and disk usage. Alerts are fingerprinted and rate-limited so repeated conditions do not spam the operator.
+
+Notifications are operational telemetry only. They do not write AML state, do not change Circle assets, and do not carry wallet material. Bot tokens and chat ids live only in `/etc/octra-vitals/notify.env` on the host.
+
 ## Local Development
 
 Octra Vitals targets Node 22. Use `.nvmrc` / `.node-version` if your local shell has multiple Node versions installed.
