@@ -16,6 +16,12 @@ interface MirrorLock {
   release: () => Promise<void>;
 }
 
+interface MirrorLockPayload {
+  run_id?: string;
+  pid?: number;
+  created_at?: string;
+}
+
 function isoNow(): string {
   return new Date().toISOString().replace(/\.\d{3}Z$/, "Z");
 }
@@ -45,6 +51,27 @@ function ms(value: number): number {
   return Math.round(value);
 }
 
+function parseLockPayload(text: string): MirrorLockPayload | null {
+  try {
+    const parsed = JSON.parse(text) as MirrorLockPayload;
+    return parsed && typeof parsed === "object" ? parsed : null;
+  } catch {
+    return null;
+  }
+}
+
+function processIsRunning(pid: unknown): boolean {
+  if (typeof pid !== "number" || !Number.isInteger(pid) || pid <= 0) return false;
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch (error: any) {
+    if (error?.code === "ESRCH") return false;
+    if (error?.code === "EPERM") return true;
+    return false;
+  }
+}
+
 async function acquireLock(lockPath: string, runId: string, staleMs: number): Promise<MirrorLock | null> {
   const payload = JSON.stringify({ run_id: runId, pid: process.pid, created_at: isoNow() }, null, 2);
   try {
@@ -54,8 +81,10 @@ async function acquireLock(lockPath: string, runId: string, staleMs: number): Pr
     if (error?.code !== "EEXIST") throw error;
     let stale = false;
     try {
+      const existing = parseLockPayload(await readFile(lockPath, "utf8"));
+      if (existing?.pid && !processIsRunning(existing.pid)) stale = true;
       const info = await stat(lockPath);
-      stale = Date.now() - info.mtimeMs > staleMs;
+      stale = stale || Date.now() - info.mtimeMs > staleMs;
     } catch {
       stale = true;
     }

@@ -1,13 +1,14 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { execFile } from "node:child_process";
-import { readFile } from "node:fs/promises";
+import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { promisify } from "node:util";
 
 import { buildLabHistoryMirrorSql, mirrorLabHistory, planLabHistoryMirrorRows } from "../lib/lab-history.js";
 import { normalizeReadOnlySql, octraSqliteConfig, octraSqliteQueryProof, parseOctraSqliteOutput } from "../lib/octra-sqlite-client.js";
+import { runLabHistoryMirror } from "../scripts/run-lab-history-mirror.js";
 import type { ProgramHistoryWindow, SummaryRow } from "../lib/summary-window.js";
 
 const execFileAsync = promisify(execFile);
@@ -98,6 +99,23 @@ async function withLabReadbackRetryEnv<T>(attempts: number, delayMs: number, fn:
     else process.env.VITALS_LAB_HISTORY_READBACK_RETRY_ATTEMPTS = previousAttempts;
     if (previousDelay === undefined) delete process.env.VITALS_LAB_HISTORY_READBACK_RETRY_DELAY_MS;
     else process.env.VITALS_LAB_HISTORY_READBACK_RETRY_DELAY_MS = previousDelay;
+  }
+}
+
+async function withEnv<T>(updates: Record<string, string | undefined>, fn: () => Promise<T>): Promise<T> {
+  const previous: Record<string, string | undefined> = {};
+  for (const [key, value] of Object.entries(updates)) {
+    previous[key] = process.env[key];
+    if (value === undefined) delete process.env[key];
+    else process.env[key] = value;
+  }
+  try {
+    return await fn();
+  } finally {
+    for (const [key, value] of Object.entries(previous)) {
+      if (value === undefined) delete process.env[key];
+      else process.env[key] = value;
+    }
   }
 }
 
@@ -325,6 +343,31 @@ test("lab mirror performs no Circle writes when already complete", async () => {
   assert.equal(summary.row_count, 0);
   assert.equal(summary.complete, true);
   assert.equal(summary.complete_through_index, 11);
+});
+
+test("lab mirror replaces a dead-pid lock instead of skipping", async () => {
+  const dir = await mkdtemp(join(tmpdir(), `octra-vitals-lab-lock-${process.pid}-`));
+  const lockPath = join(dir, "lab-history-mirror.lock");
+  await writeFile(lockPath, JSON.stringify({
+    run_id: "dead-run",
+    pid: 999_999_999,
+    created_at: "2026-01-01T00:00:00Z"
+  }, null, 2));
+
+  try {
+    const report = await withEnv({
+      VITALS_LAB_HISTORY_RUN_ID: "lock-replacement-test",
+      VITALS_LAB_HISTORY_DATA_DIR: dir,
+      VITALS_LAB_HISTORY_LOCK_PATH: lockPath,
+      VITALS_LAB_HISTORY_REPORT_PATH: join(dir, "latest.json"),
+      VITALS_LAB_HISTORY_ENABLED: "0"
+    }, () => runLabHistoryMirror());
+
+    assert.equal(report.status, "skipped");
+    assert.notEqual(report.reason, "mirror_already_running");
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
 });
 
 test("lab mirror waits for post-write readback to become visible", async () => {
