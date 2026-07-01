@@ -137,7 +137,10 @@ The SQL remains editable for review, but every browser query still goes through 
 
 ## Lab Asset Release
 
-Core releases never include Lab assets. Build the Lab release separately:
+Core Circle releases never include Lab assets. Host releases package the Lab release
+manifest when `VITALS_LAB_SITE_CIRCLE_ID` is configured, so the gateway keeps a
+pinned hash list for the separate Lab Web Circle after code-only deploys. Build
+the Lab release directly when you want to inspect it:
 
 ```bash
 npm run circle:release:lab
@@ -149,7 +152,13 @@ Publish Lab assets to the public Lab Web Circle:
 sudo bash /opt/octra-vitals/current/deploy/mainnet/publish-lab-assets.sh
 ```
 
-The script requires `VITALS_LAB_SITE_CIRCLE_ID`, uses changed-only asset uploads, and verifies `/lab/history`, `/lab-history.css`, and `/lab-history.js` are served from that Lab Web Circle. To create the public Lab Web Circle, run it once with `VITALS_LAB_SITE_CIRCLE_CREATE=1`; the script writes the created Circle id back to `gateway.env` and `lab-history.env`. The script refuses to publish lab assets to the sealed SQLite DB Circle.
+The script requires `VITALS_LAB_SITE_CIRCLE_ID`, uses changed-only asset uploads,
+refreshes the pinned Lab release manifest, and verifies `/lab/history`,
+`/lab-history.css`, and `/lab-history.js` are served from that Lab Web Circle.
+To create the public Lab Web Circle, run it once with
+`VITALS_LAB_SITE_CIRCLE_CREATE=1`; the script writes the created Circle id back
+to `gateway.env` and `lab-history.env`. The script refuses to publish lab assets
+to the sealed SQLite DB Circle.
 
 ## Review Checklist
 

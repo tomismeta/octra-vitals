@@ -48,6 +48,9 @@ ssh "${HOST}" "REMOTE_TMP=$(quote "${REMOTE_TMP}") REMOTE_RELEASE=$(quote "${REM
   npm run fact-ledger-program:compile
   npm run producer:audit:dist
   node dist/scripts/build-site-circle-release.js
+  if [ -n "${VITALS_LAB_SITE_CIRCLE_ID:-}" ]; then
+    node dist/scripts/build-site-circle-release.js --lab
+  fi
   sudo rm -rf "${REMOTE_RELEASE}"
   sudo mkdir -p "${REMOTE_RELEASE}"
   sudo rsync -a --delete "${REMOTE_TMP}/" "${REMOTE_RELEASE}/"
