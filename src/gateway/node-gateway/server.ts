@@ -15,7 +15,7 @@ import { configuredTrafficRecorder } from "../../lib/traffic.js";
 import { runtimeVitalsManifest, stableJson } from "../../lib/vitals-manifest.js";
 import { HISTORY_API_SCHEMA, LEGACY_HISTORY_SCHEMA, emptyHistoryProof, filterHistorySnapshots, historyApiCoverage, parseHistoryApiRequest, verifiedHistoryProof } from "../../lib/history-api.js";
 import { labHistorySql, labSchema, labStatus, labTables, mirrorLabHistory } from "../../lib/lab-history.js";
-import { octraSqliteConfig, octraSqliteReadOnlyQuery } from "../../lib/octra-sqlite-client.js";
+import { octraSqliteConfig, octraSqliteReadOnlyQuery, publicLabQueryError } from "../../lib/octra-sqlite-client.js";
 import type { ProgramHistoryWindow } from "../../lib/summary-window.js";
 import type { ProgramArtifacts, SnapshotArtifact } from "../../lib/types.js";
 
@@ -2005,6 +2005,8 @@ async function serveLabApi(req: http.IncomingMessage, res: http.ServerResponse, 
         result: await octraSqliteReadOnlyQuery(String(body.sql || ""), body.limit)
       });
     } catch (error) {
+      const guardError = publicLabQueryError(error);
+      if (guardError) return json(res, 400, guardError, {}, head);
       return json(res, 400, {
         error: "lab_query_result_too_large_or_unsupported",
         message: publicError(

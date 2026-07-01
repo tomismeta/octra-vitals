@@ -7,7 +7,7 @@ import { join, resolve } from "node:path";
 import { promisify } from "node:util";
 
 import { buildLabHistoryMirrorSql, mirrorLabHistory, planLabHistoryMirrorRows } from "../lib/lab-history.js";
-import { normalizeReadOnlySql, octraSqliteConfig, octraSqliteQueryProof, parseOctraSqliteOutput } from "../lib/octra-sqlite-client.js";
+import { normalizeReadOnlySql, octraSqliteConfig, octraSqliteQueryProof, parseOctraSqliteOutput, publicLabQueryError } from "../lib/octra-sqlite-client.js";
 import { acquireLock, runLabHistoryMirror } from "../scripts/run-lab-history-mirror.js";
 import type { ProgramHistoryWindow, SummaryRow } from "../lib/summary-window.js";
 
@@ -138,6 +138,14 @@ test("lab query guard rejects unsafe SQLite extension functions", () => {
   assert.throws(() => normalizeReadOnlySql("select readfile('/etc/passwd')"), /unsafe_sql_function_not_allowed/);
   assert.throws(() => normalizeReadOnlySql("select writefile('/tmp/x', 'x')"), /unsafe_sql_function_not_allowed/);
   assert.throws(() => normalizeReadOnlySql("select fileio_write('/tmp/x', 'x')"), /unsafe_sql_function_not_allowed/);
+});
+
+test("lab query guard errors are safe to expose publicly", () => {
+  assert.deepEqual(publicLabQueryError(new Error("unsafe_sql_function_not_allowed")), {
+    error: "unsafe_sql_function_not_allowed",
+    message: "SQLite extension and file access functions are not available in public Lab queries."
+  });
+  assert.equal(publicLabQueryError(new Error("some_internal_circle_error")), null);
 });
 
 test("octra-sqlite output parser accepts query and write envelopes", () => {

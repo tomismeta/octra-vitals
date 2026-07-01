@@ -253,6 +253,20 @@ function requestedLimit(limit: unknown): number {
 }
 
 const unsafeSqlFunctions = /\b(load_extension|readfile|writefile|fileio_[a-z0-9_]*|fsdir|lsmode)\s*\(/i;
+const publicLabQueryMessages: Record<string, string> = {
+  sql_required: "Enter a read-only SQL query.",
+  only_one_read_only_statement_allowed: "Only one read-only SQL statement is allowed.",
+  sql_comments_not_allowed: "SQL comments are not allowed in public Lab queries.",
+  only_select_queries_allowed: "Only SELECT or WITH queries are allowed.",
+  only_read_only_queries_allowed: "Only read-only queries are allowed.",
+  unsafe_sql_function_not_allowed: "SQLite extension and file access functions are not available in public Lab queries."
+};
+
+export function publicLabQueryError(error: unknown): { error: string; message: string } | null {
+  const code = error instanceof Error ? error.message : String(error);
+  const message = publicLabQueryMessages[code];
+  return message ? { error: code, message } : null;
+}
 
 export function normalizeReadOnlySql(sql: string, limit?: unknown): { sql: string; limit: number } {
   const trimmed = sql.trim().replace(/;+\s*$/, "");
