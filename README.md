@@ -90,7 +90,7 @@ Sealed octra-sqlite Circle
 /lab/history query page
 ```
 
-The Lab is derived and non-canonical. It exists for discovery and experimentation. The AML fact ledger remains the record.
+The Lab is derived and non-canonical. It exists for discovery and experimentation: AML remains the record, while [`octra-sqlite`](https://github.com/tomismeta/octra-sqlite) provides a sealed Circle-backed query mirror for people who want to inspect history relationally.
 
 ## Data Model
 
@@ -185,7 +185,7 @@ The canonical production deployment is:
 
 - Core Vitals Circle: AML fact ledger plus core web assets.
 - Lab Web Circle: optional public Lab assets.
-- Lab DB Circle: optional sealed `octra-sqlite` mirror.
+- Lab DB Circle: optional sealed [`octra-sqlite`](https://github.com/tomismeta/octra-sqlite) mirror.
 
 ## Documentation
 
