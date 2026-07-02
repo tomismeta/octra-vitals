@@ -181,7 +181,7 @@ export interface SnapshotArtifact {
 }
 
 export interface ProgramArtifacts {
-  schema: "octra-vitals-program-artifacts-v0" | "octra-vitals-program-circle-artifacts-v0";
+  schema: "octra-vitals-program-circle-artifacts-v0";
   source: string | null;
   abi: any | null;
   formal_verification: Record<string, any> | null;

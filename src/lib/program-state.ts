@@ -289,14 +289,9 @@ function verifiedHistoryWindowFromHistoryV1(input: {
   return window;
 }
 
-function factLedgerProbeReadsEnabled(): boolean {
-  return process.env.VITALS_ENABLE_FACT_LEDGER_PROBE_READS === "1";
-}
-
 function isFactLedgerManifest(manifest: string): boolean {
   if (manifest === "octra-vitals-fact-ledger.v2") return true;
-  if (manifest === "octra-vitals-fact-ledger.v1") return true;
-  return manifest === "octra-vitals-fact-ledger-probe.v1" && factLedgerProbeReadsEnabled();
+  return manifest === "octra-vitals-fact-ledger.v1";
 }
 
 function factLedgerHistoryCapsuleLimit(): number {

@@ -35,7 +35,7 @@ The producer performs one logical update:
 5. read back AML state and verify hashes, latest identity, roots, and receipt data;
 6. atomically promote local latest artifacts.
 
-The active programmed-Circle path uses the fact-ledger AML. Legacy bounded-window calls remain in the repo as compatibility paths, but the mainnet target is the fact ledger.
+The active programmed-Circle path uses the fact-ledger AML. The public repo keeps this as the only first-class AML target.
 
 ## Core Accounting Fact
 
@@ -83,7 +83,7 @@ The gateway only marks a boundary verified after reading the predecessor era's a
 
 - `full_chain` means the response folded every sealed capsule exposed for the era from the empty root;
 - `tail_window` means the returned rows and capsule tail were verified, but older sealed capsules were not replayed in that response;
-- `summary_window` is used only by legacy bounded-window history.
+- `summary_window` is used only when reading an older era that exposed bounded-window history.
 
 ## Bridge Accounting
 

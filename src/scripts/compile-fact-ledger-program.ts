@@ -50,6 +50,10 @@ if (verification.verified !== true || verification.safety !== "safe" || verifica
 
 await mkdir(buildDir, { recursive: true });
 await writeJson(join(buildDir, "compile.json"), compileArtifact);
+await writeJson(join(root, "program-fact-ledger", "abi.json"), abi);
+await writeFile(join(root, "program-fact-ledger", "lowered.oasm"), `${result.disasm || ""}\n`);
+await writeJson(join(root, "program-fact-ledger", "formal_verification.json"), result.verification || {});
+await writeJson(join(root, "program-fact-ledger", "formal_certificate.json"), result.certificate || {});
 
 console.log(stableJson({
   source_hash: compileArtifact.source_hash,
@@ -60,7 +64,11 @@ console.log(stableJson({
   instructions: result.instructions,
   size: result.size,
   outputs: [
+    "program-fact-ledger/abi.json",
+    "program-fact-ledger/lowered.oasm",
+    "program-fact-ledger/formal_verification.json",
+    "program-fact-ledger/formal_certificate.json",
     "build/program-fact-ledger/compile.json"
   ],
-  pinned_artifacts_updated: false
+  pinned_artifacts_updated: true
 }));

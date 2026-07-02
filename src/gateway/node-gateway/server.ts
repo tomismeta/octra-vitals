@@ -240,7 +240,7 @@ function isFresh(snapshot: SnapshotArtifact): boolean {
 
 async function loadBaseManifest() {
   const manifest = JSON.parse(await readFile(join(appDir, "vitals.manifest.json"), "utf8"));
-  const programArtifacts = await loadProgramArtifacts();
+  const programArtifacts = await loadProgramArtifacts("program-fact-ledger", "octra-vitals-program-circle-artifacts-v0");
   const circleProgramArtifactDir = programmedCircleArtifactDir();
   const circleProgramArtifacts = await loadProgramArtifacts(circleProgramArtifactDir, "octra-vitals-program-circle-artifacts-v0");
   const certificate = programArtifacts.formal_certificate || {};
@@ -451,62 +451,6 @@ async function loadLiveProgramVerification(manifest: Record<string, any>): Promi
   return value;
 }
 
-const requiredCircleProgramMethods = [
-  "manifest",
-  "is_initialized",
-  "get_snapshot_count",
-  "get_latest_snapshot_index",
-  "get_latest_snapshot_id",
-  "get_latest_observed_at",
-  "get_latest_epoch",
-  "get_latest_payload_hash",
-  "get_latest_evidence_manifest_hash",
-  "get_latest_source_refs_hash",
-  "get_latest_summary_hash",
-  "get_latest_snapshot",
-  "get_latest_evidence_manifest",
-  "get_latest_source_refs",
-  "get_latest_summary",
-  "get_latest_bundle",
-  "get_recent_summary_window",
-  "get_recent_summary_window_hash",
-  "get_recent_summary_window_first_index",
-  "get_recent_summary_window_row_count",
-  "record_snapshot_v0"
-];
-
-const requiredCircleProgramMethodsV1 = [
-  "manifest",
-  "is_initialized",
-  "get_snapshot_count",
-  "get_latest_snapshot_index",
-  "get_latest_snapshot_id",
-  "get_latest_observed_at",
-  "get_latest_epoch",
-  "get_latest_payload_hash",
-  "get_latest_evidence_manifest_hash",
-  "get_latest_source_refs_hash",
-  "get_latest_summary_hash",
-  "get_latest_history_row_hash",
-  "get_latest_snapshot",
-  "get_latest_evidence_manifest",
-  "get_latest_source_refs",
-  "get_latest_summary",
-  "get_latest_history_row",
-  "get_history_root",
-  "get_capsules_root",
-  "get_open_capsule_id",
-  "get_open_capsule_body",
-  "get_open_capsule_row_count",
-  "get_open_capsule_end_root",
-  "get_latest_capsule_id",
-  "get_history_capsule_body",
-  "get_history_capsule_meta",
-  "get_history_capsule_root_after",
-  "get_latest_bundle",
-  "record_snapshot_v1"
-];
-
 const requiredCircleProgramMethodsFactV1 = [
   "manifest",
   "is_initialized",
@@ -564,8 +508,7 @@ const requiredCircleProgramMethodsFactV1 = [
 function programmedCircleArtifactDir(): string {
   const configured = process.env.VITALS_PROGRAMMED_CIRCLE_ARTIFACT_DIR;
   if (configured && !configured.includes("..") && !configured.includes("/") && !configured.includes("\\")) return configured;
-  if (process.env.VITALS_RECORD_SNAPSHOT_VERSION === "fact-v1" || process.env.VITALS_RECORD_SNAPSHOT_VERSION === "fact-v2") return "program-fact-ledger";
-  return process.env.VITALS_RECORD_SNAPSHOT_VERSION === "v1" ? "program-v1" : "program-circle";
+  return "program-fact-ledger";
 }
 
 function methodNames(programInfo: any): string[] {
@@ -617,12 +560,8 @@ async function loadCircleProgramVerification(manifest: Record<string, any>): Pro
 
   const checkedAt = new Date().toISOString().replace(/\.\d{3}Z$/, "Z");
   const artifactDir = programmedCircleArtifactDir();
-  const expectedAmlManifest = artifactDir === "program-fact-ledger"
-    ? FACT_LEDGER_MANIFEST
-    : artifactDir === "program-v1" ? "vitals-circle-state.v1" : "vitals-circle-state.v0";
-  const requiredMethods = artifactDir === "program-fact-ledger"
-    ? requiredCircleProgramMethodsFactV1
-    : artifactDir === "program-v1" ? requiredCircleProgramMethodsV1 : requiredCircleProgramMethods;
+  const expectedAmlManifest = FACT_LEDGER_MANIFEST;
+  const requiredMethods = requiredCircleProgramMethodsFactV1;
   const sourceResult = await readFile(join(root, artifactDir, "main.aml"), "utf8").then(
     (source) => ({ source, source_hash: `sha256:${sha256Hex(source)}` }),
     () => null
@@ -632,24 +571,9 @@ async function loadCircleProgramVerification(manifest: Record<string, any>): Pro
   const localVerification = localArtifacts.formal_verification || compileArtifact?.verification || {};
   const localCertificate = localArtifacts.formal_certificate || compileArtifact?.certificate || {};
   const deployReport = await loadProgrammedCircleDeployReport();
-  const compatibleDeployReport = artifactDir === "program-v1" && deployReport?.schema !== "octra-vitals-program-v1-devnet-deploy-v0"
-    ? null
-    : deployReport;
-  const expectedBytecodeHash = artifactDir === "program-fact-ledger"
-    ? normalizeHash(process.env.VITALS_FACT_LEDGER_PROGRAMMED_CIRCLE_BYTECODE_HASH || localCertificate.bytecode_hash || compileArtifact?.bytecode_hash || process.env.VITALS_PROGRAMMED_CIRCLE_BYTECODE_HASH || manifest.programmed_circle_bytecode_hash)
-    : artifactDir === "program-v1"
-      ? normalizeHash(process.env.VITALS_PROGRAMMED_CIRCLE_V1_BYTECODE_HASH || localCertificate.bytecode_hash || compatibleDeployReport?.bytecode_hash || process.env.VITALS_PROGRAMMED_CIRCLE_BYTECODE_HASH || manifest.programmed_circle_bytecode_hash)
-      : normalizeHash(process.env.VITALS_PROGRAMMED_CIRCLE_BYTECODE_HASH || manifest.programmed_circle_bytecode_hash || deployReport?.bytecode_hash || localCertificate.bytecode_hash);
-  const expectedSourceHash = artifactDir === "program-fact-ledger"
-    ? normalizeHash(process.env.VITALS_FACT_LEDGER_PROGRAMMED_CIRCLE_SOURCE_HASH || sourceResult?.source_hash || localCertificate.source_hash || compileArtifact?.source_hash || process.env.VITALS_PROGRAMMED_CIRCLE_SOURCE_HASH || manifest.programmed_circle_source_hash)
-    : artifactDir === "program-v1"
-      ? normalizeHash(process.env.VITALS_PROGRAMMED_CIRCLE_V1_SOURCE_HASH || sourceResult?.source_hash || localCertificate.source_hash || compatibleDeployReport?.source_hash || process.env.VITALS_PROGRAMMED_CIRCLE_SOURCE_HASH || manifest.programmed_circle_source_hash)
-      : normalizeHash(process.env.VITALS_PROGRAMMED_CIRCLE_SOURCE_HASH || manifest.programmed_circle_source_hash || deployReport?.source_hash || sourceResult?.source_hash || localCertificate.source_hash);
-  const expectedVerificationHash = artifactDir === "program-fact-ledger"
-    ? normalizeHash(process.env.VITALS_FACT_LEDGER_PROGRAMMED_CIRCLE_VERIFICATION_HASH || localCertificate.verification_hash || compileArtifact?.verification_hash || process.env.VITALS_PROGRAMMED_CIRCLE_VERIFICATION_HASH || manifest.programmed_circle_verification_hash)
-    : artifactDir === "program-v1"
-      ? normalizeHash(process.env.VITALS_PROGRAMMED_CIRCLE_V1_VERIFICATION_HASH || localCertificate.verification_hash || process.env.VITALS_PROGRAMMED_CIRCLE_VERIFICATION_HASH || manifest.programmed_circle_verification_hash)
-      : normalizeHash(process.env.VITALS_PROGRAMMED_CIRCLE_VERIFICATION_HASH || manifest.programmed_circle_verification_hash || localCertificate.verification_hash);
+  const expectedBytecodeHash = normalizeHash(process.env.VITALS_FACT_LEDGER_PROGRAMMED_CIRCLE_BYTECODE_HASH || localCertificate.bytecode_hash || compileArtifact?.bytecode_hash || process.env.VITALS_PROGRAMMED_CIRCLE_BYTECODE_HASH || manifest.programmed_circle_bytecode_hash);
+  const expectedSourceHash = normalizeHash(process.env.VITALS_FACT_LEDGER_PROGRAMMED_CIRCLE_SOURCE_HASH || sourceResult?.source_hash || localCertificate.source_hash || compileArtifact?.source_hash || process.env.VITALS_PROGRAMMED_CIRCLE_SOURCE_HASH || manifest.programmed_circle_source_hash);
+  const expectedVerificationHash = normalizeHash(process.env.VITALS_FACT_LEDGER_PROGRAMMED_CIRCLE_VERIFICATION_HASH || localCertificate.verification_hash || compileArtifact?.verification_hash || process.env.VITALS_PROGRAMMED_CIRCLE_VERIFICATION_HASH || manifest.programmed_circle_verification_hash);
   const expectedOwner = chooseValue(process.env.VITALS_CIRCLE_OWNER_ADDRESS, process.env.VITALS_DEPLOYER_ADDRESS, manifest.programmed_circle_owner_address, deployReport?.deployer_address);
   const expectedOperator = chooseValue(process.env.VITALS_CIRCLE_OPERATOR_ADDRESS, process.env.VITALS_OPERATOR_ADDRESS, manifest.programmed_circle_operator_address, deployReport?.operator_address);
   const configuredMinProgramRpcUrls = positiveIntegerEnv("VITALS_MIN_PROGRAM_RPC_URLS", 1);
@@ -1266,8 +1190,8 @@ async function readTextIfExists(path: string): Promise<string | null> {
 }
 
 async function loadProgramArtifacts(
-  programDirName = "program",
-  schema: ProgramArtifacts["schema"] = "octra-vitals-program-artifacts-v0"
+  programDirName = "program-fact-ledger",
+  schema: ProgramArtifacts["schema"] = "octra-vitals-program-circle-artifacts-v0"
 ): Promise<ProgramArtifacts> {
   const programDir = join(root, programDirName);
   const [source, abi, formalVerification, formalCertificate, lowered] = await Promise.all([
@@ -2057,7 +1981,7 @@ async function serveLabApi(req: http.IncomingMessage, res: http.ServerResponse, 
 
 async function serveProgramArtifacts(res: http.ServerResponse, head = false): Promise<void> {
   if (process.env.VITALS_EXPOSE_PROGRAM_ARTIFACTS !== "1") return notFound(res, head);
-  const artifacts = await loadProgramArtifacts();
+  const artifacts = await loadProgramArtifacts("program-fact-ledger", "octra-vitals-program-circle-artifacts-v0");
   json(res, 200, artifacts, {}, head);
 }
 

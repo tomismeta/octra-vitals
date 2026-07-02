@@ -42,10 +42,7 @@ ssh "${HOST}" "REMOTE_TMP=$(quote "${REMOTE_TMP}") REMOTE_RELEASE=$(quote "${REM
   fi
   npm ci
   npm run build
-  npm run program-circle:compile
-  npm run program-circle:verify
-  npm run fact-ledger-probe:compile
-  npm run fact-ledger-program:compile
+  npm run program:compile
   npm run producer:audit:dist
   node dist/scripts/build-site-circle-release.js
   if [ -n "${VITALS_LAB_SITE_CIRCLE_ID:-}" ]; then

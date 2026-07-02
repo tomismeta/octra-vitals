@@ -13,24 +13,23 @@ import {
 
 const BASE58_ALPHABET = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz";
 const root = resolve(new URL("../..", import.meta.url).pathname);
-type ProgrammedCircleProgramKind = "v0" | "fact-ledger";
 
-function programmedCircleProgramKind(): ProgrammedCircleProgramKind {
+function assertProgramKind(): void {
   const configured = process.env.VITALS_PROGRAMMED_CIRCLE_PROGRAM || process.env.VITALS_RECORD_SNAPSHOT_VERSION;
-  if (configured === "fact-ledger" || configured === "fact-v1" || configured === "fact-v2") return "fact-ledger";
-  if (configured === "v0" || configured === undefined || configured === "") return "v0";
-  throw new Error("VITALS_PROGRAMMED_CIRCLE_PROGRAM must be v0 or fact-ledger");
+  if (configured === "fact-ledger" || configured === "fact-v1" || configured === "fact-v2" || configured === undefined || configured === "") return;
+  throw new Error("VITALS_PROGRAMMED_CIRCLE_PROGRAM must be fact-ledger");
 }
 
-const programKind = programmedCircleProgramKind();
-const artifactDir = process.env.VITALS_PROGRAMMED_CIRCLE_ARTIFACT_DIR || (programKind === "fact-ledger" ? "program-fact-ledger" : "program-circle");
+assertProgramKind();
+const programKind = "fact-ledger";
+const artifactDir = process.env.VITALS_PROGRAMMED_CIRCLE_ARTIFACT_DIR || "program-fact-ledger";
 const sourcePath = process.env.VITALS_PROGRAMMED_CIRCLE_SOURCE || join(root, artifactDir, "main.aml");
 const outPath = process.argv.find((arg) => arg.endsWith(".json")) || join(root, "build", "programmed-circle-deploy.json");
 const deployEnabled = process.env.VITALS_DEPLOY_PROGRAMMED_CIRCLE === "1";
 const deployAcknowledged = process.env.VITALS_DEPLOY_PROGRAMMED_CIRCLE_ACK === "1";
 const waitForConfirmations = process.env.VITALS_DEPLOY_WAIT !== "0";
 const requireContractReceipt = waitForConfirmations && process.env.VITALS_REQUIRE_CONTRACT_RECEIPT !== "0";
-const expectedAmlManifest = programKind === "fact-ledger" ? FACT_LEDGER_MANIFEST : "vitals-circle-state.v0";
+const expectedAmlManifest = FACT_LEDGER_MANIFEST;
 
 interface CompileResult {
   bytecode?: string;
@@ -411,13 +410,13 @@ if (deployEnabled && missing.length) throw new Error(`missing requirements: ${mi
 const canonicalPayload = canonicalCircleDeployPayload();
 const nonce = deployerAddress ? await nextNonce(deployerAddress) : 0;
 const circleId = deployerAddress ? circleIdOfDeploy(deployerAddress, nonce, canonicalPayload) : "pending";
-const factLedgerPredecessor = programKind === "fact-ledger" && deployerAddress && circleId !== "pending"
+const factLedgerPredecessor = deployerAddress && circleId !== "pending"
   ? await resolveFactLedgerPredecessor(deployerAddress, circleId)
   : null;
 const factLedgerCoreDefinition = factLedgerPredecessor
   ? encodeFactFamilyDefinition(coreFactFamilyDefinition(factLedgerPredecessor.eraFirstSnapshotIndex))
   : null;
-const factLedgerNetwork = programKind === "fact-ledger" ? factLedgerNetworkId() : null;
+const factLedgerNetwork = factLedgerNetworkId();
 const baseReport = {
   schema: "octra-vitals-programmed-circle-deploy-v0",
   generated_at: isoNow(),
@@ -496,25 +495,23 @@ if (!deployEnabled) {
   const updateConfirmation = await requireConfirmed(updateSubmission.tx_hash, "programmed Circle program_update");
   currentNonce += 1;
 
-  const initMethod = programKind === "fact-ledger" ? "initialize_fact_ledger" : "initialize_v0";
-  const initParams = programKind === "fact-ledger"
-    ? [
-      operatorAddress,
-      factLedgerPredecessor?.predecessorAddress,
-      factLedgerPredecessor?.predecessorFinalRoot,
-      factLedgerPredecessor?.predecessorFinalIndex,
-      factLedgerPredecessor?.eraFirstSnapshotIndex,
-      factLedgerNetwork,
-      circleId,
-      factLedgerCoreDefinition
-    ]
-    : [operatorAddress];
-  if (programKind === "fact-ledger" && (
+  const initMethod = "initialize_fact_ledger";
+  const initParams = [
+    operatorAddress,
+    factLedgerPredecessor?.predecessorAddress,
+    factLedgerPredecessor?.predecessorFinalRoot,
+    factLedgerPredecessor?.predecessorFinalIndex,
+    factLedgerPredecessor?.eraFirstSnapshotIndex,
+    factLedgerNetwork,
+    circleId,
+    factLedgerCoreDefinition
+  ];
+  if (
     !factLedgerPredecessor ||
     !factLedgerCoreDefinition ||
     !factLedgerNetwork ||
     initParams.some((value) => value === undefined || value === null || value === "")
-  )) {
+  ) {
     throw new Error("fact-ledger initialization parameters were incomplete");
   }
 
@@ -564,17 +561,17 @@ if (!deployEnabled) {
     circleView(circleId, "get_owner", wallet.address),
     circleView(circleId, "get_operator", wallet.address),
     circleView(circleId, "get_snapshot_count", wallet.address),
-    programKind === "fact-ledger" ? circleView(circleId, "get_era_network_id", wallet.address) : Promise.resolve(null),
-    programKind === "fact-ledger" ? circleView(circleId, "get_era_program", wallet.address) : Promise.resolve(null),
-    programKind === "fact-ledger" ? circleView(circleId, "get_predecessor_program", wallet.address) : Promise.resolve(null),
-    programKind === "fact-ledger" ? circleView(circleId, "get_predecessor_final_root", wallet.address) : Promise.resolve(null),
-    programKind === "fact-ledger" ? circleView(circleId, "get_predecessor_final_index", wallet.address) : Promise.resolve(null),
-    programKind === "fact-ledger" ? circleView(circleId, "get_era_first_snapshot_index", wallet.address) : Promise.resolve(null)
+    circleView(circleId, "get_era_network_id", wallet.address),
+    circleView(circleId, "get_era_program", wallet.address),
+    circleView(circleId, "get_predecessor_program", wallet.address),
+    circleView(circleId, "get_predecessor_final_root", wallet.address),
+    circleView(circleId, "get_predecessor_final_index", wallet.address),
+    circleView(circleId, "get_era_first_snapshot_index", wallet.address)
   ]);
   const initializedOk = initialized === true || initialized === "true";
   const ownerOk = owner === wallet.address;
   const operatorOk = operator === operatorAddress;
-  const factLedgerOk = programKind !== "fact-ledger" || (
+  const factLedgerOk = (
     eraNetwork === factLedgerNetwork &&
     eraProgram === circleId &&
     predecessorProgram === factLedgerPredecessor?.predecessorAddress &&
@@ -595,7 +592,7 @@ if (!deployEnabled) {
       era_network: eraNetwork,
       expected_era_network: factLedgerNetwork,
       era_program: eraProgram,
-      expected_era_program: programKind === "fact-ledger" ? circleId : null,
+      expected_era_program: circleId,
       predecessor_program: predecessorProgram,
       expected_predecessor_program: factLedgerPredecessor?.predecessorAddress || null,
       predecessor_root: predecessorRoot,
@@ -642,16 +639,14 @@ if (!deployEnabled) {
       VITALS_STATE_TARGET_MODE: "circle_program",
       VITALS_PROGRAMMED_CIRCLE_ID: circleId,
       VITALS_CIRCLE_VIEW_CALLER_ADDRESS: wallet.address,
-      ...(programKind === "fact-ledger" ? {
-        VITALS_PROGRAMMED_CIRCLE_PROGRAM: "fact-ledger",
-        VITALS_PROGRAMMED_CIRCLE_ARTIFACT_DIR: artifactDir,
-        VITALS_RECORD_SNAPSHOT_VERSION: "fact-v2",
-        VITALS_FACT_LEDGER_CUTOVER_ACK: `fact-v2:circle_program:${circleId}`,
-        VITALS_FACT_LEDGER_NETWORK_ID: factLedgerNetwork,
-        VITALS_FACT_LEDGER_PROGRAMMED_CIRCLE_SOURCE_HASH: `sha256:${sha256Hex(source)}`,
-        VITALS_FACT_LEDGER_PROGRAMMED_CIRCLE_BYTECODE_HASH: compile.certificate?.bytecode_hash ? `sha256:${compile.certificate.bytecode_hash}` : null,
-        VITALS_FACT_LEDGER_PROGRAMMED_CIRCLE_VERIFICATION_HASH: compile.certificate?.verification_hash ? `sha256:${compile.certificate.verification_hash}` : null
-      } : {})
+      VITALS_PROGRAMMED_CIRCLE_PROGRAM: "fact-ledger",
+      VITALS_PROGRAMMED_CIRCLE_ARTIFACT_DIR: artifactDir,
+      VITALS_RECORD_SNAPSHOT_VERSION: "fact-v2",
+      VITALS_FACT_LEDGER_CUTOVER_ACK: `fact-v2:circle_program:${circleId}`,
+      VITALS_FACT_LEDGER_NETWORK_ID: factLedgerNetwork,
+      VITALS_FACT_LEDGER_PROGRAMMED_CIRCLE_SOURCE_HASH: `sha256:${sha256Hex(source)}`,
+      VITALS_FACT_LEDGER_PROGRAMMED_CIRCLE_BYTECODE_HASH: compile.certificate?.bytecode_hash ? `sha256:${compile.certificate.bytecode_hash}` : null,
+      VITALS_FACT_LEDGER_PROGRAMMED_CIRCLE_VERIFICATION_HASH: compile.certificate?.verification_hash ? `sha256:${compile.certificate.verification_hash}` : null
     }
   });
 }

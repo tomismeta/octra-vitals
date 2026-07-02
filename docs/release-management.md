@@ -61,7 +61,7 @@ Every change should be classified before deployment.
 | Browser app | `app/index.html`, `app/app.js`, `app/style.css`, icons, manifest | Host release plus Circle asset publish |
 | Gateway shim | `src/gateway/**`, route behavior, headers, diagnostics | Host release, restart gateway |
 | Producer/updater | `src/lib/snapshot.ts`, collection, evidence, write path | Host release, updater timer/service |
-| Programmed Circle AML | `program-fact-ledger/main.aml`, compatibility AML, schema/state logic | Compatible in-place code update or new era, explicit rehearsal |
+| Programmed Circle AML | `program-fact-ledger/main.aml`, schema/state logic | Compatible in-place code update or new era, explicit rehearsal |
 | Runtime config | env values, RPC URLs, Circle ids, timers | Host env update, no git change |
 | Docs/tests | README, docs, test-only files | GitHub only unless included in producer-audit assets |
 

@@ -2,7 +2,7 @@
 
 Date: 2026-06-24
 
-Status: accepted for devnet soak; mainnet pending readiness gates
+Status: accepted
 
 ## Context
 
@@ -39,4 +39,4 @@ The first public shape may include a dormant typed-metric surface. It costs litt
 - The core row should change rarely.
 - New chains usually enter the latest payload first.
 - Durable new scalar history should use auxiliary fact families instead of widening the core row.
-- Mainnet readiness depends on devnet soak, capsule seals, read latency, cost calibration, and verified era stitching.
+- Mainnet promotion requires the current release gates in [Readiness](readiness.md).
