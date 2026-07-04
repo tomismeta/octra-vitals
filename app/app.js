@@ -1190,7 +1190,8 @@ function activeSeries(){
 }
 function hasHistoryWindow(rows=activeSeries()){ return rows.length > 1; }
 function hasCanonicalHistoryWindow(rows=activeSeries()){ return hasHistoryWindow(rows) && DATA.source?.history_canonical === true; }
-function trendPhrase(stableText="stable"){ return hasCanonicalHistoryWindow() ? stableText : "latest snapshot only"; }
+function historyPending(){ return historyHydrationState === "pending"; }
+function trendPhrase(stableText="stable"){ return hasCanonicalHistoryWindow() ? stableText : (historyPending() ? "loading history" : "latest snapshot only"); }
 function historySpan(rows=activeSeries()){
   if(!hasHistoryWindow(rows)) return "latest only";
   const first = parseRowTime(rows[0]);
@@ -1219,7 +1220,7 @@ function compactDelta(raw){
 }
 function deltaRaw(col){
   const rows = activeSeries();
-  if(!hasCanonicalHistoryWindow(rows)) return "";
+  if(!hasCanonicalHistoryWindow(rows)) return historyPending() ? "loading history" : "";
   const span = historySpan(rows);
   const first = BigInt(rows[0][col]);
   const last = BigInt(rows[rows.length - 1][col]);
@@ -1228,7 +1229,7 @@ function deltaRaw(col){
 }
 function deltaPct(values, dp=4){
   const rows = activeSeries();
-  if(!hasCanonicalHistoryWindow(rows) || values.length < 2) return "";
+  if(!hasCanonicalHistoryWindow(rows) || values.length < 2) return historyPending() ? "loading history" : "";
   const span = historySpan(rows);
   const d = values[values.length - 1] - values[0];
   const rounded = Number(d.toFixed(dp));
@@ -1510,6 +1511,7 @@ function seriesPublicPctOfCirc(){ return activeSeries().map(r=> pctR(BigInt(r[CO
    "absolute" is a wired-but-unexposed hook (zero/reference-based) for a future third tab. */
 let sparkMode = (()=>{ try{ const m=localStorage.getItem("octv.sparkMode"); return (m==="trend"||m==="flow"||m==="absolute")?m:"flow"; }catch(e){ return "flow"; } })();
 let sparkWindow = (()=>{ try{ const m=localStorage.getItem("octv.sparkWindow"); return HISTORY_WINDOWS[m] ? m : DEFAULT_HISTORY_WINDOW; }catch(e){ return DEFAULT_HISTORY_WINDOW; } })();
+let historyHydrationState = "pending";
 
 function sparkSM(values, opts={}){
   const mode = opts.mode || sparkMode;
@@ -2070,8 +2072,12 @@ function logIdentityCheck(){
 function applyCanonicalHistory(historyResult){
   const historyBody = historyResult?.body || {};
   const historyAuthority = historyBody.authority || {};
-  if(historyAuthority.canonical_state_read !== true) return false;
+  if(historyAuthority.canonical_state_read !== true){
+    historyHydrationState = "unavailable";
+    return false;
+  }
   const history = historyRows(historyBody, DATA);
+  historyHydrationState = "applied";
   DATA = {
     ...DATA,
     series: history.rows,
@@ -2096,6 +2102,9 @@ async function hydrateHistory(initialLoad){
   const historyResult = await loadCanonicalHistory(versionResult);
   if(applyCanonicalHistory(historyResult)){
     perfMark("history_applied");
+  }else if(renderReady){
+    buildState();
+    if(verifyRendered) buildLedgerSparks();
   }
 }
 
@@ -2125,6 +2134,9 @@ async function boot(){
         console.error(error);
       }
       hydrateHistory(initialLoad).catch((error)=>{
+        historyHydrationState = "unavailable";
+        if(renderReady) buildState();
+        if(verifyRendered) buildLedgerSparks();
         console.warn("[Octra Vitals] canonical history unavailable; rendering latest-only trend state", error);
       });
     });
