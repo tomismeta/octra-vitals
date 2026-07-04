@@ -1,5 +1,5 @@
 import { configuredProgrammedCircleId, stateTargetMode, type StateTargetMode } from "./circle-program.js";
-import { configuredProgramAddress, readCircleProgramSummaryHistory, readLatestCircleProgramSnapshot, readLatestProgramSnapshot, readProgramSummaryHistory } from "./program-state.js";
+import { configuredProgramAddress, readCircleProgramSummaryHistory, readLatestCircleProgramSnapshot, readLatestProgramSnapshot, readProgramSummaryHistory, type ProgramHistoryReadOptions } from "./program-state.js";
 import type { ProgramHistoryWindow } from "./summary-window.js";
 import type { SnapshotArtifact } from "./types.js";
 
@@ -7,6 +7,8 @@ export interface StateTarget {
   kind: StateTargetMode;
   id: string | null;
 }
+
+export type HistoryReadOptions = ProgramHistoryReadOptions;
 
 export function chooseConfiguredValue(...values: Array<string | null | undefined>): string {
   for (const value of values) {
@@ -29,13 +31,13 @@ export function configuredStateTarget(manifest: Record<string, any> = {}): State
   };
 }
 
-export async function readCanonicalHistory(target: StateTarget): Promise<ProgramHistoryWindow> {
+export async function readCanonicalHistory(target: StateTarget, options: HistoryReadOptions = {}): Promise<ProgramHistoryWindow> {
   if (!target.id) {
     throw new Error(`${target.kind === "circle_program" ? "programmed Circle id" : "state program address"} is required`);
   }
   return target.kind === "circle_program"
-    ? readCircleProgramSummaryHistory(target.id)
-    : readProgramSummaryHistory(target.id);
+    ? readCircleProgramSummaryHistory(target.id, options)
+    : readProgramSummaryHistory(target.id, options);
 }
 
 export function assertHistoryTailMatchesLatest(history: ProgramHistoryWindow, latest: SnapshotArtifact): void {
@@ -56,14 +58,14 @@ export function assertHistoryTailMatchesLatest(history: ProgramHistoryWindow, la
   }
 }
 
-export async function readVerifiedCanonicalHistory(target: StateTarget): Promise<ProgramHistoryWindow> {
+export async function readVerifiedCanonicalHistory(target: StateTarget, options: HistoryReadOptions = {}): Promise<ProgramHistoryWindow> {
   if (!target.id) {
     throw new Error(`${target.kind === "circle_program" ? "programmed Circle id" : "state program address"} is required`);
   }
   const latest = target.kind === "circle_program"
     ? await readLatestCircleProgramSnapshot(target.id)
     : await readLatestProgramSnapshot(target.id);
-  const history = await readCanonicalHistory(target);
+  const history = await readCanonicalHistory(target, options);
   assertHistoryTailMatchesLatest(history, latest);
   return history;
 }

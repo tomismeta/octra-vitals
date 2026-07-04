@@ -60,6 +60,8 @@ const WINDOW_MS: Record<HistoryWindowName, number> = {
   "7d": 7 * 24 * 60 * 60 * 1000,
   "30d": 30 * 24 * 60 * 60 * 1000
 };
+const SNAPSHOT_INTERVAL_MS = 15 * 60 * 1000;
+const FACT_LEDGER_ROWS_PER_CAPSULE = 48;
 
 function parsePositiveInteger(value: string | null): number | null {
   if (!value) return null;
@@ -112,6 +114,14 @@ export function parseHistoryApiRequest(searchParams: URLSearchParams): HistoryAp
     valid: errors.length === 0,
     errors
   };
+}
+
+export function historyApiRecommendedCapsuleLimit(request: HistoryApiRequest, maxLimit = 64): number | null {
+  if (!request.valid || !request.window) return null;
+  const safeMax = Number.isSafeInteger(maxLimit) && maxLimit > 0 ? maxLimit : 64;
+  const estimatedRows = Math.ceil(WINDOW_MS[request.window] / SNAPSHOT_INTERVAL_MS);
+  const sealedCapsules = Math.ceil(estimatedRows / FACT_LEDGER_ROWS_PER_CAPSULE);
+  return Math.max(1, Math.min(safeMax, sealedCapsules + 1));
 }
 
 export function filterHistorySnapshots<T extends NormalizedHistorySnapshot>(snapshots: T[], request: HistoryApiRequest): T[] {

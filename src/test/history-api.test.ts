@@ -4,6 +4,7 @@ import test from "node:test";
 import {
   emptyHistoryProof,
   filterHistorySnapshots,
+  historyApiRecommendedCapsuleLimit,
   historyApiCoverage,
   parseHistoryApiRequest,
   verifiedHistoryProof,
@@ -50,6 +51,14 @@ test("history API supports a 1-hour inspection window", () => {
   assert.equal(coverage.status, "complete");
   assert.equal(coverage.requested_window, "1h");
   assert.equal(coverage.points, 5);
+});
+
+test("history API recommends smaller fact-ledger capsule tails for shorter windows", () => {
+  assert.equal(historyApiRecommendedCapsuleLimit(parseHistoryApiRequest(new URLSearchParams("window=1h"))), 2);
+  assert.equal(historyApiRecommendedCapsuleLimit(parseHistoryApiRequest(new URLSearchParams("window=1d"))), 3);
+  assert.equal(historyApiRecommendedCapsuleLimit(parseHistoryApiRequest(new URLSearchParams("window=7d"))), 15);
+  assert.equal(historyApiRecommendedCapsuleLimit(parseHistoryApiRequest(new URLSearchParams("window=30d"))), 61);
+  assert.equal(historyApiRecommendedCapsuleLimit(parseHistoryApiRequest(new URLSearchParams("from_index=1"))), null);
 });
 
 test("history API parser ignores malformed bounds instead of throwing", () => {

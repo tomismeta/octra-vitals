@@ -37,6 +37,10 @@ interface SnapshotReadback {
   submitter: string;
 }
 
+export interface ProgramHistoryReadOptions {
+  maxSealedCapsules?: number | null;
+}
+
 export function configuredProgramAddress(value = process.env.VITALS_STATE_PROGRAM_ADDRESS): string | null {
   if (!value || value === "pending") return null;
   return value;
@@ -294,10 +298,12 @@ function isFactLedgerManifest(manifest: string): boolean {
   return manifest === "octra-vitals-fact-ledger.v1";
 }
 
-function factLedgerHistoryCapsuleLimit(): number {
+function factLedgerHistoryCapsuleLimit(options: ProgramHistoryReadOptions = {}): number {
   const configured = Number(process.env.VITALS_FACT_LEDGER_HISTORY_CAPSULE_LIMIT || 64);
-  if (!Number.isInteger(configured) || configured < 1) return 64;
-  return Math.min(configured, 256);
+  const configuredLimit = Number.isInteger(configured) && configured > 0 ? Math.min(configured, 256) : 64;
+  const requested = Number(options.maxSealedCapsules || 0);
+  if (!Number.isInteger(requested) || requested < 1) return configuredLimit;
+  return Math.min(configuredLimit, requested);
 }
 
 function splitHistoryRows(body: string): string[] {
@@ -327,6 +333,7 @@ function verifiedHistoryWindowFromFactLedger(input: {
   openRowCount: number;
   openStartRoot: string;
   openEndRoot: string;
+  capsuleLimit?: number;
 }): ProgramHistoryWindow {
   const bodies: string[] = [];
   const manifest = input.manifest || "octra-vitals-fact-ledger.v2";
@@ -429,7 +436,7 @@ function verifiedHistoryWindowFromFactLedger(input: {
     sealed_capsule_start_ordinal: sealedCapsuleStartOrdinal,
     sealed_capsule_total_count: sealedCapsuleTotalCount,
     sealed_capsule_verified_count: input.sealedCapsules.length,
-    capsule_limit: factLedgerHistoryCapsuleLimit(),
+    capsule_limit: input.capsuleLimit || factLedgerHistoryCapsuleLimit(),
     families: [{
       family_id: FACT_LEDGER_CORE_FAMILY_ID,
       schema_id: FACT_LEDGER_CORE_SCHEMA_ID,
@@ -686,7 +693,7 @@ async function readProgramSummaryHistoryFromUrlV1(programAddress: string, url: s
   });
 }
 
-async function readProgramSummaryHistoryFromUrlFactLedger(programAddress: string, url: string): Promise<ProgramHistoryWindow> {
+async function readProgramSummaryHistoryFromUrlFactLedger(programAddress: string, url: string, options: ProgramHistoryReadOptions = {}): Promise<ProgramHistoryWindow> {
   const [catalogRoot, familyRoot, openBody, openRowCount, openStartRoot, openEndRoot, capsuleCount] = await Promise.all([
     contractCallAtUrl<string>(url, programAddress, "get_catalog_root"),
     contractCallAtUrl<string>(url, programAddress, "get_family_root", ["0000"]),
@@ -698,8 +705,8 @@ async function readProgramSummaryHistoryFromUrlFactLedger(programAddress: string
   ]);
   const sealedCount = Number(capsuleCount || 0);
   const sealedCapsules: Array<{ id: string; body: string; meta: string; rootAfter: string }> = [];
+  const limit = factLedgerHistoryCapsuleLimit(options);
   if (sealedCount > 0) {
-    const limit = factLedgerHistoryCapsuleLimit();
     const start = Math.max(0, sealedCount - limit);
     const capsuleIds = await Promise.all(Array.from({ length: sealedCount - start }, (_, index) => (
       contractCallAtUrl<string>(url, programAddress, "get_family_capsule_id_at", ["0000", start + index])
@@ -720,17 +727,18 @@ async function readProgramSummaryHistoryFromUrlFactLedger(programAddress: string
     openBody,
     openRowCount: Number(openRowCount || 0),
     openStartRoot,
-    openEndRoot
+    openEndRoot,
+    capsuleLimit: limit
   });
 }
 
-async function readProgramSummaryHistoryFromUrl(programAddress: string, url: string): Promise<ProgramHistoryWindow> {
+async function readProgramSummaryHistoryFromUrl(programAddress: string, url: string, options: ProgramHistoryReadOptions = {}): Promise<ProgramHistoryWindow> {
   try {
     return await readProgramSummaryHistoryFromUrlV0(programAddress, url);
   } catch (error) {
     const manifest = await contractCallAtUrl<string>(url, programAddress, "manifest").catch(() => "");
     if (manifest === "vitals-circle-state.v1") return readProgramSummaryHistoryFromUrlV1(programAddress, url);
-    if (isFactLedgerManifest(manifest)) return readProgramSummaryHistoryFromUrlFactLedger(programAddress, url);
+    if (isFactLedgerManifest(manifest)) return readProgramSummaryHistoryFromUrlFactLedger(programAddress, url, options);
     throw error;
   }
 }
@@ -792,7 +800,7 @@ async function readCircleProgramSummaryHistoryFromUrlV1(circleId: string, url: s
   return history;
 }
 
-async function readCircleProgramSummaryHistoryFromUrlFactLedger(circleId: string, url: string): Promise<ProgramHistoryWindow> {
+async function readCircleProgramSummaryHistoryFromUrlFactLedger(circleId: string, url: string, options: ProgramHistoryReadOptions = {}): Promise<ProgramHistoryWindow> {
   const [manifest, eraProgram, eraNetworkId, predecessorProgram, predecessorFinalRoot, predecessorFinalIndex, predecessorAnchorHash, eraFirstSnapshotIndex, catalogRoot, familyRoot, familyCapsulesRoot, openBody, openRowCount, openStartRoot, openEndRoot, capsuleCount] = await Promise.all([
     circleProgramViewAtUrl<string>(url, circleId, "manifest").catch(() => ""),
     circleProgramViewAtUrl<string>(url, circleId, "get_era_program").catch(() => circleId),
@@ -813,8 +821,8 @@ async function readCircleProgramSummaryHistoryFromUrlFactLedger(circleId: string
   ]);
   const sealedCount = Number(capsuleCount || 0);
   const sealedCapsules: Array<{ id: string; body: string; meta: string; rootAfter: string }> = [];
+  const limit = factLedgerHistoryCapsuleLimit(options);
   if (sealedCount > 0) {
-    const limit = factLedgerHistoryCapsuleLimit();
     const start = Math.max(0, sealedCount - limit);
     const capsuleIds = await Promise.all(Array.from({ length: sealedCount - start }, (_, index) => (
       circleProgramViewAtUrl<string>(url, circleId, "get_family_capsule_id_at", ["0000", start + index])
@@ -833,12 +841,13 @@ async function readCircleProgramSummaryHistoryFromUrlFactLedger(circleId: string
     familyRoot,
     familyCapsulesRoot,
     sealedCapsules,
-    sealedCapsuleStartOrdinal: Math.max(0, sealedCount - factLedgerHistoryCapsuleLimit()),
+    sealedCapsuleStartOrdinal: Math.max(0, sealedCount - limit),
     sealedCapsuleTotalCount: sealedCount,
     openBody,
     openRowCount: Number(openRowCount || 0),
     openStartRoot,
-    openEndRoot
+    openEndRoot,
+    capsuleLimit: limit
   });
   const era: ProgramHistoryEra = {
     era_id: circleId,
@@ -863,13 +872,13 @@ async function readCircleProgramSummaryHistoryFromUrlFactLedger(circleId: string
   return history;
 }
 
-async function readCircleProgramSummaryHistoryFromUrl(circleId: string, url: string): Promise<ProgramHistoryWindow> {
+async function readCircleProgramSummaryHistoryFromUrl(circleId: string, url: string, options: ProgramHistoryReadOptions = {}): Promise<ProgramHistoryWindow> {
   try {
     return await readCircleProgramSummaryHistoryFromUrlV0(circleId, url);
   } catch (error) {
     const manifest = await circleProgramViewAtUrl<string>(url, circleId, "manifest").catch(() => "");
     if (manifest === "vitals-circle-state.v1") return readCircleProgramSummaryHistoryFromUrlV1(circleId, url);
-    if (isFactLedgerManifest(manifest)) return readCircleProgramSummaryHistoryFromUrlFactLedger(circleId, url);
+    if (isFactLedgerManifest(manifest)) return readCircleProgramSummaryHistoryFromUrlFactLedger(circleId, url, options);
     throw error;
   }
 }
@@ -882,19 +891,23 @@ function meaningfulPredecessor(era: ProgramHistoryEra | undefined, circleId: str
   return true;
 }
 
-async function readCircleProgramSummaryHistoryFromUrlStitched(circleId: string, url: string, seen = new Set<string>()): Promise<ProgramHistoryWindow> {
+async function readCircleProgramSummaryHistoryFromUrlStitched(circleId: string, url: string, options: ProgramHistoryReadOptions = {}, seen = new Set<string>()): Promise<ProgramHistoryWindow> {
   if (seen.has(circleId)) throw new Error(`cycle in history era predecessor chain at ${circleId}`);
   if (seen.size >= Number(process.env.VITALS_HISTORY_ERA_LIMIT || 8)) throw new Error("history era predecessor chain exceeds configured limit");
   const nextSeen = new Set(seen);
   nextSeen.add(circleId);
-  const current = await readCircleProgramSummaryHistoryFromUrl(circleId, url);
+  const current = await readCircleProgramSummaryHistoryFromUrl(circleId, url, options);
   const currentEra = current.eras?.[0];
   if (!meaningfulPredecessor(currentEra, circleId)) return current;
 
   const predecessorId = currentEra?.predecessor_program || "";
-  const predecessor = await readCircleProgramSummaryHistoryFromUrlStitched(predecessorId, url, nextSeen);
   const predecessorFinalIndex = Number(currentEra?.predecessor_final_index || 0);
   const eraFirstIndex = Number(currentEra?.era_first_snapshot_index || 0);
+  const currentFirstIndex = historyFirstIndex(current);
+  if (current.proof?.truncated || (currentFirstIndex && eraFirstIndex && currentFirstIndex !== eraFirstIndex)) {
+    return current;
+  }
+  const predecessor = await readCircleProgramSummaryHistoryFromUrlStitched(predecessorId, url, options, nextSeen);
   const predecessorLatestIndex = historyLatestIndex(predecessor);
   if (predecessorLatestIndex !== predecessorFinalIndex) {
     throw new Error(`predecessor era latest index mismatch: expected ${predecessorFinalIndex}, got ${predecessorLatestIndex}`);
@@ -906,7 +919,6 @@ async function readCircleProgramSummaryHistoryFromUrlStitched(circleId: string, 
   if (eraFirstIndex !== predecessorFinalIndex + 1) {
     throw new Error(`era first index mismatch: expected ${predecessorFinalIndex + 1}, got ${eraFirstIndex}`);
   }
-  const currentFirstIndex = historyFirstIndex(current);
   if (currentFirstIndex && currentFirstIndex !== eraFirstIndex) {
     throw new Error(`current era first row mismatch: expected ${eraFirstIndex}, got ${currentFirstIndex}`);
   }
@@ -931,15 +943,15 @@ async function readCircleProgramSummaryHistoryFromUrlStitched(circleId: string, 
   return combined;
 }
 
-export async function readCircleProgramSummaryHistory(circleId: string): Promise<ProgramHistoryWindow> {
+export async function readCircleProgramSummaryHistory(circleId: string, options: ProgramHistoryReadOptions = {}): Promise<ProgramHistoryWindow> {
   const urls = programRpcUrls();
   const [primaryUrl, ...otherUrls] = urls;
   if (!primaryUrl) throw new Error("no Octra program RPC URL configured");
-  const primary = await readCircleProgramSummaryHistoryFromUrlStitched(circleId, primaryUrl);
+  const primary = await readCircleProgramSummaryHistoryFromUrlStitched(circleId, primaryUrl, options);
   if (!otherUrls.length) return primary;
   const candidates = await Promise.all(otherUrls.map(async (url) => ({
     url,
-    history: await readCircleProgramSummaryHistoryFromUrlStitched(circleId, url)
+    history: await readCircleProgramSummaryHistoryFromUrlStitched(circleId, url, options)
   })));
   for (const candidate of candidates) {
     assertSameHistory(primary, candidate.history, candidate.url);
@@ -947,15 +959,15 @@ export async function readCircleProgramSummaryHistory(circleId: string): Promise
   return primary;
 }
 
-export async function readProgramSummaryHistory(programAddress: string): Promise<ProgramHistoryWindow> {
+export async function readProgramSummaryHistory(programAddress: string, options: ProgramHistoryReadOptions = {}): Promise<ProgramHistoryWindow> {
   const urls = programRpcUrls();
   const [primaryUrl, ...otherUrls] = urls;
   if (!primaryUrl) throw new Error("no Octra program RPC URL configured");
-  const primary = await readProgramSummaryHistoryFromUrl(programAddress, primaryUrl);
+  const primary = await readProgramSummaryHistoryFromUrl(programAddress, primaryUrl, options);
   if (!otherUrls.length) return primary;
   const candidates = await Promise.all(otherUrls.map(async (url) => ({
     url,
-    history: await readProgramSummaryHistoryFromUrl(programAddress, url)
+    history: await readProgramSummaryHistoryFromUrl(programAddress, url, options)
   })));
   for (const candidate of candidates) {
     assertSameHistory(primary, candidate.history, candidate.url);

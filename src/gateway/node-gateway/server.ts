@@ -6,14 +6,14 @@ import { extname, join, resolve } from "node:path";
 import { buildLiveSnapshot, publicSnapshotArtifact, writeSnapshotArtifacts } from "../../lib/snapshot.js";
 import { FACT_LEDGER_MANIFEST } from "../../lib/aml-fact-ledger.js";
 import { canonicalJson, responseHash, sha256Hex, sha256Tagged } from "../../lib/canonical-json.js";
-import { assertHistoryTailMatchesLatest, configuredStateTarget, readCanonicalHistory as readCanonicalHistoryUncached, type StateTarget } from "../../lib/canonical-history.js";
+import { assertHistoryTailMatchesLatest, configuredStateTarget, readCanonicalHistory as readCanonicalHistoryUncached, type HistoryReadOptions, type StateTarget } from "../../lib/canonical-history.js";
 import { verifyCircleAssetIntegrity } from "../../lib/circle-asset-integrity.js";
 import { circleProgramViewAtUrl, configuredProgrammedCircleId, stateTargetMode } from "../../lib/circle-program.js";
 import { configuredProgramAddress, readLatestCircleProgramSnapshot, readLatestProgramSnapshot } from "../../lib/program-state.js";
 import { circleInfoAtUrl, circleProgramInfoAtUrl, contractCall, contractReceipt, contractSource, octraProgramRpcUrls, octraRpc, vmContract } from "../../lib/octra-rpc.js";
 import { configuredTrafficRecorder } from "../../lib/traffic.js";
 import { runtimeVitalsManifest, stableJson } from "../../lib/vitals-manifest.js";
-import { HISTORY_API_SCHEMA, LEGACY_HISTORY_SCHEMA, emptyHistoryProof, filterHistorySnapshots, historyApiCoverage, parseHistoryApiRequest, verifiedHistoryProof } from "../../lib/history-api.js";
+import { HISTORY_API_SCHEMA, LEGACY_HISTORY_SCHEMA, emptyHistoryProof, filterHistorySnapshots, historyApiCoverage, historyApiRecommendedCapsuleLimit, parseHistoryApiRequest, verifiedHistoryProof, type HistoryApiRequest } from "../../lib/history-api.js";
 import { labHistorySql, labSchema, labStatus, labTables, mirrorLabHistory } from "../../lib/lab-history.js";
 import { octraSqliteConfig, octraSqliteReadOnlyQuery, publicLabQueryError } from "../../lib/octra-sqlite-client.js";
 import type { ProgramHistoryWindow } from "../../lib/summary-window.js";
@@ -84,8 +84,8 @@ let latestCacheSource: SnapshotSource = "sample_fallback";
 let latestReadInFlight: Promise<LatestSnapshotResult> | null = null;
 let latestError: Error | null = null;
 let lastSuccessfulProgramReadAt: string | null = null;
-let historyCache: { program_address: string; checked_at: number; value: ProgramHistoryWindow } | null = null;
-let historyReadInFlight: { program_address: string; promise: Promise<ProgramHistoryWindow> } | null = null;
+let historyCache = new Map<string, { checked_at: number; value: ProgramHistoryWindow }>();
+let historyReadInFlight = new Map<string, Promise<ProgramHistoryWindow>>();
 let historyError: Error | null = null;
 let liveVerificationCache: { address: string; checked_at: string; value: Record<string, any> } | null = null;
 let circleProgramVerificationCache: { circle_id: string; checked_at: string; value: Record<string, any> } | null = null;
@@ -984,41 +984,66 @@ function targetCacheKey(target: StateTarget): string {
   return `${target.kind}:${target.id || "pending"}`;
 }
 
-async function readCanonicalHistory(target: StateTarget, bypassCache = false): Promise<ProgramHistoryWindow> {
-  const cacheKey = targetCacheKey(target);
+function historyReadCacheKey(target: StateTarget, options: HistoryReadOptions = {}): string {
+  const capsuleLimit = options.maxSealedCapsules === null || options.maxSealedCapsules === undefined
+    ? "default"
+    : String(options.maxSealedCapsules);
+  return `${targetCacheKey(target)}:capsules=${capsuleLimit}`;
+}
+
+function historyReadOptionsForRequest(request: HistoryApiRequest): HistoryReadOptions {
+  const maxSealedCapsules = historyApiRecommendedCapsuleLimit(request);
+  return maxSealedCapsules === null ? {} : { maxSealedCapsules };
+}
+
+async function readCanonicalHistory(target: StateTarget, bypassCache = false, options: HistoryReadOptions = {}): Promise<ProgramHistoryWindow> {
+  const cacheKey = historyReadCacheKey(target, options);
+  const cached = historyCache.get(cacheKey);
   if (
     !bypassCache &&
-    historyCache?.program_address === cacheKey &&
+    cached &&
     historyReadTtlMs > 0 &&
-    Date.now() - historyCache.checked_at <= historyReadTtlMs
+    Date.now() - cached.checked_at <= historyReadTtlMs
   ) {
-    return historyCache.value;
+    return cached.value;
   }
-  if (historyReadInFlight?.program_address === cacheKey) {
-    return historyReadInFlight.promise;
+  const inFlight = historyReadInFlight.get(cacheKey);
+  if (inFlight) {
+    return inFlight;
   }
   if (!target.id) throw new Error(`${target.kind === "circle_program" ? "programmed Circle id" : "state program address"} is required`);
-  const promise = readCanonicalHistoryUncached(target)
+  const promise = readCanonicalHistoryUncached(target, options)
     .then((value) => {
-      historyCache = { program_address: cacheKey, checked_at: Date.now(), value };
+      historyCache.set(cacheKey, { checked_at: Date.now(), value });
+      while (historyCache.size > 8) {
+        const oldest = historyCache.keys().next().value;
+        if (!oldest) break;
+        historyCache.delete(oldest);
+      }
       historyError = null;
       return value;
     })
     .finally(() => {
-      if (historyReadInFlight?.promise === promise) historyReadInFlight = null;
+      if (historyReadInFlight.get(cacheKey) === promise) historyReadInFlight.delete(cacheKey);
     });
-  historyReadInFlight = { program_address: cacheKey, promise };
+  historyReadInFlight.set(cacheKey, promise);
   return promise;
 }
 
-async function readVerifiedCanonicalHistory(target: StateTarget): Promise<ProgramHistoryWindow> {
+async function readVerifiedCanonicalHistory(target: StateTarget, options: HistoryReadOptions = {}): Promise<ProgramHistoryWindow> {
   if (!target.id) throw new Error(`${target.kind === "circle_program" ? "programmed Circle id" : "state program address"} is required`);
   const latest = target.kind === "circle_program"
     ? await readLatestCircleProgramSnapshot(target.id)
     : await readLatestProgramSnapshot(target.id);
-  const history = await readCanonicalHistory(target, true);
-  assertHistoryTailMatchesLatest(history, latest);
-  return history;
+  const history = await readCanonicalHistory(target, false, options);
+  try {
+    assertHistoryTailMatchesLatest(history, latest);
+    return history;
+  } catch (error) {
+    const refreshed = await readCanonicalHistory(target, true, options);
+    assertHistoryTailMatchesLatest(refreshed, latest);
+    return refreshed;
+  }
 }
 
 async function resolvedStateTarget(): Promise<StateTarget> {
@@ -1702,7 +1727,7 @@ async function serveHistory(res: http.ServerResponse, url: URL, head = false): P
     }, {}, head);
   }
   try {
-    const history = await readVerifiedCanonicalHistory(target);
+    const history = await readVerifiedCanonicalHistory(target, historyReadOptionsForRequest(historyRequest));
     const allSnapshots = history.rows.map((row) => ({
       snapshot_index: row.snapshot_index,
       snapshot_id: `vitals.${new Date(row.observed_at_unix * 1000).toISOString().replace(/\.\d{3}Z$/, "Z")}`,
