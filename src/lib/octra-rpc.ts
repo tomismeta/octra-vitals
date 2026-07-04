@@ -47,7 +47,37 @@ function retrySafeOctraMethod(method: string): boolean {
 
 function retryableError(error: unknown): boolean {
   const message = error instanceof Error ? error.message : String(error);
-  return /aborted|network|fetch failed|timeout|timed out|econnreset|etimedout|eai_again|returned 408|returned 425|returned 429|returned 5\d\d/i.test(message);
+  return /aborted|network|fetch failed|timeout|timed out|econnreset|etimedout|eai_again|returned 408|returned 425|returned 429|returned 5\d\d|non-json|temporarily unavailable|rate limit|too many requests/i.test(message);
+}
+
+function retryableHttpStatus(status: number): boolean {
+  return [408, 425, 429, 500, 502, 503, 504].includes(status);
+}
+
+function retryableRpcError(error: any): boolean {
+  const code = Number(error?.code);
+  const message = String(error?.message || JSON.stringify(error || "")).toLowerCase();
+  return code === 429 ||
+    code === -32029 ||
+    message.includes("too many requests") ||
+    message.includes("rate limit") ||
+    message.includes("temporarily unavailable");
+}
+
+function retryAfterMs(value: string | null): number | null {
+  if (!value) return null;
+  const seconds = Number(value.trim());
+  if (Number.isFinite(seconds) && seconds >= 0) return Math.min(seconds * 1000, 30_000);
+  const dateMs = Date.parse(value);
+  if (Number.isFinite(dateMs)) return Math.min(Math.max(0, dateMs - Date.now()), 30_000);
+  return null;
+}
+
+function retryDelay(attempt: number, retryAfter: number | null): number {
+  if (retryAfter !== null) return retryAfter;
+  const baseMs = Math.max(0, Number(process.env.OCTRA_RPC_RETRY_DELAY_MS || 1_000));
+  const jitterMs = Math.floor(Math.random() * Math.max(1, baseMs / 3));
+  return Math.min(10_000, baseMs * 2 ** Math.max(0, attempt - 1) + jitterMs);
 }
 
 export async function octraRpc<T = any>(method: string, params: unknown[] = [], options: OctraRpcOptions = {}): Promise<T> {
@@ -60,8 +90,7 @@ export async function octraRpc<T = any>(method: string, params: unknown[] = [], 
     params
   };
   const shouldRetry = options.retry ?? retrySafeOctraMethod(method);
-  const maxAttempts = shouldRetry ? Math.max(1, Number(process.env.OCTRA_RPC_ATTEMPTS || 3)) : 1;
-  const retryDelayMs = Math.max(0, Number(process.env.OCTRA_RPC_RETRY_DELAY_MS || 1_500));
+  const maxAttempts = shouldRetry ? Math.max(1, Number(process.env.OCTRA_RPC_ATTEMPTS || 5)) : 1;
   let lastError: unknown = null;
 
   for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
@@ -80,11 +109,34 @@ export async function octraRpc<T = any>(method: string, params: unknown[] = [], 
       });
       const text = await response.text();
       if (!response.ok) {
-        throw new Error(`${url} returned ${response.status}: ${text.slice(0, 240)}`);
+        const error = new Error(`${url} returned ${response.status}: ${text.slice(0, 240)}`);
+        lastError = error;
+        if (attempt < maxAttempts && retryableHttpStatus(response.status)) {
+          await sleep(retryDelay(attempt, retryAfterMs(response.headers.get("retry-after"))));
+          continue;
+        }
+        throw error;
       }
-      const body = JSON.parse(text);
+      let body: any;
+      try {
+        body = JSON.parse(text);
+      } catch (error) {
+        const wrapped = new Error(`${url} returned non-JSON ${method} response: ${text.slice(0, 240)}`);
+        lastError = wrapped;
+        if (attempt < maxAttempts && retryableError(wrapped)) {
+          await sleep(retryDelay(attempt, null));
+          continue;
+        }
+        throw wrapped;
+      }
       if (body.error) {
-        throw new Error(`${method} failed: ${body.error.message || JSON.stringify(body.error)}`);
+        const error = new Error(`${method} failed: ${body.error.message || JSON.stringify(body.error)}`);
+        lastError = error;
+        if (attempt < maxAttempts && retryableRpcError(body.error)) {
+          await sleep(retryDelay(attempt, null));
+          continue;
+        }
+        throw error;
       }
       return body.result;
     } catch (error) {
@@ -92,7 +144,7 @@ export async function octraRpc<T = any>(method: string, params: unknown[] = [], 
       if (attempt >= maxAttempts || !retryableError(error)) {
         throw error;
       }
-      await sleep(retryDelayMs * attempt);
+      await sleep(retryDelay(attempt, null));
     } finally {
       clearTimeout(timeout);
     }
