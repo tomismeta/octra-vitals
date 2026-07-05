@@ -28,8 +28,8 @@ const latestSubmitReceiptPath = join(dataDir, "latest_submit_receipt.json");
 const host = process.env.HOST || "127.0.0.1";
 const port = Number(process.env.PORT || 4173);
 const staleAfterMs = Number(process.env.VITALS_STALE_AFTER_MS || 20 * 60_000);
-const latestReadTtlMs = Number(process.env.VITALS_LATEST_READ_TTL_MS || 15_000);
-const historyReadTtlMs = Number(process.env.VITALS_HISTORY_READ_TTL_MS || 60_000);
+const latestReadTtlMs = Number(process.env.VITALS_LATEST_READ_TTL_MS || 60_000);
+const historyReadTtlMs = Number(process.env.VITALS_HISTORY_READ_TTL_MS || 60 * 60_000);
 const labQueryMaxConcurrent = Math.max(1, Number(process.env.VITALS_LAB_QUERY_MAX_CONCURRENT || 2));
 const labQueryRateWindowMs = Math.max(1_000, Number(process.env.VITALS_LAB_QUERY_RATE_WINDOW_MS || 60_000));
 const labQueryRateMax = Math.max(1, Number(process.env.VITALS_LAB_QUERY_RATE_MAX || 30));
@@ -1032,10 +1032,14 @@ async function readCanonicalHistory(target: StateTarget, bypassCache = false, op
 
 async function readVerifiedCanonicalHistory(target: StateTarget, options: HistoryReadOptions = {}): Promise<ProgramHistoryWindow> {
   if (!target.id) throw new Error(`${target.kind === "circle_program" ? "programmed Circle id" : "state program address"} is required`);
-  const latest = target.kind === "circle_program"
-    ? await readLatestCircleProgramSnapshot(target.id)
-    : await readLatestProgramSnapshot(target.id);
+  const latestResultPromise = getLatestSnapshot();
   const history = await readCanonicalHistory(target, false, options);
+  const latestResult = await latestResultPromise;
+  const latest = latestResult.source === "program" && latestResult.snapshot
+    ? latestResult.snapshot
+    : target.kind === "circle_program"
+      ? await readLatestCircleProgramSnapshot(target.id)
+      : await readLatestProgramSnapshot(target.id);
   try {
     assertHistoryTailMatchesLatest(history, latest);
     return history;

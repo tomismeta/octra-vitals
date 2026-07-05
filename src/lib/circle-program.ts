@@ -28,8 +28,8 @@ function nonNegativeIntEnv(name: string, fallback: number): number {
   return Number.isSafeInteger(parsed) && parsed >= 0 ? parsed : fallback;
 }
 
-const circleViewMaxConcurrent = positiveIntEnv("VITALS_CIRCLE_VIEW_MAX_CONCURRENT", 3);
-const circleViewMinStartGapMs = nonNegativeIntEnv("VITALS_CIRCLE_VIEW_MIN_START_GAP_MS", 75);
+const circleViewMaxConcurrent = positiveIntEnv("VITALS_CIRCLE_VIEW_MAX_CONCURRENT", 4);
+const circleViewMinStartGapMs = nonNegativeIntEnv("VITALS_CIRCLE_VIEW_MIN_START_GAP_MS", 50);
 let activeCircleViews = 0;
 let nextCircleViewStartAt = 0;
 const circleViewQueue: Array<() => void> = [];

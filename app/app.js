@@ -71,7 +71,6 @@ const HISTORY_WINDOWS = Object.freeze({
   "30d": { label: "30d", ms: 30 * 24 * 60 * 60 * 1000 }
 });
 const DEFAULT_HISTORY_WINDOW = "1d";
-const HISTORY_FETCH_WINDOW = "30d";
 const MAX_HISTORY_POINTS = 30 * 24 * 4 + 8; // 30 days at the current ~15-minute cadence, plus a little drift.
 
 /* ============================================================================
@@ -998,7 +997,7 @@ async function loadInitialData(){
   };
 }
 
-async function loadCanonicalHistory(versionResult){
+async function loadCanonicalHistory(versionResult, windowName=DEFAULT_HISTORY_WINDOW){
   if(versionResult?.body || APP_CONFIG?.state_program_address){
     try{
       return await loadNativeProgramHistory(versionResult?.body || APP_CONFIG);
@@ -1006,7 +1005,7 @@ async function loadCanonicalHistory(versionResult){
       console.warn("[Octra Vitals] direct Octra history read unavailable; falling back to gateway", error);
     }
   }
-  return fetchFirst(endpointCandidates(historyApiPath(), null, {
+  return fetchFirst(endpointCandidates(historyApiPath(windowName), null, {
     gatewayOrigin: configuredGatewayOrigin(versionResult?.body || APP_CONFIG)
   }));
 }
@@ -1512,6 +1511,25 @@ function seriesPublicPctOfCirc(){ return activeSeries().map(r=> pctR(BigInt(r[CO
 let sparkMode = (()=>{ try{ const m=localStorage.getItem("octv.sparkMode"); return (m==="trend"||m==="flow"||m==="absolute")?m:"flow"; }catch(e){ return "flow"; } })();
 let sparkWindow = (()=>{ try{ const m=localStorage.getItem("octv.sparkWindow"); return HISTORY_WINDOWS[m] ? m : DEFAULT_HISTORY_WINDOW; }catch(e){ return DEFAULT_HISTORY_WINDOW; } })();
 let historyHydrationState = "pending";
+let historyInitialLoad = null;
+let historyHydrationPromise = null;
+
+function historyWindowRank(name){
+  return Object.keys(HISTORY_WINDOWS).indexOf(name);
+}
+
+function loadedHistoryWindowName(){
+  const coverageWindow = DATA?.source?.history_coverage?.requested_window;
+  const loadedWindow = DATA?.source?.history_window;
+  return HISTORY_WINDOWS[loadedWindow] ? loadedWindow : HISTORY_WINDOWS[coverageWindow] ? coverageWindow : null;
+}
+
+function loadedHistoryCovers(windowName){
+  const loaded = loadedHistoryWindowName();
+  const loadedRank = historyWindowRank(loaded);
+  const requestedRank = historyWindowRank(windowName);
+  return loadedRank >= 0 && requestedRank >= 0 && loadedRank >= requestedRank && DATA?.source?.history_canonical === true;
+}
 
 function sparkSM(values, opts={}){
   const mode = opts.mode || sparkMode;
@@ -1601,6 +1619,7 @@ function setupSparkWindow(){
       syncHistoryWindowControls();
       if(renderReady) buildState();
       if(verifyRendered) buildLedgerSparks();
+      ensureCanonicalHistoryWindow(m);
     });
   });
   syncHistoryWindowControls();
@@ -1680,8 +1699,8 @@ function setupSparkTooltips(){
   });
 }
 
-function historyApiPath(){
-  return `/api/history?window=${encodeURIComponent(HISTORY_FETCH_WINDOW)}`;
+function historyApiPath(windowName=DEFAULT_HISTORY_WINDOW){
+  return `/api/history?window=${encodeURIComponent(HISTORY_WINDOWS[windowName] ? windowName : DEFAULT_HISTORY_WINDOW)}`;
 }
 
 /* ============================================================================
@@ -2069,7 +2088,7 @@ function logIdentityCheck(){
   if(!ok) console.warn("[Octra Vitals] a snapshot identity did NOT hold — investigate before publishing.");
 }
 
-function applyCanonicalHistory(historyResult){
+function applyCanonicalHistory(historyResult, windowName=null){
   const historyBody = historyResult?.body || {};
   const historyAuthority = historyBody.authority || {};
   if(historyAuthority.canonical_state_read !== true){
@@ -2087,7 +2106,8 @@ function applyCanonicalHistory(historyResult){
       history_canonical: true,
       history_source: historyAuthority.source || null,
       history_url: historyResult.url || null,
-      history_coverage: historyBody.coverage || null
+      history_coverage: historyBody.coverage || null,
+      history_window: windowName || historyBody.request?.window || null
     }
   };
   A = accounting(DATA);
@@ -2096,16 +2116,37 @@ function applyCanonicalHistory(historyResult){
   return true;
 }
 
-async function hydrateHistory(initialLoad){
+async function hydrateHistory(initialLoad, windowName=sparkWindow){
   let versionResult = initialLoad.versionResult;
   if(!versionResult && (isStaticOnlyOrigin() || isCircleClientOrigin())) versionResult = await initialLoad.versionPromise;
-  const historyResult = await loadCanonicalHistory(versionResult);
-  if(applyCanonicalHistory(historyResult)){
+  const historyResult = await loadCanonicalHistory(versionResult, windowName);
+  if(applyCanonicalHistory(historyResult, windowName)){
     perfMark("history_applied");
   }else if(renderReady){
     buildState();
     if(verifyRendered) buildLedgerSparks();
   }
+}
+
+function ensureCanonicalHistoryWindow(windowName=sparkWindow){
+  if(!historyInitialLoad || loadedHistoryCovers(windowName)) return;
+  if(historyHydrationPromise){
+    historyHydrationPromise.finally(()=>{
+      if(!loadedHistoryCovers(windowName)) ensureCanonicalHistoryWindow(windowName);
+    });
+    return;
+  }
+  historyHydrationState = "pending";
+  if(renderReady) buildState();
+  if(verifyRendered) buildLedgerSparks();
+  historyHydrationPromise = hydrateHistory(historyInitialLoad, windowName).catch((error)=>{
+    historyHydrationState = "unavailable";
+    if(renderReady) buildState();
+    if(verifyRendered) buildLedgerSparks();
+    console.warn("[Octra Vitals] canonical history unavailable; rendering latest-only trend state", error);
+  }).finally(()=>{
+    historyHydrationPromise = null;
+  });
 }
 
 async function boot(){
@@ -2117,6 +2158,7 @@ async function boot(){
     A = accounting(DATA);
     renderReady = true;
     verifyRendered = false;
+    historyInitialLoad = initialLoad;
 
     renderFirstViewport();
     setupVerifyLazyRender();
@@ -2133,12 +2175,7 @@ async function boot(){
       }catch(error){
         console.error(error);
       }
-      hydrateHistory(initialLoad).catch((error)=>{
-        historyHydrationState = "unavailable";
-        if(renderReady) buildState();
-        if(verifyRendered) buildLedgerSparks();
-        console.warn("[Octra Vitals] canonical history unavailable; rendering latest-only trend state", error);
-      });
+      ensureCanonicalHistoryWindow(sparkWindow);
     });
   }catch(err){
     console.error(err);
