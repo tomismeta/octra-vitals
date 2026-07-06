@@ -181,7 +181,7 @@ export function historyApiCoverage(snapshots: NormalizedHistorySnapshot[], filte
     const allLatestMs = observedMs(snapshots[snapshots.length - 1] || {});
     if (allFirstMs !== null && allLatestMs !== null && allLatestMs - allFirstMs < WINDOW_MS[request.window]) {
       status = "partial";
-      note = "available canonical history is shorter than the requested window";
+      note = "available verified history is shorter than the requested window";
     }
   }
   if (!request.valid) {
@@ -191,13 +191,13 @@ export function historyApiCoverage(snapshots: NormalizedHistorySnapshot[], filte
     const allFirstIndex = snapshotIndex(snapshots[0] || {});
     if (allFirstIndex !== null && request.from_index < allFirstIndex) {
       status = filtered.length > 0 ? "partial" : "empty";
-      note = "requested index range begins before available canonical history";
+      note = "requested index range begins before available verified history";
     }
   } else if (request.from && snapshots.length > 0) {
     const allFirstMs = observedMs(snapshots[0] || {});
     if (allFirstMs !== null && Date.parse(request.from) < allFirstMs) {
       status = filtered.length > 0 ? "partial" : "empty";
-      note = "requested time range begins before available canonical history";
+      note = "requested time range begins before available verified history";
     }
   }
 
