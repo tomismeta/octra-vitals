@@ -60,6 +60,7 @@ Durable history reads are verified by folding capsule bodies and metadata agains
 - `full_chain`: every sealed capsule needed for that era was read and folded from the empty root;
 - `tail_window`: only the recent configured capsule tail was read, so the returned rows are verified locally but the whole era was not replayed in that response;
 - `summary_window`: older-era bounded-window history.
+- `latest_row_anchor`: rows came from a derived history mirror, and the latest returned row was anchored against the latest AML snapshot before use.
 
 ## Extensibility
 

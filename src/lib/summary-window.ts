@@ -41,7 +41,7 @@ export interface ProgramHistoryWindow {
 }
 
 export interface ProgramHistoryProof {
-  scope: "full_chain" | "tail_window" | "summary_window" | "unavailable";
+  scope: "full_chain" | "tail_window" | "summary_window" | "latest_row_anchor" | "unavailable";
   truncated: boolean;
   sealed_capsule_start_ordinal?: number;
   sealed_capsule_total_count?: number;

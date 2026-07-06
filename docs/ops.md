@@ -112,7 +112,7 @@ curl https://<gateway-origin>/api/site-integrity
 Native-ready means:
 
 - latest is program-backed and fresh;
-- history is AML-backed and proof-bearing;
+- history is proof-bearing and explicitly labels whether rows were served from AML or the SQLite mirror;
 - site assets match the pinned Circle release;
 - programmed-Circle code/methods/source/formal artifacts verify;
 - the gateway is in fail-closed production mode.

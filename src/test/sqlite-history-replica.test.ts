@@ -89,8 +89,8 @@ function fakeOpen(rows: SummaryRow[]): (sql: string) => Promise<OctraSqliteResul
 
 test("SQLite history replica rebuilds a paged tail and verifies it against latest AML summary", async () => {
   const rows = Array.from({ length: 60 }, (_, offset) => row(offset + 1));
-  const previousPageRows = process.env.VITALS_SQLITE_HISTORY_PAGE_ROWS;
-  process.env.VITALS_SQLITE_HISTORY_PAGE_ROWS = "25";
+  const previousPageRows = process.env.VITALS_HISTORY_REPLICA_PAGE_ROWS;
+  process.env.VITALS_HISTORY_REPLICA_PAGE_ROWS = "25";
   let result: Awaited<ReturnType<typeof readSqliteHistoryReplica>>;
   try {
     result = await readSqliteHistoryReplica(
@@ -109,15 +109,16 @@ test("SQLite history replica rebuilds a paged tail and verifies it against lates
       }
     );
   } finally {
-    if (previousPageRows === undefined) delete process.env.VITALS_SQLITE_HISTORY_PAGE_ROWS;
-    else process.env.VITALS_SQLITE_HISTORY_PAGE_ROWS = previousPageRows;
+    if (previousPageRows === undefined) delete process.env.VITALS_HISTORY_REPLICA_PAGE_ROWS;
+    else process.env.VITALS_HISTORY_REPLICA_PAGE_ROWS = previousPageRows;
   }
 
   assert.equal(result.history.row_count, 48);
   assert.equal(result.history.first_index, 13);
   assert.equal(result.history.rows[result.history.rows.length - 1]?.snapshot_index, 60);
   assert.equal(result.page_count, 2);
-  assert.equal(result.history.proof?.scope, "tail_window");
+  assert.equal(result.history.history_discovery, "sqlite_history_mirror_latest_summary_anchor");
+  assert.equal(result.history.proof?.scope, "latest_row_anchor");
   assert.equal(result.history.proof?.truncated, true);
 });
 

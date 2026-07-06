@@ -849,7 +849,9 @@ function adaptSnapshot(latestResult, versionResult, historyResult){
   if(body.fresh === false){
     throw new Error("latest AML snapshot is stale");
   }
+  const historyRead = historyAuthority.history_read || {};
   const historyCanonical = historyAuthority.canonical_state_read === true;
+  const historyVerified = historyCanonical || historyRead.usable_for_display === true;
   const currentStateTargetMode = authority.state_target_mode || version.state_target_mode || body.native_readiness?.state_target_mode || "state_program";
   const programRef = currentStateTargetMode === "circle_program"
     ? pickText(authority.programmed_circle_id, version.programmed_circle_id, body.native_readiness?.state_target_id)
@@ -955,11 +957,15 @@ function adaptSnapshot(latestResult, versionResult, historyResult){
       canonical_state_read: !sampleFallback && authority.canonical_state_read === true && authority.client_verified === true,
       client_verified: !sampleFallback && authority.client_verified === true,
       history_canonical: historyCanonical,
+      history_verified: historyVerified,
       history_source: historyAuthority.source || null,
+      history_serving_path: historyRead.serving_path || null,
+      history_backing_path: historyRead.backing_path || null,
+      history_verification_level: historyRead.verification_level || null,
       burn_source: supply.confirmed_burned_oct_raw ? "confirmed_burned_oct_raw" : supply.burned_oct_raw ? "burned_oct_raw" : "not_provided"
     }
   };
-  const history = historyRows(historyCanonical ? historyBody : null, data);
+  const history = historyRows(historyVerified ? historyBody : null, data);
   data.series = history.rows;
   data.history_points = history.distinctCount;
   return data;
@@ -1188,7 +1194,7 @@ function activeSeries(){
   return filtered;
 }
 function hasHistoryWindow(rows=activeSeries()){ return rows.length > 1; }
-function hasCanonicalHistoryWindow(rows=activeSeries()){ return hasHistoryWindow(rows) && DATA.source?.history_canonical === true; }
+function hasCanonicalHistoryWindow(rows=activeSeries()){ return hasHistoryWindow(rows) && (DATA.source?.history_verified === true || DATA.source?.history_canonical === true); }
 function historyPending(){ return historyHydrationState === "pending"; }
 function trendPhrase(stableText="stable"){ return hasCanonicalHistoryWindow() ? stableText : (historyPending() ? "loading history" : "latest snapshot only"); }
 function historySpan(rows=activeSeries()){
@@ -1538,7 +1544,7 @@ function loadedHistoryCovers(windowName){
   const loaded = loadedHistoryWindowName();
   const loadedRank = historyWindowRank(loaded);
   const requestedRank = historyWindowRank(windowName);
-  return loadedRank >= 0 && requestedRank >= 0 && loadedRank >= requestedRank && DATA?.source?.history_canonical === true;
+  return loadedRank >= 0 && requestedRank >= 0 && loadedRank >= requestedRank && (DATA?.source?.history_verified === true || DATA?.source?.history_canonical === true);
 }
 
 function sparkSM(values, opts={}){
@@ -2102,7 +2108,10 @@ function logIdentityCheck(){
 function applyCanonicalHistory(historyResult, windowName=null){
   const historyBody = historyResult?.body || {};
   const historyAuthority = historyBody.authority || {};
-  if(historyAuthority.canonical_state_read !== true){
+  const historyRead = historyAuthority.history_read || {};
+  const historyCanonical = historyAuthority.canonical_state_read === true;
+  const historyVerified = historyCanonical || historyRead.usable_for_display === true;
+  if(!historyVerified){
     historyHydrationState = "unavailable";
     return false;
   }
@@ -2114,8 +2123,12 @@ function applyCanonicalHistory(historyResult, windowName=null){
     history_points: history.distinctCount,
     source: {
       ...DATA.source,
-      history_canonical: true,
+      history_canonical: historyCanonical,
+      history_verified: true,
       history_source: historyAuthority.source || null,
+      history_serving_path: historyRead.serving_path || null,
+      history_backing_path: historyRead.backing_path || null,
+      history_verification_level: historyRead.verification_level || null,
       history_url: historyResult.url || null,
       history_coverage: historyBody.coverage || null,
       history_window: windowName || historyBody.request?.window || null
@@ -2154,7 +2167,7 @@ function ensureCanonicalHistoryWindow(windowName=sparkWindow){
     historyHydrationState = "unavailable";
     if(renderReady) buildState();
     if(verifyRendered) buildLedgerSparks();
-    console.warn("[Octra Vitals] canonical history unavailable; rendering latest-only trend state", error);
+    console.warn("[Octra Vitals] verified history unavailable; rendering latest-only trend state", error);
   }).finally(()=>{
     historyHydrationPromise = null;
   });

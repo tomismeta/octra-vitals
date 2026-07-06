@@ -13,7 +13,7 @@ This hardening pass changes only read paths, retention, diagnostics, and the opt
 - The UI requests compact history JSON and samples sparkline hover hit targets.
 - Octra RPC calls share one small concurrency budget.
 - The Lab mirror reads only the gap after its completion watermark.
-- `/api/history` can use the `octra-sqlite` Circle as a read-through history replica, then verify the tail against the latest AML snapshot before serving it.
+- `/api/history` can use the `octra-sqlite` Circle as a read replica, then anchor the latest row against the latest AML snapshot before serving it.
 - New raw evidence bodies are stored gzip-compressed on disk.
 - Operator alerts include a 365-day raw-evidence growth projection.
 - `/api/performance` can expose low-impact timing and cache checks when explicitly enabled.
@@ -30,9 +30,9 @@ This hardening pass changes only read paths, retention, diagnostics, and the opt
 
 ```text
 VITALS_HISTORY_READ_TTL_MS=3600000
-VITALS_HISTORY_READ_MODE=sqlite        # sqlite | aml | memory
-VITALS_HISTORY_SQLITE_FALLBACK_TO_AML=1
-VITALS_SQLITE_HISTORY_PAGE_ROWS=175
+VITALS_HISTORY_READ_PATH=replica       # replica | canonical | cache_only
+VITALS_HISTORY_REPLICA_FALLBACK_TO_CANONICAL=1
+VITALS_HISTORY_REPLICA_PAGE_ROWS=175
 VITALS_HISTORY_STALE_WHILE_REFRESH_MS=21600000
 VITALS_HISTORY_API_STALE_WINDOWS=7d,30d
 VITALS_HISTORY_PREWARM_ENABLED=1
@@ -72,4 +72,4 @@ The probe is sequential by design. It should measure the site, not become load.
 
 ## Main Constraint
 
-The expensive surface is long-horizon AML history reads. The current answer is Octra-native read-through history from the SQLite Circle, verified cache, and stale-while-refresh, not weaker truth. Future AML getter changes remain a separate gated design decision.
+The expensive surface is long-horizon AML history reads. The current answer is an Octra-native SQLite Circle history mirror, verified cache, and stale-while-refresh. AML remains canonical; the mirror is usable for display only after its latest row matches the latest AML snapshot. Future AML getter changes remain a separate gated design decision.

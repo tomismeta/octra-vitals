@@ -87,7 +87,7 @@ The dispatcher refuses mainnet write actions unless the report:
 - matches the current git commit;
 - targets devnet or stage;
 - serves program-backed latest state;
-- serves AML-backed history;
+- serves verified history with an explicit AML or SQLite-mirror read path;
 - reports native readiness;
 - verifies Circle assets;
 - uses `circle_program` mode.

@@ -125,6 +125,8 @@ test("empty history proof does not overclaim fact-family verification", () => {
   assert.equal(emptyHistoryProof("aml_fact_family_core_capsules_verified", true).proof_scope, "full_chain");
   assert.equal(emptyHistoryProof("aml_fact_family_core_capsules_tail_verified", true).proof_scope, "tail_window");
   assert.equal(emptyHistoryProof("aml_fact_family_core_capsules_tail_verified", true).truncated, true);
+  assert.equal(emptyHistoryProof("sqlite_history_mirror_latest_summary_anchor", true).proof_status, "latest_summary_anchor_verified");
+  assert.equal(emptyHistoryProof("sqlite_history_mirror_latest_summary_anchor", true).proof_scope, "latest_row_anchor");
   assert.equal(emptyHistoryProof("unavailable", false).proof_status, "unavailable");
   assert.equal(emptyHistoryProof("unavailable", false).proof_scope, "unavailable");
 });

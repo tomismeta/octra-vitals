@@ -22,7 +22,7 @@ function sourceId(target: StateTarget): string {
 }
 
 function pageRows(): number {
-  const configured = Number(process.env.VITALS_SQLITE_HISTORY_PAGE_ROWS || DEFAULT_SQLITE_HISTORY_PAGE_ROWS);
+  const configured = Number(process.env.VITALS_HISTORY_REPLICA_PAGE_ROWS || process.env.VITALS_SQLITE_HISTORY_PAGE_ROWS || DEFAULT_SQLITE_HISTORY_PAGE_ROWS);
   if (!Number.isFinite(configured) || configured <= 0) return DEFAULT_SQLITE_HISTORY_PAGE_ROWS;
   return Math.max(25, Math.min(175, Math.trunc(configured)));
 }
@@ -80,20 +80,11 @@ function historyWindowFromRows(rows: SummaryRow[], input: {
     window,
     window_hash: summaryWindowHash(window),
     rows,
-    history_discovery: "octra_sqlite_read_replica_summary_rows_aml_tail_verified",
+    history_discovery: "sqlite_history_mirror_latest_summary_anchor",
     proof: {
-      scope: "tail_window",
+      scope: "latest_row_anchor",
       truncated: rows.length < input.totalRowCount,
-      families: [{
-        family_id: "0000",
-        source: input.source,
-        source_id: input.sourceId,
-        database_uri: input.databaseUri,
-        total_row_count: input.totalRowCount,
-        selected_first_index: input.selectedFirstIndex,
-        selected_latest_index: input.selectedLatestIndex,
-        page_count: input.pageCount
-      }],
+      families: [],
       capsules: []
     }
   };

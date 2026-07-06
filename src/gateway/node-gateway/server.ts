@@ -45,13 +45,15 @@ const historyPrewarmWindows = (process.env.VITALS_HISTORY_PREWARM_WINDOWS || "1h
   .split(",")
   .map((value) => value.trim())
   .filter(Boolean);
-type HistoryReadMode = "sqlite" | "aml" | "memory";
+type HistoryReadMode = "replica" | "canonical" | "cache_only";
 type HistoryCacheSource = "sqlite" | "aml";
 const historyReadMode = ((): HistoryReadMode => {
-  const configured = (process.env.VITALS_HISTORY_READ_MODE || process.env.VITALS_HISTORY_READ_SOURCE || "sqlite").trim().toLowerCase();
-  return configured === "aml" || configured === "memory" || configured === "sqlite" ? configured : "sqlite";
+  const configured = (process.env.VITALS_HISTORY_READ_PATH || process.env.VITALS_HISTORY_READ_MODE || process.env.VITALS_HISTORY_READ_SOURCE || "replica").trim().toLowerCase();
+  if (configured === "canonical" || configured === "aml") return "canonical";
+  if (configured === "cache_only" || configured === "memory") return "cache_only";
+  return "replica";
 })();
-const sqliteHistoryFallbackToAml = process.env.VITALS_HISTORY_SQLITE_FALLBACK_TO_AML !== "0";
+const sqliteHistoryFallbackToAml = (process.env.VITALS_HISTORY_REPLICA_FALLBACK_TO_CANONICAL || process.env.VITALS_HISTORY_SQLITE_FALLBACK_TO_AML) !== "0";
 const responseGzipEnabled = process.env.VITALS_RESPONSE_GZIP_ENABLED !== "0";
 const responseGzipMinBytes = Number(process.env.VITALS_RESPONSE_GZIP_MIN_BYTES || 1024);
 const labQueryMaxConcurrent = Math.max(1, Number(process.env.VITALS_LAB_QUERY_MAX_CONCURRENT || 2));
@@ -131,6 +133,7 @@ let latestError: Error | null = null;
 let lastSuccessfulProgramReadAt: string | null = null;
 let historyCache = new Map<string, HistoryCacheEntry>();
 let historyReadInFlight = new Map<string, Promise<ProgramHistoryWindow>>();
+let historyRefreshInFlight = new Map<string, Promise<ProgramHistoryWindow>>();
 let historyError: Error | null = null;
 let lastHistoryPrewarmAt = 0;
 let historyPrewarmInFlight: Promise<void> | null = null;
@@ -1133,8 +1136,44 @@ function historyCacheDiagnostic(cacheKey: string, entry: HistoryCacheEntry | und
     verified: entry?.verified === true,
     source: entry?.source || null,
     read_mode: historyReadMode,
-    refresh_in_flight: historyReadInFlight.has(cacheKey),
+    refresh_in_flight: historyRefreshInFlight.has(cacheKey) || historyReadInFlight.has(cacheKey),
     last_refresh_error: entry?.last_refresh_error || null
+  };
+}
+
+function historyBackingPath(source: HistoryCacheSource | null): "canonical_state" | "sqlite_history_mirror" | "unavailable" {
+  if (source === "aml") return "canonical_state";
+  if (source === "sqlite") return "sqlite_history_mirror";
+  return "unavailable";
+}
+
+function configuredHistoryReadPath(): "canonical_state" | "sqlite_history_mirror" | "gateway_cache_only" {
+  if (historyReadMode === "canonical") return "canonical_state";
+  if (historyReadMode === "cache_only") return "gateway_cache_only";
+  return "sqlite_history_mirror";
+}
+
+function historyVerificationLevel(source: HistoryCacheSource | null, history: ProgramHistoryWindow | null | undefined): string {
+  const scope = history?.proof?.scope || "unavailable";
+  if (source === "sqlite") return "sqlite_latest_summary_anchor_verified";
+  if (source === "aml" && scope === "full_chain") return "aml_full_chain_verified";
+  if (source === "aml" && scope === "tail_window") return "aml_tail_window_verified";
+  if (source === "aml" && scope === "summary_window") return "aml_summary_window_verified";
+  if (source === "aml" && scope === "latest_row_anchor") return "aml_latest_summary_anchor_verified";
+  return "unavailable";
+}
+
+function publicHistoryRead(cache: HistoryApiRead["cache"], history: ProgramHistoryWindow): Record<string, unknown> {
+  const backingPath = historyBackingPath(cache.source);
+  return {
+    read_result: cache.status === "fresh" ? "served_from_cache" : cache.status === "stale_refreshing" ? "served_stale_revalidating" : "refreshed",
+    serving_path: cache.status === "miss" ? backingPath : "gateway_cache",
+    backing_path: backingPath,
+    configured_read_path: configuredHistoryReadPath(),
+    checked_at: cache.checked_at,
+    age_ms: cache.age_ms,
+    usable_for_display: cache.verified === true && backingPath !== "unavailable",
+    verification_level: historyVerificationLevel(cache.source, history)
   };
 }
 
@@ -1183,6 +1222,7 @@ async function readCanonicalHistory(target: StateTarget, bypassCache = false, op
   if (
     !bypassCache &&
     cached &&
+    cached.source === "aml" &&
     historyReadTtlMs > 0 &&
     Date.now() - cached.checked_at <= historyReadTtlMs
   ) {
@@ -1226,15 +1266,15 @@ async function latestSnapshotForHistory(target: StateTarget, latestResult?: Late
 }
 
 async function readHistorySource(target: StateTarget, latest: SnapshotArtifact, options: HistoryReadOptions = {}): Promise<{ history: ProgramHistoryWindow; source: HistoryCacheSource }> {
-  if (historyReadMode === "aml") {
+  if (historyReadMode === "canonical") {
     return {
       history: await readCanonicalHistory(target, true, options),
       source: "aml"
     };
   }
 
-  if (historyReadMode === "memory") {
-    throw new Error("history_memory_cache_unavailable");
+  if (historyReadMode === "cache_only") {
+    throw new Error("history_cache_only_unavailable");
   }
 
   try {
@@ -1252,32 +1292,40 @@ async function readHistorySource(target: StateTarget, latest: SnapshotArtifact, 
 
 async function refreshVerifiedHistoryCache(target: StateTarget, options: HistoryReadOptions = {}): Promise<ProgramHistoryWindow> {
   const cacheKey = historyReadCacheKey(target, options);
-  markHistoryRefreshStarted(cacheKey);
-  historyMetrics.refreshes += 1;
-  try {
-    const latestResult = await getLatestSnapshot();
-    const latest = await latestSnapshotForHistory(target, latestResult);
-    const { history, source } = await readHistorySource(target, latest, options);
-    assertHistoryTailMatchesLatest(history, latest);
-    historyCache.set(cacheKey, {
-      checked_at: Date.now(),
-      value: history,
-      verified: true,
-      source,
-      refresh_started_at: null,
-      last_refresh_error: null
-    });
-    while (historyCache.size > 8) {
-      const oldest = historyCache.keys().next().value;
-      if (!oldest) break;
-      historyCache.delete(oldest);
+  const inFlight = historyRefreshInFlight.get(cacheKey);
+  if (inFlight) return inFlight;
+  const promise = (async () => {
+    markHistoryRefreshStarted(cacheKey);
+    historyMetrics.refreshes += 1;
+    try {
+      const latestResult = await getLatestSnapshot();
+      const latest = await latestSnapshotForHistory(target, latestResult);
+      const { history, source } = await readHistorySource(target, latest, options);
+      assertHistoryTailMatchesLatest(history, latest);
+      historyCache.set(cacheKey, {
+        checked_at: Date.now(),
+        value: history,
+        verified: true,
+        source,
+        refresh_started_at: null,
+        last_refresh_error: null
+      });
+      while (historyCache.size > 8) {
+        const oldest = historyCache.keys().next().value;
+        if (!oldest) break;
+        historyCache.delete(oldest);
+      }
+      return history;
+    } catch (error) {
+      historyMetrics.refresh_errors += 1;
+      markHistoryRefreshError(cacheKey, error);
+      throw error;
+    } finally {
+      historyRefreshInFlight.delete(cacheKey);
     }
-    return history;
-  } catch (error) {
-    historyMetrics.refresh_errors += 1;
-    markHistoryRefreshError(cacheKey, error);
-    throw error;
-  }
+  })();
+  historyRefreshInFlight.set(cacheKey, promise);
+  return promise;
 }
 
 async function readVerifiedCanonicalHistory(target: StateTarget, options: HistoryReadOptions = {}): Promise<ProgramHistoryWindow> {
@@ -1294,9 +1342,8 @@ async function readVerifiedCanonicalHistory(target: StateTarget, options: Histor
     assertHistoryTailMatchesLatest(history, latest);
     const cacheKey = historyReadCacheKey(target, options);
     const entry = historyCache.get(cacheKey);
-    if (entry) {
+    if (entry?.source === "aml") {
       entry.verified = true;
-      entry.source = "aml";
       entry.last_refresh_error = null;
       historyCache.set(cacheKey, entry);
     }
@@ -1306,9 +1353,8 @@ async function readVerifiedCanonicalHistory(target: StateTarget, options: Histor
     assertHistoryTailMatchesLatest(refreshed, latest);
     const cacheKey = historyReadCacheKey(target, options);
     const entry = historyCache.get(cacheKey);
-    if (entry) {
+    if (entry?.source === "aml") {
       entry.verified = true;
-      entry.source = "aml";
       entry.last_refresh_error = null;
       historyCache.set(cacheKey, entry);
     }
@@ -1340,7 +1386,7 @@ async function readHistoryForApi(target: StateTarget, request: HistoryApiRequest
     age <= historyReadTtlMs + Math.max(0, historyStaleWhileRefreshMs)
   ) {
     historyMetrics.stale_hits += 1;
-    if (!historyReadInFlight.has(cacheKey)) {
+    if (!historyRefreshInFlight.has(cacheKey)) {
       refreshVerifiedHistoryCache(target, options).catch((error) => {
         historyError = error instanceof Error ? error : new Error(String(error));
       });
@@ -1349,9 +1395,9 @@ async function readHistoryForApi(target: StateTarget, request: HistoryApiRequest
   }
 
   historyMetrics.misses += 1;
-  if (historyReadMode === "memory") {
-    markHistoryRefreshError(cacheKey, new Error("history_memory_cache_unavailable"));
-    throw new Error("history_memory_cache_unavailable");
+  if (historyReadMode === "cache_only") {
+    markHistoryRefreshError(cacheKey, new Error("history_cache_only_unavailable"));
+    throw new Error("history_cache_only_unavailable");
   }
   const history = await refreshVerifiedHistoryCache(target, options);
   const entry = historyCache.get(cacheKey);
@@ -1940,7 +1986,7 @@ function historyCacheSnapshot(): Array<Record<string, unknown>> {
     history_model: entry.value.history_discovery || null,
     proof_scope: entry.value.proof?.scope || null,
     proof_truncated: entry.value.proof?.truncated ?? null,
-    refresh_in_flight: historyReadInFlight.has(key),
+    refresh_in_flight: historyRefreshInFlight.has(key) || historyReadInFlight.has(key),
     last_refresh_error: entry.last_refresh_error
   }));
 }
@@ -2159,6 +2205,8 @@ async function serveHistory(res: http.ServerResponse, url: URL, head = false): P
     if (history.proof?.sealed_capsule_total_count !== undefined) proofHints.sealed_capsule_total_count = history.proof.sealed_capsule_total_count;
     if (history.proof?.sealed_capsule_verified_count !== undefined) proofHints.sealed_capsule_verified_count = history.proof.sealed_capsule_verified_count;
     if (history.proof?.capsule_limit !== undefined) proofHints.capsule_limit = history.proof.capsule_limit;
+    const isCanonicalHistoryRead = cache.source === "aml";
+    const historyRead = publicHistoryRead(cache, history);
     return json(res, 200, {
       schema: LEGACY_HISTORY_SCHEMA,
       api_schema: HISTORY_API_SCHEMA,
@@ -2174,15 +2222,20 @@ async function serveHistory(res: http.ServerResponse, url: URL, head = false): P
       proof: verifiedHistoryProof(historyModel, true, history.eras || [], history.proof?.families || [], history.proof?.capsules || [], proofHints),
       snapshots,
       authority: {
-        source: target.kind === "circle_program" ? "vitals_circle_program_history" : "vitals_state_program_history",
-        canonical_state_read: true,
+        canonical_authority: "aml_fact_ledger",
+        source: isCanonicalHistoryRead
+          ? target.kind === "circle_program" ? "vitals_circle_program_history" : "vitals_state_program_history"
+          : "sqlite_history_mirror",
+        canonical_state_read: isCanonicalHistoryRead,
+        history_read: historyRead,
         history_discovery: historyModel,
         state_target_mode: target.kind,
         state_target_id: target.id,
         state_program_address: target.kind === "state_program" ? target.id : configuredProgramAddress(manifest.state_program_address),
         programmed_circle_id: target.kind === "circle_program" ? target.id : null,
-        history_cache: cache,
-        note: "Rows are compact AML summary commitments; latest row is verified against the latest payload by the gateway."
+        note: isCanonicalHistoryRead
+          ? "Rows are compact AML summary commitments; latest row is verified against the latest payload by the gateway."
+          : "Rows are served from the derived SQLite history mirror and the latest row is anchored to the AML latest summary; AML remains canonical."
       }
     }, {}, head);
   } catch (error) {
@@ -2198,8 +2251,19 @@ async function serveHistory(res: http.ServerResponse, url: URL, head = false): P
       proof: emptyHistoryProof("unavailable", false),
       snapshots: [],
       authority: {
+        canonical_authority: "aml_fact_ledger",
         source: "unavailable",
         canonical_state_read: false,
+        history_read: {
+          read_result: "unavailable",
+          serving_path: "unavailable",
+          backing_path: "unavailable",
+          configured_read_path: configuredHistoryReadPath(),
+          checked_at: null,
+          age_ms: null,
+          usable_for_display: false,
+          verification_level: "unavailable"
+        },
         state_target_mode: target.kind,
         state_target_id: target.id,
         state_program_address: target.kind === "state_program" ? target.id : configuredProgramAddress(manifest.state_program_address),

@@ -83,7 +83,8 @@ The gateway only marks a boundary verified after reading the predecessor era's a
 
 - `full_chain` means the response folded every sealed capsule exposed for the era from the empty root;
 - `tail_window` means the returned rows and capsule tail were verified, but older sealed capsules were not replayed in that response;
-- `summary_window` is used only when reading an older era that exposed bounded-window history.
+- `summary_window` is used only when reading an older era that exposed bounded-window history;
+- `latest_row_anchor` means rows came from a derived history mirror and the latest returned row was anchored against the latest AML snapshot.
 
 ## Bridge Accounting
 

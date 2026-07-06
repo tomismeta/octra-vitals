@@ -14,8 +14,8 @@ This checklist defines what must be true before a devnet-soaked candidate can be
 ## Runtime
 
 - `/api/latest` is program-backed, fresh, and conservation-aware.
-- `/api/history` is AML-backed and exposes proof metadata.
-- `/api/history.proof.proof_scope` honestly states whether the response is a full-chain proof or a tail-window proof.
+- `/api/history` exposes whether rows were served directly from AML or from the SQLite history mirror.
+- `/api/history.proof.proof_scope` honestly states whether the response is a full-chain proof, tail-window proof, summary-window proof, or latest-row anchor.
 - `/api/site-integrity` reports Circle asset parity.
 - `/api/native-readiness` reports `native_ready`.
 - Configured program RPCs agree, or the deployment explicitly accepts one canonical RPC.

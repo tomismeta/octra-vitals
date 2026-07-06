@@ -29,8 +29,8 @@ export interface HistoryApiCoverage {
 
 export interface HistoryApiProof {
   history_model: string;
-  proof_status: "fact_family_verified" | "summary_window_verified" | "unavailable";
-  proof_scope: "full_chain" | "tail_window" | "summary_window" | "unavailable";
+  proof_status: "fact_family_verified" | "summary_window_verified" | "latest_summary_anchor_verified" | "unavailable";
+  proof_scope: "full_chain" | "tail_window" | "summary_window" | "latest_row_anchor" | "unavailable";
   truncated: boolean;
   sealed_capsule_start_ordinal?: number;
   sealed_capsule_total_count?: number;
@@ -232,13 +232,23 @@ export function verifiedHistoryProof(
   >> = {}
 ): HistoryApiProof {
   const factFamilyVerified = verified && historyModel.includes("fact_family") && historyModel.includes("verified");
+  const latestAnchorVerified = verified && (
+    historyModel.includes("sqlite_history_mirror") ||
+    historyModel.includes("latest_summary_anchor") ||
+    proof.proof_scope === "latest_row_anchor"
+  );
   const proofScope = proof.proof_scope ||
     (factFamilyVerified
       ? historyModel.includes("tail") ? "tail_window" : "full_chain"
+      : latestAnchorVerified ? "latest_row_anchor"
       : verified ? "summary_window" : "unavailable");
   const out: HistoryApiProof = {
     history_model: historyModel,
-    proof_status: factFamilyVerified ? "fact_family_verified" : verified ? "summary_window_verified" : "unavailable",
+    proof_status: factFamilyVerified
+      ? "fact_family_verified"
+      : latestAnchorVerified
+        ? "latest_summary_anchor_verified"
+        : verified ? "summary_window_verified" : "unavailable",
     proof_scope: proofScope,
     truncated: proof.truncated ?? proofScope === "tail_window",
     eras,
