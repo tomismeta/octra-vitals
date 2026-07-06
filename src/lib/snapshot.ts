@@ -1,5 +1,6 @@
 import { chmod, mkdir, rename, unlink, writeFile } from "node:fs/promises";
 import { basename, dirname, join } from "node:path";
+import { gzipSync } from "node:zlib";
 import { canonicalJson, requestHash, responseHash, sha256Tagged } from "./canonical-json.js";
 import { octraObservationRpcUrl } from "./octra-rpc.js";
 import { decimalToRawString, hexToRawString, sumRaw } from "./units.js";
@@ -798,7 +799,7 @@ export async function writeSnapshotArtifacts(snapshot: SnapshotArtifact, outPath
       await chmod(rawDir, 0o770).catch(() => undefined);
       for (const raw of snapshot.raw_evidence) {
         const rawHash = raw.response_hash.replace(/^sha256:/, "").toLowerCase();
-        await writeFileAtomic(join(rawDir, `${rawHash}.json`), `${JSON.stringify({
+        await writeRawEvidenceAtomic(join(rawDir, `${rawHash}.json`), `${JSON.stringify({
           schema: "octra-vitals-raw-evidence-v0",
           ...raw
         }, null, 2)}\n`);
@@ -812,6 +813,23 @@ async function writeFileAtomic(path: string, text: string): Promise<void> {
   try {
     await writeFile(tmp, text, { mode: 0o660 });
     await rename(tmp, path);
+  } catch (error) {
+    await unlink(tmp).catch(() => undefined);
+    throw error;
+  }
+}
+
+async function writeRawEvidenceAtomic(path: string, text: string): Promise<void> {
+  if (process.env.VITALS_RAW_EVIDENCE_COMPRESS === "0") {
+    await writeFileAtomic(path, text);
+    return;
+  }
+  const gzPath = `${path}.gz`;
+  const tmp = join(dirname(gzPath), `.${basename(gzPath)}.${process.pid}.${Date.now()}.tmp`);
+  try {
+    await writeFile(tmp, gzipSync(Buffer.from(text)), { mode: 0o660 });
+    await rename(tmp, gzPath);
+    await unlink(path).catch(() => undefined);
   } catch (error) {
     await unlink(tmp).catch(() => undefined);
     throw error;

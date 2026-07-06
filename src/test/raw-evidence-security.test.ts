@@ -1,7 +1,11 @@
 import assert from "node:assert/strict";
+import { gunzipSync } from "node:zlib";
+import { mkdtemp, readFile, rm, stat } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import test from "node:test";
 
-import { validateEvidenceSourceUrl } from "../lib/snapshot.js";
+import { validateEvidenceSourceUrl, writeSnapshotArtifacts } from "../lib/snapshot.js";
 
 test("raw evidence source URLs allow known public hosts", () => {
   assert.equal(
@@ -73,5 +77,42 @@ test("raw evidence source URL allowlist is explicit", () => {
   } finally {
     if (previous === undefined) delete process.env.VITALS_PUBLIC_EVIDENCE_HOSTS;
     else process.env.VITALS_PUBLIC_EVIDENCE_HOSTS = previous;
+  }
+});
+
+test("snapshot artifact writer compresses raw evidence by default", async () => {
+  const dir = await mkdtemp(join(tmpdir(), `octra-vitals-raw-evidence-${process.pid}-`));
+  const evidenceDir = join(dir, "evidence");
+  const evidenceHash = "a".repeat(64);
+  const rawHash = "b".repeat(64);
+  const snapshot: any = {
+    envelope: {
+      evidence_manifest_hash: `sha256:${evidenceHash}`
+    },
+    evidence_manifest: {
+      schema_version: "test",
+      entries: []
+    },
+    canonical_payload: "{}",
+    canonical_evidence_manifest: "{}",
+    generated_at: "2026-06-16T21:00:00Z",
+    raw_evidence: [{
+      id: "supply",
+      response_hash: `sha256:${rawHash}`,
+      body: "{\"ok\":true}",
+      content_type: "application/json",
+      observed_at: "2026-06-16T21:00:00Z"
+    }]
+  };
+
+  try {
+    await writeSnapshotArtifacts(snapshot, join(dir, "snapshot.json"), evidenceDir);
+    await assert.rejects(() => stat(join(evidenceDir, "raw", `${rawHash}.json`)), /ENOENT/);
+    const compressed = await readFile(join(evidenceDir, "raw", `${rawHash}.json.gz`));
+    const parsed = JSON.parse(gunzipSync(compressed).toString("utf8"));
+    assert.equal(parsed.id, "supply");
+    assert.equal(parsed.body, "{\"ok\":true}");
+  } finally {
+    await rm(dir, { recursive: true, force: true });
   }
 });

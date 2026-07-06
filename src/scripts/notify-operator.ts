@@ -112,6 +112,7 @@ export interface ArchiveSummary {
   raw_evidence_bytes_last_hour: number;
   raw_evidence_files_24h: number;
   raw_evidence_bytes_24h: number;
+  raw_evidence_projected_365d_bytes: number;
 }
 
 export interface DiskSummary {
@@ -131,6 +132,7 @@ export interface AlertThresholds {
   max_snapshot_age_ms: number;
   disk_used_percent: number;
   diagnostic_requests_current_hour: number;
+  raw_evidence_projected_disk_percent: number;
 }
 
 interface FetchResult {
@@ -479,7 +481,8 @@ async function summarizeArchive(dataDir: string, periods: OperatorPeriods): Prom
     raw_evidence_files_last_hour: rawEvidenceLastHour.files,
     raw_evidence_bytes_last_hour: rawEvidenceLastHour.bytes,
     raw_evidence_files_24h: rawEvidence24h.files,
-    raw_evidence_bytes_24h: rawEvidence24h.bytes
+    raw_evidence_bytes_24h: rawEvidence24h.bytes,
+    raw_evidence_projected_365d_bytes: rawEvidence24h.bytes * 365
   };
 }
 
@@ -696,6 +699,19 @@ export function detectOperatorAlerts(summary: OperatorSummary, thresholds: Alert
       message: `disk usage is ${summary.disk.used_percent}% on ${summary.disk.path}`
     });
   }
+  if (summary.disk.available_kb !== null) {
+    const availableBytes = summary.disk.available_kb * 1024;
+    const projectedPercentOfFree = availableBytes > 0
+      ? (summary.archive.raw_evidence_projected_365d_bytes / availableBytes) * 100
+      : 0;
+    if (projectedPercentOfFree >= thresholds.raw_evidence_projected_disk_percent) {
+      alerts.push({
+        id: "raw_evidence_growth",
+        severity: "warn",
+        message: `raw evidence 365d projection is ${bytes(summary.archive.raw_evidence_projected_365d_bytes)} (${Math.round(projectedPercentOfFree)}% of current free disk)`
+      });
+    }
+  }
   if (summary.traffic.diagnostic_requests_current_hour >= thresholds.diagnostic_requests_current_hour) {
     alerts.push({
       id: "diagnostic_noise",
@@ -742,7 +758,7 @@ export function formatOperatorDigest(summary: OperatorSummary, alerts: OperatorA
     "",
     `${b("System")}`,
     `Native: ${c(summary.gateway.native_status || "n/a")} | site integrity=${c(summary.gateway.site_integrity_status || boolText(summary.gateway.site_integrity_ok))}`,
-    `Archive: ${summary.archive.raw_evidence_files} raw files (${bytes(summary.archive.raw_evidence_bytes)}), ${summary.archive.raw_evidence_files_24h} in 24h`,
+    `Archive: ${summary.archive.raw_evidence_files} raw files (${bytes(summary.archive.raw_evidence_bytes)}), ${summary.archive.raw_evidence_files_24h} in 24h, 365d pace ${bytes(summary.archive.raw_evidence_projected_365d_bytes)}`,
     `Cadence: ${cadence} median | run: ${duration(summary.snapshots.median_total_ms)}`,
     `Disk: ${h(disk)}`,
     ...(alerts.length ? ["", `${b("Alerts")}`, ...alerts.map((alert) => `${c(alert.severity)} ${h(alert.message)}`)] : [])
@@ -790,7 +806,8 @@ function alertThresholds(): AlertThresholds {
   return {
     max_snapshot_age_ms: envNumber("VITALS_NOTIFY_ALERT_MAX_SNAPSHOT_AGE_MS", 45 * 60_000),
     disk_used_percent: envNumber("VITALS_NOTIFY_ALERT_DISK_PCT", 75),
-    diagnostic_requests_current_hour: envNumber("VITALS_NOTIFY_ALERT_DIAGNOSTIC_REQUESTS_PER_HOUR", 300)
+    diagnostic_requests_current_hour: envNumber("VITALS_NOTIFY_ALERT_DIAGNOSTIC_REQUESTS_PER_HOUR", 300),
+    raw_evidence_projected_disk_percent: envNumber("VITALS_NOTIFY_ALERT_RAW_EVIDENCE_365D_FREE_DISK_PCT", 60)
   };
 }
 

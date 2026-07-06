@@ -7,6 +7,13 @@ import {
   type OperatorSummary
 } from "../scripts/notify-operator.js";
 
+const healthyThresholds = {
+  max_snapshot_age_ms: 45 * 60_000,
+  disk_used_percent: 75,
+  diagnostic_requests_current_hour: 300,
+  raw_evidence_projected_disk_percent: 60
+};
+
 function healthySummary(overrides: Partial<OperatorSummary> = {}): OperatorSummary {
   const summary: OperatorSummary = {
     generated_at: "2026-06-16T21:00:00Z",
@@ -106,7 +113,8 @@ function healthySummary(overrides: Partial<OperatorSummary> = {}): OperatorSumma
       raw_evidence_files_last_hour: 20,
       raw_evidence_bytes_last_hour: 1_000_000,
       raw_evidence_files_24h: 480,
-      raw_evidence_bytes_24h: 24_000_000
+      raw_evidence_bytes_24h: 1_000_000,
+      raw_evidence_projected_365d_bytes: 1_000_000 * 365
     },
     disk: {
       path: "/var/lib/octra-vitals",
@@ -119,11 +127,7 @@ function healthySummary(overrides: Partial<OperatorSummary> = {}): OperatorSumma
 }
 
 test("operator notifier reports no alerts for a healthy native deployment", () => {
-  const alerts = detectOperatorAlerts(healthySummary(), {
-    max_snapshot_age_ms: 45 * 60_000,
-    disk_used_percent: 75,
-    diagnostic_requests_current_hour: 300
-  });
+  const alerts = detectOperatorAlerts(healthySummary(), healthyThresholds);
   assert.deepEqual(alerts, []);
 });
 
@@ -136,11 +140,7 @@ test("operator notifier alerts on stale or non-program latest data", () => {
       latest_age_ms: 60 * 60_000,
       latest_error: "/api/latest returned 503"
     }
-  }), {
-    max_snapshot_age_ms: 45 * 60_000,
-    disk_used_percent: 75,
-    diagnostic_requests_current_hour: 300
-  });
+  }), healthyThresholds);
   assert.equal(alerts.some((alert) => alert.id === "gateway_latest"), true);
   assert.equal(alerts.some((alert) => alert.id === "snapshot_stale_gateway"), true);
 });
@@ -164,11 +164,7 @@ test("operator notifier does not add conservation alert when latest fetch aborts
       conservation_largest_abs_delta_raw: null,
       native_status: null
     }
-  }), {
-    max_snapshot_age_ms: 45 * 60_000,
-    disk_used_percent: 75,
-    diagnostic_requests_current_hour: 300
-  });
+  }), healthyThresholds);
   assert.equal(alerts.some((alert) => alert.id === "gateway_latest"), true);
   assert.equal(alerts.some((alert) => alert.id === "conservation_unavailable"), false);
 });
@@ -180,11 +176,7 @@ test("operator notifier does not page when gateway receipt readback is temporari
       latest_ok: true,
       readback_matches: null
     }
-  }), {
-    max_snapshot_age_ms: 45 * 60_000,
-    disk_used_percent: 75,
-    diagnostic_requests_current_hour: 300
-  });
+  }), healthyThresholds);
   assert.equal(alerts.some((alert) => alert.id === "gateway_latest"), false);
   assert.equal(alerts.some((alert) => alert.id === "gateway_latest_readback"), false);
 });
@@ -196,11 +188,7 @@ test("operator notifier pages when gateway receipt readback explicitly mismatche
       latest_ok: true,
       readback_matches: false
     }
-  }), {
-    max_snapshot_age_ms: 45 * 60_000,
-    disk_used_percent: 75,
-    diagnostic_requests_current_hour: 300
-  });
+  }), healthyThresholds);
   assert.equal(alerts.some((alert) => alert.id === "gateway_latest"), false);
   assert.equal(alerts.some((alert) => alert.id === "gateway_latest_readback"), true);
 });
@@ -213,11 +201,7 @@ test("operator notifier warns on yellow signed conservation", () => {
       conservation_flags: ["future_reconciliation_review"],
       conservation_largest_abs_delta_raw: "127010820000"
     }
-  }), {
-    max_snapshot_age_ms: 45 * 60_000,
-    disk_used_percent: 75,
-    diagnostic_requests_current_hour: 300
-  });
+  }), healthyThresholds);
   assert.equal(alerts.some((alert) => alert.id === "conservation_yellow" && alert.severity === "warn"), true);
   assert.equal(alerts.some((alert) => alert.id === "conservation_red"), false);
 });
@@ -230,11 +214,7 @@ test("operator notifier pages on red signed conservation", () => {
       conservation_flags: ["bridge_claims_exceed_locked"],
       conservation_largest_abs_delta_raw: "1"
     }
-  }), {
-    max_snapshot_age_ms: 45 * 60_000,
-    disk_used_percent: 75,
-    diagnostic_requests_current_hour: 300
-  });
+  }), healthyThresholds);
   assert.equal(alerts.some((alert) => alert.id === "conservation_red" && alert.severity === "critical"), true);
 });
 
@@ -247,11 +227,7 @@ test("operator notifier treats Circle RPC site proof failures as availability wa
       site_integrity_status: "circle_unavailable",
       site_integrity_error_count: 7
     }
-  }), {
-    max_snapshot_age_ms: 45 * 60_000,
-    disk_used_percent: 75,
-    diagnostic_requests_current_hour: 300
-  });
+  }), healthyThresholds);
   assert.equal(alerts.some((alert) => alert.id === "site_integrity_unavailable" && alert.severity === "warn"), true);
   assert.equal(alerts.some((alert) => alert.id === "site_integrity"), false);
   assert.equal(alerts.some((alert) => alert.id === "native_readiness"), false);
@@ -263,11 +239,7 @@ test("operator notifier suppresses transient native readiness when other trust s
       ...healthySummary().gateway,
       native_status: "program_pending_verification"
     }
-  }), {
-    max_snapshot_age_ms: 45 * 60_000,
-    disk_used_percent: 75,
-    diagnostic_requests_current_hour: 300
-  });
+  }), healthyThresholds);
   assert.equal(alerts.some((alert) => alert.id === "native_readiness"), false);
 });
 
@@ -278,13 +250,24 @@ test("operator notifier warns on native readiness when another trust signal is d
       native_status: "program_pending_verification",
       readback_matches: false
     }
-  }), {
-    max_snapshot_age_ms: 45 * 60_000,
-    disk_used_percent: 75,
-    diagnostic_requests_current_hour: 300
-  });
+  }), healthyThresholds);
   assert.equal(alerts.some((alert) => alert.id === "gateway_latest_readback"), true);
   assert.equal(alerts.some((alert) => alert.id === "native_readiness"), true);
+});
+
+test("operator notifier warns when raw evidence growth threatens disk headroom", () => {
+  const alerts = detectOperatorAlerts(healthySummary({
+    archive: {
+      ...healthySummary().archive,
+      raw_evidence_projected_365d_bytes: 800_000_000
+    },
+    disk: {
+      ...healthySummary().disk,
+      available_kb: 1_000_000
+    }
+  }), healthyThresholds);
+
+  assert.equal(alerts.some((alert) => alert.id === "raw_evidence_growth"), true);
 });
 
 test("operator digest is compact and uses aggregate traffic, not raw client details", () => {

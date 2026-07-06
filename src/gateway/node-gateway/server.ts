@@ -3,6 +3,7 @@ import http from "node:http";
 import { timingSafeEqual } from "node:crypto";
 import { mkdir, readFile, stat, writeFile } from "node:fs/promises";
 import { extname, join, resolve } from "node:path";
+import { gunzipSync, gzipSync } from "node:zlib";
 import { buildLiveSnapshot, publicSnapshotArtifact, writeSnapshotArtifacts } from "../../lib/snapshot.js";
 import { FACT_LEDGER_MANIFEST } from "../../lib/aml-fact-ledger.js";
 import { canonicalJson, responseHash, sha256Hex, sha256Tagged } from "../../lib/canonical-json.js";
@@ -10,7 +11,7 @@ import { assertHistoryTailMatchesLatest, configuredStateTarget, readCanonicalHis
 import { verifyCircleAssetIntegrity } from "../../lib/circle-asset-integrity.js";
 import { circleProgramViewAtUrl, configuredProgrammedCircleId, stateTargetMode } from "../../lib/circle-program.js";
 import { configuredProgramAddress, readLatestCircleProgramSnapshot, readLatestProgramSnapshot } from "../../lib/program-state.js";
-import { circleInfoAtUrl, circleProgramInfoAtUrl, contractCall, contractReceipt, contractSource, octraProgramRpcUrls, octraRpc, vmContract } from "../../lib/octra-rpc.js";
+import { circleInfoAtUrl, circleProgramInfoAtUrl, contractCall, contractReceipt, contractSource, octraProgramRpcUrls, octraRpc, octraRpcMetricsSnapshot, vmContract } from "../../lib/octra-rpc.js";
 import { configuredTrafficRecorder } from "../../lib/traffic.js";
 import { runtimeVitalsManifest, stableJson } from "../../lib/vitals-manifest.js";
 import { HISTORY_API_SCHEMA, LEGACY_HISTORY_SCHEMA, emptyHistoryProof, filterHistorySnapshots, historyApiCoverage, historyApiRecommendedCapsuleLimit, parseHistoryApiRequest, verifiedHistoryProof, type HistoryApiRequest } from "../../lib/history-api.js";
@@ -30,6 +31,21 @@ const port = Number(process.env.PORT || 4173);
 const staleAfterMs = Number(process.env.VITALS_STALE_AFTER_MS || 20 * 60_000);
 const latestReadTtlMs = Number(process.env.VITALS_LATEST_READ_TTL_MS || 60_000);
 const historyReadTtlMs = Number(process.env.VITALS_HISTORY_READ_TTL_MS || 60 * 60_000);
+const historyStaleWhileRefreshMs = Number(process.env.VITALS_HISTORY_STALE_WHILE_REFRESH_MS || 6 * 60 * 60_000);
+const historyApiStaleWindows = new Set(
+  (process.env.VITALS_HISTORY_API_STALE_WINDOWS || "7d,30d")
+    .split(",")
+    .map((value) => value.trim())
+    .filter(Boolean)
+);
+const historyPrewarmEnabled = process.env.VITALS_HISTORY_PREWARM_ENABLED !== "0";
+const historyPrewarmMinIntervalMs = Number(process.env.VITALS_HISTORY_PREWARM_MIN_INTERVAL_MS || 15 * 60_000);
+const historyPrewarmWindows = (process.env.VITALS_HISTORY_PREWARM_WINDOWS || "1h,1d,7d,30d")
+  .split(",")
+  .map((value) => value.trim())
+  .filter(Boolean);
+const responseGzipEnabled = process.env.VITALS_RESPONSE_GZIP_ENABLED !== "0";
+const responseGzipMinBytes = Number(process.env.VITALS_RESPONSE_GZIP_MIN_BYTES || 1024);
 const labQueryMaxConcurrent = Math.max(1, Number(process.env.VITALS_LAB_QUERY_MAX_CONCURRENT || 2));
 const labQueryRateWindowMs = Math.max(1_000, Number(process.env.VITALS_LAB_QUERY_RATE_WINDOW_MS || 60_000));
 const labQueryRateMax = Math.max(1, Number(process.env.VITALS_LAB_QUERY_RATE_MAX || 30));
@@ -69,6 +85,24 @@ type StaticAssetRead = {
 type CachedStaticAsset = StaticAssetRead & {
   cachedAt: number;
 };
+type HistoryCacheEntry = {
+  checked_at: number;
+  value: ProgramHistoryWindow;
+  verified: boolean;
+  refresh_started_at: number | null;
+  last_refresh_error: string | null;
+};
+type HistoryApiRead = {
+  history: ProgramHistoryWindow;
+  cache: {
+    status: "miss" | "fresh" | "stale_refreshing";
+    checked_at: string | null;
+    age_ms: number | null;
+    verified: boolean;
+    refresh_in_flight: boolean;
+    last_refresh_error: string | null;
+  };
+};
 
 function stateSourceMode(): StateSourceMode {
   const configured = process.env.VITALS_STATE_SOURCE_MODE;
@@ -84,9 +118,21 @@ let latestCacheSource: SnapshotSource = "sample_fallback";
 let latestReadInFlight: Promise<LatestSnapshotResult> | null = null;
 let latestError: Error | null = null;
 let lastSuccessfulProgramReadAt: string | null = null;
-let historyCache = new Map<string, { checked_at: number; value: ProgramHistoryWindow }>();
+let historyCache = new Map<string, HistoryCacheEntry>();
 let historyReadInFlight = new Map<string, Promise<ProgramHistoryWindow>>();
 let historyError: Error | null = null;
+let lastHistoryPrewarmAt = 0;
+let historyPrewarmInFlight: Promise<void> | null = null;
+let historyMetrics = {
+  reads: 0,
+  cache_hits: 0,
+  stale_hits: 0,
+  misses: 0,
+  refreshes: 0,
+  refresh_errors: 0,
+  prewarm_runs: 0,
+  prewarm_errors: 0
+};
 let liveVerificationCache: { address: string; checked_at: string; value: Record<string, any> } | null = null;
 let circleProgramVerificationCache: { circle_id: string; checked_at: string; value: Record<string, any> } | null = null;
 let circleMetadataCache: { circle_id: string; checked_at: number; value: CircleMetadata } | null = null;
@@ -128,17 +174,81 @@ function staticCacheControl(assetPath: string): string {
   return "no-store";
 }
 
-function json(res: http.ServerResponse, status: number, body: unknown, extraHeaders: Record<string, string> = {}, head = false): void {
-  const data = `${JSON.stringify(body, null, 2)}\n`;
-  res.writeHead(status, {
-    "Content-Type": "application/json; charset=utf-8",
-    "Cache-Control": "no-store",
-    "Content-Length": Buffer.byteLength(data),
+function requestForResponse(res: http.ServerResponse): http.IncomingMessage | null {
+  return ((res as any).__octraRequest as http.IncomingMessage | undefined) || null;
+}
+
+function requestUrl(req: http.IncomingMessage | null): URL | null {
+  if (!req) return null;
+  const headerHost = Array.isArray(req.headers.host) ? req.headers.host[0] : req.headers.host;
+  try {
+    return new URL(req.url || "/", `http://${headerHost || `${host}:${port}`}`);
+  } catch {
+    return null;
+  }
+}
+
+function requestAcceptsGzip(req: http.IncomingMessage | null): boolean {
+  if (!responseGzipEnabled || !req) return false;
+  const value = Array.isArray(req.headers["accept-encoding"])
+    ? req.headers["accept-encoding"].join(",")
+    : req.headers["accept-encoding"] || "";
+  return /\bgzip\b/i.test(value);
+}
+
+function textContentType(contentType: string): boolean {
+  return /^text\//i.test(contentType) ||
+    /(?:json|javascript|xml|manifest\+json|svg\+xml)/i.test(contentType);
+}
+
+function shouldCompress(req: http.IncomingMessage | null, contentType: string, bytes: Buffer, headers: Record<string, string | number>): boolean {
+  if (!requestAcceptsGzip(req)) return false;
+  if (!textContentType(contentType)) return false;
+  if (bytes.length < Math.max(0, responseGzipMinBytes)) return false;
+  if (headers["Content-Encoding"]) return false;
+  return true;
+}
+
+function shouldPrettyJson(res: http.ServerResponse): boolean {
+  const url = requestUrl(requestForResponse(res));
+  if (url?.searchParams.get("pretty") === "1") return true;
+  if (url?.searchParams.get("compact") === "1") return false;
+  return process.env.VITALS_JSON_PRETTY_DEFAULT !== "0";
+}
+
+function writeBufferedResponse(
+  res: http.ServerResponse,
+  status: number,
+  contentType: string,
+  bytes: Buffer,
+  extraHeaders: Record<string, string | number> = {},
+  head = false
+): void {
+  const req = requestForResponse(res);
+  let output = bytes;
+  const headers: Record<string, string | number> = {
+    "Content-Type": contentType,
+    "Content-Length": output.length,
     "X-Content-Type-Options": "nosniff",
     ...corsHeaders(),
     ...extraHeaders
-  });
-  res.end(head ? undefined : data);
+  };
+  if (shouldCompress(req, contentType, output, headers)) {
+    output = gzipSync(output);
+    headers["Content-Encoding"] = "gzip";
+    headers["Content-Length"] = output.length;
+    headers.Vary = headers.Vary ? `${headers.Vary}, Accept-Encoding` : "Accept-Encoding";
+  }
+  res.writeHead(status, headers);
+  res.end(head ? undefined : output);
+}
+
+function json(res: http.ServerResponse, status: number, body: unknown, extraHeaders: Record<string, string> = {}, head = false): void {
+  const data = `${JSON.stringify(body, null, shouldPrettyJson(res) ? 2 : 0)}\n`;
+  writeBufferedResponse(res, status, "application/json; charset=utf-8", Buffer.from(data), {
+    "Cache-Control": "no-store",
+    ...extraHeaders
+  }, head);
 }
 
 function notFound(res: http.ServerResponse, head = false): void {
@@ -996,6 +1106,46 @@ function historyReadOptionsForRequest(request: HistoryApiRequest): HistoryReadOp
   return maxSealedCapsules === null ? {} : { maxSealedCapsules };
 }
 
+function isoFromMs(value: number | null): string | null {
+  return value ? new Date(value).toISOString().replace(/\.\d{3}Z$/, "Z") : null;
+}
+
+function historyCacheAgeMs(entry: HistoryCacheEntry | undefined): number | null {
+  return entry ? Date.now() - entry.checked_at : null;
+}
+
+function historyCacheDiagnostic(cacheKey: string, entry: HistoryCacheEntry | undefined, status: HistoryApiRead["cache"]["status"]): HistoryApiRead["cache"] {
+  return {
+    status,
+    checked_at: isoFromMs(entry?.checked_at || null),
+    age_ms: historyCacheAgeMs(entry),
+    verified: entry?.verified === true,
+    refresh_in_flight: historyReadInFlight.has(cacheKey),
+    last_refresh_error: entry?.last_refresh_error || null
+  };
+}
+
+function historyStaleAllowed(request: HistoryApiRequest): boolean {
+  return Boolean(request.window && historyApiStaleWindows.has(request.window));
+}
+
+function markHistoryRefreshStarted(cacheKey: string): void {
+  const entry = historyCache.get(cacheKey);
+  if (entry) {
+    entry.refresh_started_at = Date.now();
+    historyCache.set(cacheKey, entry);
+  }
+}
+
+function markHistoryRefreshError(cacheKey: string, error: unknown): void {
+  const entry = historyCache.get(cacheKey);
+  if (entry) {
+    entry.last_refresh_error = error instanceof Error ? error.message : String(error);
+    entry.refresh_started_at = null;
+    historyCache.set(cacheKey, entry);
+  }
+}
+
 async function readCanonicalHistory(target: StateTarget, bypassCache = false, options: HistoryReadOptions = {}): Promise<ProgramHistoryWindow> {
   const cacheKey = historyReadCacheKey(target, options);
   const cached = historyCache.get(cacheKey);
@@ -1014,7 +1164,13 @@ async function readCanonicalHistory(target: StateTarget, bypassCache = false, op
   if (!target.id) throw new Error(`${target.kind === "circle_program" ? "programmed Circle id" : "state program address"} is required`);
   const promise = readCanonicalHistoryUncached(target, options)
     .then((value) => {
-      historyCache.set(cacheKey, { checked_at: Date.now(), value });
+      historyCache.set(cacheKey, {
+        checked_at: Date.now(),
+        value,
+        verified: false,
+        refresh_started_at: null,
+        last_refresh_error: null
+      });
       while (historyCache.size > 8) {
         const oldest = historyCache.keys().next().value;
         if (!oldest) break;
@@ -1030,6 +1186,35 @@ async function readCanonicalHistory(target: StateTarget, bypassCache = false, op
   return promise;
 }
 
+async function refreshVerifiedHistoryCache(target: StateTarget, options: HistoryReadOptions = {}): Promise<ProgramHistoryWindow> {
+  const cacheKey = historyReadCacheKey(target, options);
+  markHistoryRefreshStarted(cacheKey);
+  historyMetrics.refreshes += 1;
+  try {
+    const latestResultPromise = getLatestSnapshot();
+    const history = await readCanonicalHistory(target, true, options);
+    const latestResult = await latestResultPromise;
+    const latest = latestResult.source === "program" && latestResult.snapshot
+      ? latestResult.snapshot
+      : target.kind === "circle_program"
+        ? await readLatestCircleProgramSnapshot(target.id!)
+        : await readLatestProgramSnapshot(target.id!);
+    assertHistoryTailMatchesLatest(history, latest);
+    const entry = historyCache.get(cacheKey);
+    if (entry) {
+      entry.verified = true;
+      entry.refresh_started_at = null;
+      entry.last_refresh_error = null;
+      historyCache.set(cacheKey, entry);
+    }
+    return history;
+  } catch (error) {
+    historyMetrics.refresh_errors += 1;
+    markHistoryRefreshError(cacheKey, error);
+    throw error;
+  }
+}
+
 async function readVerifiedCanonicalHistory(target: StateTarget, options: HistoryReadOptions = {}): Promise<ProgramHistoryWindow> {
   if (!target.id) throw new Error(`${target.kind === "circle_program" ? "programmed Circle id" : "state program address"} is required`);
   const latestResultPromise = getLatestSnapshot();
@@ -1042,12 +1227,86 @@ async function readVerifiedCanonicalHistory(target: StateTarget, options: Histor
       : await readLatestProgramSnapshot(target.id);
   try {
     assertHistoryTailMatchesLatest(history, latest);
+    const cacheKey = historyReadCacheKey(target, options);
+    const entry = historyCache.get(cacheKey);
+    if (entry) {
+      entry.verified = true;
+      entry.last_refresh_error = null;
+      historyCache.set(cacheKey, entry);
+    }
     return history;
   } catch (error) {
     const refreshed = await readCanonicalHistory(target, true, options);
     assertHistoryTailMatchesLatest(refreshed, latest);
+    const cacheKey = historyReadCacheKey(target, options);
+    const entry = historyCache.get(cacheKey);
+    if (entry) {
+      entry.verified = true;
+      entry.last_refresh_error = null;
+      historyCache.set(cacheKey, entry);
+    }
     return refreshed;
   }
+}
+
+async function readHistoryForApi(target: StateTarget, request: HistoryApiRequest): Promise<HistoryApiRead> {
+  if (!target.id) throw new Error(`${target.kind === "circle_program" ? "programmed Circle id" : "state program address"} is required`);
+  const options = historyReadOptionsForRequest(request);
+  const cacheKey = historyReadCacheKey(target, options);
+  const cached = historyCache.get(cacheKey);
+  const age = historyCacheAgeMs(cached);
+  historyMetrics.reads += 1;
+
+  if (cached && cached.verified && age !== null && age <= historyReadTtlMs) {
+    historyMetrics.cache_hits += 1;
+    return { history: cached.value, cache: historyCacheDiagnostic(cacheKey, cached, "fresh") };
+  }
+
+  if (
+    cached &&
+    cached.verified &&
+    historyStaleAllowed(request) &&
+    age !== null &&
+    age <= historyReadTtlMs + Math.max(0, historyStaleWhileRefreshMs)
+  ) {
+    historyMetrics.stale_hits += 1;
+    if (!historyReadInFlight.has(cacheKey)) {
+      refreshVerifiedHistoryCache(target, options).catch((error) => {
+        historyError = error instanceof Error ? error : new Error(String(error));
+      });
+    }
+    return { history: cached.value, cache: historyCacheDiagnostic(cacheKey, cached, "stale_refreshing") };
+  }
+
+  historyMetrics.misses += 1;
+  const history = await refreshVerifiedHistoryCache(target, options);
+  const entry = historyCache.get(cacheKey);
+  return { history, cache: historyCacheDiagnostic(cacheKey, entry, "miss") };
+}
+
+function scheduleHistoryPrewarm(target: StateTarget): void {
+  if (!historyPrewarmEnabled || !target.id) return;
+  if (historyPrewarmInFlight) return;
+  if (Date.now() - lastHistoryPrewarmAt < historyPrewarmMinIntervalMs) return;
+  lastHistoryPrewarmAt = Date.now();
+  historyMetrics.prewarm_runs += 1;
+  historyPrewarmInFlight = (async () => {
+    for (const windowName of historyPrewarmWindows) {
+      const request = parseHistoryApiRequest(new URLSearchParams(`window=${encodeURIComponent(windowName)}`));
+      if (!request.valid || !request.window) continue;
+      const options = historyReadOptionsForRequest(request);
+      const cacheKey = historyReadCacheKey(target, options);
+      const entry = historyCache.get(cacheKey);
+      const age = historyCacheAgeMs(entry);
+      if (entry?.verified && age !== null && age <= historyReadTtlMs) continue;
+      await refreshVerifiedHistoryCache(target, options);
+    }
+  })().catch((error) => {
+    historyMetrics.prewarm_errors += 1;
+    historyError = error instanceof Error ? error : new Error(String(error));
+  }).finally(() => {
+    historyPrewarmInFlight = null;
+  });
 }
 
 async function resolvedStateTarget(): Promise<StateTarget> {
@@ -1059,7 +1318,8 @@ async function loadHistoryIntegrity(manifest: Record<string, any>): Promise<Reco
   const target = configuredStateTarget(manifest);
   if (!target.id) return null;
   try {
-    const history = await readVerifiedCanonicalHistory(target);
+    const integrityCapsuleLimit = Math.max(1, Number(process.env.VITALS_HISTORY_INTEGRITY_CAPSULE_LIMIT || 3));
+    const history = await readVerifiedCanonicalHistory(target, { maxSealedCapsules: integrityCapsuleLimit });
     return {
       checked_at: new Date().toISOString().replace(/\.\d{3}Z$/, "Z"),
       canonical_state_read: true,
@@ -1073,7 +1333,9 @@ async function loadHistoryIntegrity(manifest: Record<string, any>): Promise<Reco
       row_len: history.row_len,
       window_hash: history.window_hash,
       era_count: history.eras?.length || 0,
-      eras: history.eras || []
+      eras: history.eras || [],
+      proof: history.proof || null,
+      capsule_limit: integrityCapsuleLimit
     };
   } catch (error) {
     historyError = error instanceof Error ? error : new Error(String(error));
@@ -1535,6 +1797,9 @@ async function serveLatest(res: http.ServerResponse, head = false): Promise<void
   }
   const receipt = await readSubmitReceipt(snapshot);
   const safeSnapshot = publicSnapshot(snapshot);
+  if (resolvedSource === "program") {
+    scheduleHistoryPrewarm(configuredStateTarget(manifest));
+  }
   const status =
     resolvedSource === "program" ? "program" :
     resolvedSource === "bootstrap_live" ? "bootstrap" :
@@ -1585,6 +1850,60 @@ async function serveVersion(res: http.ServerResponse, head = false): Promise<voi
     canonical_state: stateTargetMode() === "circle_program" ? "vitals-circle-program" : "vitals-state-program",
     authority: authority("none", manifest),
     native_readiness: null
+  }, {}, head);
+}
+
+function historyCacheSnapshot(): Array<Record<string, unknown>> {
+  return [...historyCache.entries()].map(([key, entry]) => ({
+    key,
+    checked_at: isoFromMs(entry.checked_at),
+    age_ms: historyCacheAgeMs(entry),
+    verified: entry.verified,
+    row_count: entry.value.row_count,
+    first_index: entry.value.first_index,
+    latest_index: entry.value.rows[entry.value.rows.length - 1]?.snapshot_index || 0,
+    history_model: entry.value.history_discovery || null,
+    proof_scope: entry.value.proof?.scope || null,
+    proof_truncated: entry.value.proof?.truncated ?? null,
+    refresh_in_flight: historyReadInFlight.has(key),
+    last_refresh_error: entry.last_refresh_error
+  }));
+}
+
+async function servePerformance(res: http.ServerResponse, head = false): Promise<void> {
+  const manifest = await loadBaseManifest();
+  json(res, 200, {
+    schema: "octra-vitals-performance-v0",
+    generated_at: new Date().toISOString().replace(/\.\d{3}Z$/, "Z"),
+    gateway: {
+      role: gatewayRole,
+      uptime_seconds: Math.round(process.uptime()),
+      memory: process.memoryUsage(),
+      latest_cache: {
+        available: Boolean(latestCache),
+        source: latestCache ? latestCacheSource : null,
+        checked_at: isoFromMs(latestCacheAt || null),
+        age_ms: latestCacheAt ? Date.now() - latestCacheAt : null,
+        snapshot_id: latestCache?.envelope?.snapshot_id || null
+      },
+      latest_error: latestError?.message || null,
+      history_error: historyError?.message || null
+    },
+    history_cache: {
+      ttl_ms: historyReadTtlMs,
+      stale_while_refresh_ms: historyStaleWhileRefreshMs,
+      stale_windows: [...historyApiStaleWindows],
+      prewarm_enabled: historyPrewarmEnabled,
+      prewarm_windows: historyPrewarmWindows,
+      prewarm_in_flight: Boolean(historyPrewarmInFlight),
+      metrics: historyMetrics,
+      entries: historyCacheSnapshot()
+    },
+    static_asset_cache: {
+      entries: staticAssetCache.size
+    },
+    rpc: octraRpcMetricsSnapshot(),
+    authority: authority("none", manifest)
   }, {}, head);
 }
 
@@ -1731,7 +2050,7 @@ async function serveHistory(res: http.ServerResponse, url: URL, head = false): P
     }, {}, head);
   }
   try {
-    const history = await readVerifiedCanonicalHistory(target, historyReadOptionsForRequest(historyRequest));
+    const { history, cache } = await readHistoryForApi(target, historyRequest);
     const allSnapshots = history.rows.map((row) => ({
       snapshot_index: row.snapshot_index,
       snapshot_id: `vitals.${new Date(row.observed_at_unix * 1000).toISOString().replace(/\.\d{3}Z$/, "Z")}`,
@@ -1784,6 +2103,7 @@ async function serveHistory(res: http.ServerResponse, url: URL, head = false): P
         state_target_id: target.id,
         state_program_address: target.kind === "state_program" ? target.id : configuredProgramAddress(manifest.state_program_address),
         programmed_circle_id: target.kind === "circle_program" ? target.id : null,
+        history_cache: cache,
         note: "Rows are compact AML summary commitments; latest row is verified against the latest payload by the gateway."
       }
     }, {}, head);
@@ -2014,6 +2334,29 @@ async function serveProgramArtifacts(res: http.ServerResponse, head = false): Pr
   json(res, 200, artifacts, {}, head);
 }
 
+async function readJsonEvidenceText(file: string, maxFileBytes?: number): Promise<{ text: string; compressed: boolean; stored_bytes: number }> {
+  try {
+    const info = await stat(file);
+    if (maxFileBytes !== undefined && info.size > maxFileBytes) {
+      const error = new Error("raw_evidence_too_large");
+      (error as any).stored_bytes = info.size;
+      throw error;
+    }
+    return { text: await readFile(file, "utf8"), compressed: false, stored_bytes: info.size };
+  } catch (error: any) {
+    if (error?.code !== "ENOENT") throw error;
+  }
+  const gzFile = `${file}.gz`;
+  const info = await stat(gzFile);
+  if (maxFileBytes !== undefined && info.size > maxFileBytes) {
+    const error = new Error("raw_evidence_too_large");
+    (error as any).stored_bytes = info.size;
+    throw error;
+  }
+  const bytes = await readFile(gzFile);
+  return { text: gunzipSync(bytes).toString("utf8"), compressed: true, stored_bytes: info.size };
+}
+
 function rawEvidenceView(raw: any): Record<string, unknown> {
   const { body, schema: _schema, ...rest } = raw;
   let bodyJson: unknown;
@@ -2043,34 +2386,30 @@ async function serveEvidence(res: http.ServerResponse, url: URL, head = false): 
     const file = join(evidenceDir, "raw", `${rawHash.toLowerCase()}.json`);
     try {
       const maxFileBytes = positiveIntegerEnv("VITALS_RAW_EVIDENCE_MAX_FILE_BYTES", 6_000_000);
-      const info = await stat(file);
-      if (info.size > maxFileBytes) {
-        return json(res, 413, {
-          error: "raw_evidence_too_large",
-          max_bytes: maxFileBytes
-        }, {}, head);
-      }
-      const text = await readFile(file, "utf8");
+      const { text, compressed, stored_bytes } = await readJsonEvidenceText(file, maxFileBytes);
       const parsed = JSON.parse(text);
       if (parsed.response_hash !== expected || typeof parsed.body !== "string" || responseHash(parsed.body) !== expected) {
         throw new Error("raw evidence hash mismatch");
       }
       const rawWrapperRequested = url.searchParams.get("raw") === "1";
       if (!rawWrapperRequested) {
-        return json(res, 200, rawEvidenceView(parsed), immutableJsonHeaders, head);
+        return json(res, 200, {
+          ...rawEvidenceView(parsed),
+          storage: { compressed, stored_bytes }
+        }, immutableJsonHeaders, head);
       }
       if (url.searchParams.get("exact") !== "1") {
         return json(res, 200, parsed, immutableJsonHeaders, head);
       }
-      res.writeHead(200, {
-        "Content-Type": "application/json; charset=utf-8",
-        "Cache-Control": "public, max-age=3600, immutable",
-        "Content-Length": Buffer.byteLength(text),
-        "X-Content-Type-Options": "nosniff",
-        ...corsHeaders()
-      });
-      res.end(head ? undefined : text);
-    } catch {
+      writeBufferedResponse(res, 200, "application/json; charset=utf-8", Buffer.from(text), immutableJsonHeaders, head);
+    } catch (error: any) {
+      if (error?.message === "raw_evidence_too_large") {
+        return json(res, 413, {
+          error: "raw_evidence_too_large",
+          max_bytes: positiveIntegerEnv("VITALS_RAW_EVIDENCE_MAX_FILE_BYTES", 6_000_000),
+          stored_bytes: error?.stored_bytes ?? null
+        }, {}, head);
+      }
       notFound(res);
     }
     return;
@@ -2082,7 +2421,7 @@ async function serveEvidence(res: http.ServerResponse, url: URL, head = false): 
   const expected = `sha256:${evidenceHash.toLowerCase()}`;
   const file = join(evidenceDir, `${evidenceHash.toLowerCase()}.json`);
   try {
-    const text = await readFile(file, "utf8");
+    const { text } = await readJsonEvidenceText(file);
     const parsed = JSON.parse(text);
     if (sha256Tagged(EVIDENCE_HASH_DOMAIN, canonicalJson(parsed)) !== expected) {
       throw new Error("evidence manifest hash mismatch");
@@ -2090,14 +2429,7 @@ async function serveEvidence(res: http.ServerResponse, url: URL, head = false): 
     if (url.searchParams.get("exact") !== "1") {
       return json(res, 200, parsed, immutableJsonHeaders, head);
     }
-    res.writeHead(200, {
-      "Content-Type": "application/json; charset=utf-8",
-      "Cache-Control": "public, max-age=3600, immutable",
-      "Content-Length": Buffer.byteLength(text),
-      "X-Content-Type-Options": "nosniff",
-      ...corsHeaders()
-    });
-    res.end(head ? undefined : text);
+    writeBufferedResponse(res, 200, "application/json; charset=utf-8", Buffer.from(text), immutableJsonHeaders, head);
   } catch {
     notFound(res);
   }
@@ -2110,11 +2442,8 @@ function writeStaticAssetResponse(
   head = false
 ): void {
   const headers: Record<string, string | number> = {
-    "Content-Type": asset.contentType,
     "Cache-Control": staticCacheControl(assetPath),
-    "Content-Length": asset.bytes.length,
     "Content-Security-Policy": "default-src 'self'; script-src 'self'; style-src 'self'; connect-src 'self'; img-src 'self' data:; object-src 'none'; base-uri 'none'",
-    "X-Content-Type-Options": "nosniff",
     "Referrer-Policy": "no-referrer",
     "X-Octra-Asset-Source": asset.source,
     "X-Octra-Asset-SHA256": asset.sha256
@@ -2127,8 +2456,7 @@ function writeStaticAssetResponse(
   if (asset.circleIntegrityChecksPassed !== null) {
     headers["X-Octra-Circle-Consistency"] = asset.circleIntegrityChecksPassed ? "verified" : "failed";
   }
-  res.writeHead(200, headers);
-  res.end(head ? undefined : asset.bytes);
+  writeBufferedResponse(res, 200, asset.contentType, asset.bytes, headers, head);
 }
 
 async function serveLabStatic(res: http.ServerResponse, pathname: string, head = false): Promise<void> {
@@ -2218,6 +2546,7 @@ async function route(req: http.IncomingMessage, res: http.ServerResponse): Promi
   if (req.method !== "GET" && !head) return methodNotAllowed(res);
   if (url.pathname === "/api/latest") return serveLatest(res, head);
   if (url.pathname === "/api/version" || url.pathname === "/version") return serveVersion(res, head);
+  if (url.pathname === "/api/performance") return servePerformance(res, head);
   if (url.pathname === "/api/native-readiness") return serveNativeReadiness(res, head);
   if (url.pathname === "/api/site-integrity") return serveSiteIntegrity(res, head);
   if (url.pathname === "/api/history") return serveHistory(res, url, head);
@@ -2235,11 +2564,16 @@ await mkdir(evidenceDir, { recursive: true });
 
 const server = http.createServer((req: http.IncomingMessage, res: http.ServerResponse) => {
   const startedAtNs = process.hrtime.bigint();
+  (res as any).__octraRequest = req;
   if (trafficRecorder) {
     res.once("finish", () => trafficRecorder.record(req, res, startedAtNs));
   }
   route(req, res).catch((error) => {
     console.error(error);
+    if (res.headersSent) {
+      res.end();
+      return;
+    }
     json(res, 500, { error: "internal_error", message: exposeErrors && error instanceof Error ? error.message : "request_failed" });
   });
 });

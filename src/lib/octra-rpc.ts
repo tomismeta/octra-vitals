@@ -7,6 +7,92 @@ interface OctraRpcOptions {
   retry?: boolean;
 }
 
+type RpcMethodMetrics = {
+  calls: number;
+  attempts: number;
+  successes: number;
+  failures: number;
+  retries: number;
+};
+
+const rpcMaxConcurrent = Math.max(1, Number(process.env.OCTRA_RPC_MAX_CONCURRENT || 6));
+const rpcMinStartGapMs = Math.max(0, Number(process.env.OCTRA_RPC_MIN_START_GAP_MS || 50));
+let rpcActive = 0;
+let rpcLastStartAt = 0;
+const rpcQueue: Array<() => void> = [];
+const rpcMetrics = {
+  calls: 0,
+  attempts: 0,
+  successes: 0,
+  failures: 0,
+  retries: 0,
+  throttled_starts: 0,
+  max_concurrent_observed: 0,
+  by_method: new Map<string, RpcMethodMetrics>()
+};
+
+function methodMetrics(method: string): RpcMethodMetrics {
+  let value = rpcMetrics.by_method.get(method);
+  if (!value) {
+    value = { calls: 0, attempts: 0, successes: 0, failures: 0, retries: 0 };
+    rpcMetrics.by_method.set(method, value);
+  }
+  return value;
+}
+
+function pumpRpcQueue(): void {
+  while (rpcActive < rpcMaxConcurrent && rpcQueue.length) {
+    const next = rpcQueue.shift();
+    if (next) next();
+  }
+}
+
+async function acquireRpcSlot(): Promise<void> {
+  if (rpcActive >= rpcMaxConcurrent) {
+    rpcMetrics.throttled_starts += 1;
+    await new Promise<void>((resolve) => rpcQueue.push(resolve));
+  }
+  rpcActive += 1;
+  rpcMetrics.max_concurrent_observed = Math.max(rpcMetrics.max_concurrent_observed, rpcActive);
+  const waitMs = Math.max(0, rpcMinStartGapMs - (Date.now() - rpcLastStartAt));
+  if (waitMs > 0) {
+    rpcMetrics.throttled_starts += 1;
+    await sleep(waitMs);
+  }
+  rpcLastStartAt = Date.now();
+}
+
+function releaseRpcSlot(): void {
+  rpcActive = Math.max(0, rpcActive - 1);
+  pumpRpcQueue();
+}
+
+async function withRpcSlot<T>(fn: () => Promise<T>): Promise<T> {
+  await acquireRpcSlot();
+  try {
+    return await fn();
+  } finally {
+    releaseRpcSlot();
+  }
+}
+
+export function octraRpcMetricsSnapshot(): Record<string, unknown> {
+  return {
+    max_concurrent: rpcMaxConcurrent,
+    min_start_gap_ms: rpcMinStartGapMs,
+    active: rpcActive,
+    queued: rpcQueue.length,
+    calls: rpcMetrics.calls,
+    attempts: rpcMetrics.attempts,
+    successes: rpcMetrics.successes,
+    failures: rpcMetrics.failures,
+    retries: rpcMetrics.retries,
+    throttled_starts: rpcMetrics.throttled_starts,
+    max_concurrent_observed: rpcMetrics.max_concurrent_observed,
+    by_method: Object.fromEntries([...rpcMetrics.by_method.entries()].map(([method, value]) => [method, { ...value }]))
+  };
+}
+
 export function octraProgramRpcUrl(): string {
   return octraProgramRpcUrls()[0] || DEFAULT_OCTRA_RPC_URL;
 }
@@ -92,12 +178,21 @@ export async function octraRpc<T = any>(method: string, params: unknown[] = [], 
   const shouldRetry = options.retry ?? retrySafeOctraMethod(method);
   const maxAttempts = shouldRetry ? Math.max(1, Number(process.env.OCTRA_RPC_ATTEMPTS || 5)) : 1;
   let lastError: unknown = null;
+  const perMethod = methodMetrics(method);
+  rpcMetrics.calls += 1;
+  perMethod.calls += 1;
 
   for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), timeoutMs);
     try {
-      const response = await fetch(url, {
+      rpcMetrics.attempts += 1;
+      perMethod.attempts += 1;
+      if (attempt > 1) {
+        rpcMetrics.retries += 1;
+        perMethod.retries += 1;
+      }
+      const response = await withRpcSlot(() => fetch(url, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -106,7 +201,7 @@ export async function octraRpc<T = any>(method: string, params: unknown[] = [], 
         },
         body: JSON.stringify(request),
         signal: controller.signal
-      });
+      }));
       const text = await response.text();
       if (!response.ok) {
         const error = new Error(`${url} returned ${response.status}: ${text.slice(0, 240)}`);
@@ -138,10 +233,14 @@ export async function octraRpc<T = any>(method: string, params: unknown[] = [], 
         }
         throw error;
       }
+      rpcMetrics.successes += 1;
+      perMethod.successes += 1;
       return body.result;
     } catch (error) {
       lastError = error;
       if (attempt >= maxAttempts || !retryableError(error)) {
+        rpcMetrics.failures += 1;
+        perMethod.failures += 1;
         throw error;
       }
       await sleep(retryDelay(attempt, null));

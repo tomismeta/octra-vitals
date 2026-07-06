@@ -36,6 +36,8 @@
     "snapshot-runs:summary:dist": "node dist/scripts/summarize-snapshot-runs.js",
     "notify:operator": "npm run build && node dist/scripts/notify-operator.js",
     "notify:operator:dist": "node dist/scripts/notify-operator.js",
+    "perf:probe": "npm run build && node dist/scripts/probe-gateway-performance.js",
+    "perf:probe:dist": "node dist/scripts/probe-gateway-performance.js",
     "release:plan": "bash deploy/mainnet/plan-release.sh",
     "circle:release": "npm run build && node dist/scripts/build-producer-audit-manifest.js && node dist/scripts/build-site-circle-release.js",
     "circle:release:lab": "npm run build && VITALS_SITE_RELEASE_KIND=lab node dist/scripts/build-site-circle-release.js",

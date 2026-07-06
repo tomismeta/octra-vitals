@@ -141,6 +141,7 @@ Useful routes:
 ```text
 /api/latest
 /api/history
+/api/performance
 /api/version
 /api/site-integrity
 /api/native-readiness
@@ -179,6 +180,7 @@ Start with:
 - [Release Management](docs/release-management.md)
 - [Mainnet Deployment](docs/mainnet-deployment.md)
 - [History Lab Mirror](docs/lab-history-mirror.md)
+- [Performance and Capacity](docs/performance-capacity.md)
 - [Costs](docs/costs.md)
 - [Readiness](docs/readiness.md)
 

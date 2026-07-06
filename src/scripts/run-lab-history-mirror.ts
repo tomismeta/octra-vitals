@@ -4,8 +4,9 @@ import { realpathSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { performance } from "node:perf_hooks";
-import { configuredStateTarget, readVerifiedCanonicalHistory } from "../lib/canonical-history.js";
-import { mirrorLabHistory } from "../lib/lab-history.js";
+import { configuredStateTarget, readVerifiedCanonicalHistory, type HistoryReadOptions } from "../lib/canonical-history.js";
+import { readLatestCircleProgramSnapshot, readLatestProgramSnapshot } from "../lib/program-state.js";
+import { mirrorLabHistory, readLabHistoryWatermark, type LabHistorySource } from "../lib/lab-history.js";
 import { octraSqliteConfig } from "../lib/octra-sqlite-client.js";
 import { writeJsonAtomic } from "./submit-snapshot.js";
 
@@ -180,6 +181,44 @@ async function readManifest(path: string): Promise<Record<string, any>> {
   return JSON.parse(await readFile(path, "utf8"));
 }
 
+function snapshotIndex(value: unknown): number {
+  const parsed = Number((value as any)?.snapshot_index || 0);
+  return Number.isSafeInteger(parsed) && parsed > 0 ? parsed : 0;
+}
+
+async function readLatestIndex(target: ReturnType<typeof configuredStateTarget>): Promise<number> {
+  if (!target.id) return 0;
+  const snapshot = target.kind === "circle_program"
+    ? await readLatestCircleProgramSnapshot(target.id)
+    : await readLatestProgramSnapshot(target.id);
+  return snapshotIndex(snapshot);
+}
+
+export function historyReadOptionsForGap(latestIndex: number, completeThroughIndex: number): HistoryReadOptions {
+  const rowsPerCapsule = 48;
+  const configuredMax = Number(process.env.VITALS_LAB_HISTORY_MAX_SEALED_CAPSULES || 64);
+  const safeMax = Number.isSafeInteger(configuredMax) && configuredMax > 0 ? configuredMax : 64;
+  const missingRows = Math.max(0, latestIndex - completeThroughIndex);
+  if (missingRows <= 0) return {};
+  const requestedRows = missingRows + Number(process.env.VITALS_LAB_HISTORY_SYNC_TAIL_ROWS || 0);
+  return {
+    maxSealedCapsules: Math.max(1, Math.min(safeMax, Math.ceil(requestedRows / rowsPerCapsule) + 1))
+  };
+}
+
+async function pruneLabRunDirs(
+  timings: Record<string, number>,
+  runsDir: string,
+  runDir: string
+): Promise<Record<string, unknown>> {
+  return timed(timings, "retention_ms", () => pruneRunDirs(
+    runsDir,
+    Number(process.env.VITALS_LAB_HISTORY_RETENTION_MAX_RUNS || 672),
+    Number(process.env.VITALS_LAB_HISTORY_RETENTION_MAX_AGE_MS || 7 * 24 * 60 * 60_000),
+    runDir
+  ));
+}
+
 export async function runLabHistoryMirror(): Promise<Record<string, any>> {
   const startedAt = isoNow();
   const runId = process.env.VITALS_LAB_HISTORY_RUN_ID || `lab-history-${fileSafe(startedAt)}-${process.pid}`;
@@ -247,17 +286,66 @@ export async function runLabHistoryMirror(): Promise<Record<string, any>> {
     const target = configuredStateTarget(manifest);
     if (!target.id) throw new Error(`${target.kind === "circle_program" ? "programmed Circle id" : "state program address"} is required`);
     const targetId = target.id;
-    const history = await timed(timings, "verified_history_read_ms", () => readVerifiedCanonicalHistory(target));
-    const mirror = await timed(timings, "lab_mirror_ms", () => mirrorLabHistory(history, {
+    const source: LabHistorySource = {
       target_kind: target.kind,
       target_id: targetId
-    }));
-    const retention = await timed(timings, "retention_ms", () => pruneRunDirs(
-      runsDir,
-      Number(process.env.VITALS_LAB_HISTORY_RETENTION_MAX_RUNS || 672),
-      Number(process.env.VITALS_LAB_HISTORY_RETENTION_MAX_AGE_MS || 7 * 24 * 60 * 60_000),
-      runDir
-    ));
+    };
+    const watermark = await timed(timings, "lab_watermark_read_ms", () => readLabHistoryWatermark(source).catch(() => null));
+    const latestIndex = await timed(timings, "latest_index_read_ms", () => readLatestIndex(target));
+    if (watermark && latestIndex > 0 && watermark.last_complete_snapshot_index >= latestIndex) {
+      const retention = await pruneLabRunDirs(timings, runsDir, runDir);
+      timings.total_ms = ms(performance.now() - totalStarted);
+      const report = {
+        schema: "octra-vitals-lab-history-mirror-report-v0",
+        status: "ok",
+        reason: "mirror_current",
+        run_id: runId,
+        started_at: startedAt,
+        generated_at: isoNow(),
+        lab_database_network: config.network,
+        lab_database: config.database,
+        state_target_mode: target.kind,
+        state_target_id: targetId,
+        source_history: {
+          first_index: watermark.source_range_first_index,
+          row_count: Math.max(0, watermark.source_range_latest_index - watermark.source_range_first_index + 1),
+          latest_index: latestIndex,
+          history_model: "skipped_current",
+          proof_scope: "not_read",
+          proof_truncated: null
+        },
+        mirror: {
+          schema: "octra-vitals-lab-history-v0",
+          run_id: runId,
+          mirrored_at: isoNow(),
+          source_id: `${source.target_kind}:${source.target_id}`,
+          history_model: "skipped_current",
+          first_index: watermark.source_range_first_index,
+          latest_index: latestIndex,
+          complete_through_index: watermark.last_complete_snapshot_index,
+          mirrored_latest_index: watermark.last_complete_snapshot_index,
+          row_count: 0,
+          source_row_count: 0,
+          pending_row_count: 0,
+          complete: true,
+          era_count: 0,
+          proof_scope: "not_read",
+          proof_truncated: false,
+          readback_status: "verified"
+        },
+        retention,
+        paths,
+        timings_ms: timings
+      };
+      await writeJsonAtomic(runReportPath, report);
+      await writeJsonAtomic(latestReportPath, report);
+      return report;
+    }
+
+    const historyOptions = historyReadOptionsForGap(latestIndex, watermark?.last_complete_snapshot_index || 0);
+    const history = await timed(timings, "verified_history_read_ms", () => readVerifiedCanonicalHistory(target, historyOptions));
+    const mirror = await timed(timings, "lab_mirror_ms", () => mirrorLabHistory(history, source));
+    const retention = await pruneLabRunDirs(timings, runsDir, runDir);
     timings.total_ms = ms(performance.now() - totalStarted);
     const report = {
       schema: "octra-vitals-lab-history-mirror-report-v0",
@@ -275,7 +363,10 @@ export async function runLabHistoryMirror(): Promise<Record<string, any>> {
         latest_index: history.rows[history.rows.length - 1]?.snapshot_index || 0,
         history_model: history.history_discovery || null,
         proof_scope: history.proof?.scope || null,
-        proof_truncated: history.proof?.truncated ?? null
+        proof_truncated: history.proof?.truncated ?? null,
+        max_sealed_capsules: historyOptions.maxSealedCapsules ?? null,
+        prior_complete_through_index: watermark?.last_complete_snapshot_index || 0,
+        latest_index_probe: latestIndex || null
       },
       mirror,
       retention,

@@ -1506,6 +1506,16 @@ function seriesPegPct(){ return activeSeries().map(r=>pctR(BigInt(r[COL.WOCT]), 
 function seriesPublicPctOfCirc(){ return activeSeries().map(r=> pctR(BigInt(r[COL.INCIRC])-BigInt(r[COL.ENC]), BigInt(r[COL.INCIRC]), 4)); }
 
 /* Act II small-multiple sparkline (returns HTML string) */
+const SPARK_HIT_SLOT_MAX = 96;
+function sparkHitIndexes(n){
+  if(n <= SPARK_HIT_SLOT_MAX) return Array.from({length:n}, (_,i)=>i);
+  const out = new Set([0, n - 1]);
+  for(let i=1;i<SPARK_HIT_SLOT_MAX-1;i++){
+    out.add(Math.round((i / (SPARK_HIT_SLOT_MAX - 1)) * (n - 1)));
+  }
+  return [...out].sort((a,b)=>a-b);
+}
+
 /* live-state sparkline lens: "flow" = per-interval change (default) · "trend" = level trajectory.
    "absolute" is a wired-but-unexposed hook (zero/reference-based) for a future third tab. */
 let sparkMode = (()=>{ try{ const m=localStorage.getItem("octv.sparkMode"); return (m==="trend"||m==="flow"||m==="absolute")?m:"flow"; }catch(e){ return "flow"; } })();
@@ -1540,13 +1550,14 @@ function sparkSM(values, opts={}){
   const wrap = inner => `<span class="spark"><svg class="sl-svg" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" role="img" aria-label="${esc(opts.aria||"")}">${inner}</svg></span>`;
   if(!n) return `<span class="spark"></span>`;
   const hitSlots = ()=>{
-    const step = n > 1 ? innerW / (n - 1) : innerW;
-    return values.map((_, i)=>{
-      const slotW = n > 1
-        ? (i === 0 || i === n - 1 ? step / 2 : step)
-        : innerW;
-      const left = Math.max(0, x(i) - slotW / 2);
-      const width = Math.min(W - left, slotW);
+    const indexes = sparkHitIndexes(n);
+    return indexes.map((i, slotIndex)=>{
+      const prev = indexes[slotIndex - 1];
+      const next = indexes[slotIndex + 1];
+      const leftEdge = prev === undefined ? padL : (x(prev) + x(i)) / 2;
+      const rightEdge = next === undefined ? padL + innerW : (x(i) + x(next)) / 2;
+      const left = Math.max(0, leftEdge);
+      const width = Math.min(W - left, Math.max(1, rightEdge - leftEdge));
       const tip = sparkPointTip(values, i, opts);
       return `<rect class="sl-hit" x="${left.toFixed(2)}" y="0" width="${width.toFixed(2)}" height="${H}" tabindex="0" role="img" aria-label="${esc(tip)}" data-tip="${esc(tip)}"/>`;
     }).join("");
@@ -1700,7 +1711,7 @@ function setupSparkTooltips(){
 }
 
 function historyApiPath(windowName=DEFAULT_HISTORY_WINDOW){
-  return `/api/history?window=${encodeURIComponent(HISTORY_WINDOWS[windowName] ? windowName : DEFAULT_HISTORY_WINDOW)}`;
+  return `/api/history?window=${encodeURIComponent(HISTORY_WINDOWS[windowName] ? windowName : DEFAULT_HISTORY_WINDOW)}&compact=1`;
 }
 
 /* ============================================================================

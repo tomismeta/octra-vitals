@@ -8,7 +8,7 @@ import { promisify } from "node:util";
 
 import { buildLabHistoryMirrorSql, mirrorLabHistory, planLabHistoryMirrorRows } from "../lib/lab-history.js";
 import { normalizeReadOnlySql, octraSqliteConfig, octraSqliteQueryProof, parseOctraSqliteOutput, publicLabQueryError } from "../lib/octra-sqlite-client.js";
-import { acquireLock, runLabHistoryMirror } from "../scripts/run-lab-history-mirror.js";
+import { acquireLock, historyReadOptionsForGap, runLabHistoryMirror } from "../scripts/run-lab-history-mirror.js";
 import type { ProgramHistoryWindow, SummaryRow } from "../lib/summary-window.js";
 
 const execFileAsync = promisify(execFile);
@@ -483,6 +483,19 @@ test("lab mirror planner advances from completion watermark without enumerating 
   assert.equal(plan.mirroredLatestIndex, 13);
   assert.equal(plan.pendingRowCount, 1);
   assert.equal(plan.complete, false);
+});
+
+test("lab mirror history read planner stays bounded to the missing gap", async () => {
+  assert.deepEqual(historyReadOptionsForGap(100, 100), {});
+  assert.deepEqual(historyReadOptionsForGap(100, 95), { maxSealedCapsules: 2 });
+
+  await withEnv({
+    VITALS_LAB_HISTORY_MAX_SEALED_CAPSULES: "4",
+    VITALS_LAB_HISTORY_SYNC_TAIL_ROWS: "48"
+  }, async () => {
+    assert.deepEqual(historyReadOptionsForGap(300, 1), { maxSealedCapsules: 4 });
+    assert.deepEqual(historyReadOptionsForGap(300, 299), { maxSealedCapsules: 3 });
+  });
 });
 
 test("core snapshot updater does not depend on the optional Lab mirror", async () => {

@@ -369,7 +369,7 @@ function completionStatements(
   ];
 }
 
-async function readWatermark(source: LabHistorySource, open: LabHistorySqlOpen = octraSqliteOpen): Promise<LabHistoryWatermark | null> {
+export async function readLabHistoryWatermark(source: LabHistorySource, open: LabHistorySqlOpen = octraSqliteOpen): Promise<LabHistoryWatermark | null> {
   const result = rowsAsObjects(await open(`
     select
       source_range_first_index,
@@ -589,7 +589,7 @@ function statementBatches(statements: string[], maxBytes = maxSyncSqlBytes()): s
 }
 
 export async function mirrorLabHistory(history: ProgramHistoryWindow, source: LabHistorySource, open: LabHistorySqlOpen = octraSqliteOpen): Promise<LabHistoryMirrorSummary> {
-  const watermark = await readWatermark(source, open);
+  const watermark = await readLabHistoryWatermark(source, open);
   const completeBeforeRun = watermark?.last_complete_snapshot_index || 0;
   const plan = planLabHistoryMirrorRows(history, completeBeforeRun, maxSyncRows(), syncTailRows());
   const includeCatalog = completeBeforeRun === 0;
