@@ -104,15 +104,18 @@ function probePaths(): Array<{ label: string; path: string }> {
     .split(",")
     .map((part) => part.trim())
     .filter(Boolean);
-  return [
+  const paths = [
     { label: "health", path: "/health" },
     { label: "latest", path: "/api/latest?compact=1" },
     ...windows.map((window) => ({
       label: `history_${window}`,
       path: `/api/history?window=${encodeURIComponent(window)}&compact=1`
-    })),
-    { label: "performance", path: "/api/performance?compact=1" }
+    }))
   ];
+  if (process.argv.includes("--include-internal") || process.env.VITALS_PERF_PROBE_INCLUDE_INTERNAL === "1") {
+    paths.push({ label: "performance", path: "/api/performance?compact=1" });
+  }
+  return paths;
 }
 
 async function main(): Promise<void> {

@@ -15,7 +15,7 @@ This hardening pass changes only read paths, retention, diagnostics, and the opt
 - The Lab mirror reads only the gap after its completion watermark.
 - New raw evidence bodies are stored gzip-compressed on disk.
 - Operator alerts include a 365-day raw-evidence growth projection.
-- `/api/performance` and `npm run perf:probe` expose low-impact timing and cache checks.
+- `/api/performance` can expose low-impact timing and cache checks when explicitly enabled.
 
 ## What Is Not Changed
 
@@ -37,9 +37,11 @@ VITALS_HISTORY_PREWARM_WINDOWS=1h,1d,7d,30d
 VITALS_HISTORY_INTEGRITY_CAPSULE_LIMIT=3
 VITALS_RESPONSE_GZIP_ENABLED=1
 VITALS_RAW_EVIDENCE_COMPRESS=1
+VITALS_EXPOSE_PERFORMANCE=0
 OCTRA_RPC_MAX_CONCURRENT=6
 OCTRA_RPC_MIN_START_GAP_MS=50
 VITALS_LAB_HISTORY_MAX_SEALED_CAPSULES=64
+VITALS_PERF_PROBE_INCLUDE_INTERNAL=0
 ```
 
 ## Probe
@@ -55,9 +57,14 @@ The report records status, elapsed time, decoded body size, content type, and re
 - `/health`
 - `/api/latest`
 - `/api/history` for `1h`, `1d`, `7d`, and `30d`
+
+When `VITALS_EXPOSE_PERFORMANCE=1` is set on the gateway, pass `--include-internal` to also check:
+
 - `/api/performance`
 
 The probe is sequential by design. It should measure the site, not become load.
+
+`/api/performance` is disabled by default because it reports gateway internals such as cache state, uptime, memory, and RPC counters. Enable it only on trusted environments or for short diagnostic windows.
 
 ## Main Constraint
 

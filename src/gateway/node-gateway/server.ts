@@ -1871,6 +1871,7 @@ function historyCacheSnapshot(): Array<Record<string, unknown>> {
 }
 
 async function servePerformance(res: http.ServerResponse, head = false): Promise<void> {
+  if (process.env.VITALS_EXPOSE_PERFORMANCE !== "1") return notFound(res, head);
   const manifest = await loadBaseManifest();
   json(res, 200, {
     schema: "octra-vitals-performance-v0",

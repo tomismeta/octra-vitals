@@ -141,7 +141,6 @@ Useful routes:
 ```text
 /api/latest
 /api/history
-/api/performance
 /api/version
 /api/site-integrity
 /api/native-readiness
