@@ -1,4 +1,4 @@
-import { assertHistoryTailMatchesLatest, type HistoryReadOptions, type StateTarget } from "./canonical-history.js";
+import { assertHistoryTailWithinLag, type HistoryReadOptions, type HistorySummaryAnchor, type HistoryTailAnchorVerification, type StateTarget } from "./canonical-history.js";
 import { octraSqliteConfig, octraSqliteOpen, rowsAsObjects, sqlString, type OctraSqliteConfig, type OctraSqliteResult } from "./octra-sqlite-client.js";
 import { encodeSummaryRow, summaryWindowHash, SUMMARY_ROW_LEN, type ProgramHistoryWindow, type SummaryRow } from "./summary-window.js";
 import type { SnapshotArtifact } from "./types.js";
@@ -12,9 +12,15 @@ export interface SqliteHistoryReplicaRead {
   total_row_count: number;
   source_id: string;
   database_uri: string | null;
+  tail_anchor: HistoryTailAnchorVerification;
 }
 
 type SqliteOpen = (sql: string) => Promise<OctraSqliteResult>;
+
+export interface SqliteHistoryReplicaVerifyOptions {
+  maxLagSnapshots?: number;
+  rememberedSummaries?: ReadonlyMap<number, HistorySummaryAnchor>;
+}
 
 function sourceId(target: StateTarget): string {
   if (!target.id) throw new Error(`${target.kind === "circle_program" ? "programmed Circle id" : "state program address"} is required`);
@@ -149,7 +155,8 @@ export async function readSqliteHistoryReplica(
   latest: SnapshotArtifact,
   options: HistoryReadOptions = {},
   open: SqliteOpen = octraSqliteOpen,
-  config: OctraSqliteConfig = octraSqliteConfig()
+  config: OctraSqliteConfig = octraSqliteConfig(),
+  verifyOptions: SqliteHistoryReplicaVerifyOptions = {}
 ): Promise<SqliteHistoryReplicaRead> {
   if (!config.enabled) throw new Error(config.reason || "sqlite_history_replica_unavailable");
   const source = sourceId(target);
@@ -183,12 +190,13 @@ export async function readSqliteHistoryReplica(
     selectedLatestIndex: selectedLatest,
     pageCount
   });
-  assertHistoryTailMatchesLatest(history, latest);
+  const tailAnchor = assertHistoryTailWithinLag(history, latest, verifyOptions);
   return {
     history,
     page_count: pageCount,
     total_row_count: meta.rowCount,
     source_id: source,
-    database_uri: config.databaseUri || config.database
+    database_uri: config.databaseUri || config.database,
+    tail_anchor: tailAnchor
   };
 }

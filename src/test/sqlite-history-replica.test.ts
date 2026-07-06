@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
+import { type HistorySummaryAnchor } from "../lib/canonical-history.js";
 import { readSqliteHistoryReplica } from "../lib/sqlite-history-replica.js";
 import { encodeSummaryRow, type SummaryRow } from "../lib/summary-window.js";
 import type { OctraSqliteResult } from "../lib/octra-sqlite-client.js";
@@ -38,6 +39,19 @@ function latestFor(rowValue: SummaryRow): SnapshotArtifact {
     snapshot_index: rowValue.snapshot_index,
     latest_summary: encodeSummaryRow(rowValue)
   } as unknown as SnapshotArtifact;
+}
+
+function remembered(rowValue: SummaryRow): Map<number, HistorySummaryAnchor> {
+  return new Map([
+    [
+      rowValue.snapshot_index,
+      {
+        latest_summary: encodeSummaryRow(rowValue),
+        observed_at_unix: rowValue.observed_at_unix,
+        checked_at_ms: Date.now()
+      }
+    ]
+  ]);
 }
 
 function fakeOpen(rows: SummaryRow[]): (sql: string) => Promise<OctraSqliteResult> {
@@ -140,6 +154,89 @@ test("SQLite history replica rejects a mirror that does not tail-match latest AM
         network: "devnet"
       }
     ),
-    /canonical history tail does not match latest summary row/
+    /canonical history tail lag 1 exceeds max 0/
+  );
+});
+
+test("SQLite history replica accepts a one-snapshot lag when the tail matches a remembered AML summary", async () => {
+  const rows = Array.from({ length: 60 }, (_, offset) => row(offset + 1));
+  const result = await readSqliteHistoryReplica(
+    { kind: "circle_program", id: "octProgram" },
+    latestFor(row(61)),
+    { maxSealedCapsules: 1 },
+    fakeOpen(rows),
+    {
+      enabled: true,
+      reason: null,
+      bin: "octra-sqlite",
+      configPath: null,
+      database: "oct://devnet/octDb",
+      databaseUri: "oct://devnet/octDb",
+      network: "devnet"
+    },
+    {
+      maxLagSnapshots: 1,
+      rememberedSummaries: remembered(rows[59]!)
+    }
+  );
+
+  assert.equal(result.history.rows[result.history.rows.length - 1]?.snapshot_index, 60);
+  assert.equal(result.tail_anchor.latest_index, 61);
+  assert.equal(result.tail_anchor.tail_index, 60);
+  assert.equal(result.tail_anchor.lag_snapshots, 1);
+  assert.equal(result.tail_anchor.lag_seconds, 900);
+  assert.equal(result.tail_anchor.anchor_source, "remembered_latest_summary");
+});
+
+test("SQLite history replica rejects a one-snapshot lag after restart when no remembered AML summary exists", async () => {
+  const rows = Array.from({ length: 60 }, (_, offset) => row(offset + 1));
+  await assert.rejects(
+    readSqliteHistoryReplica(
+      { kind: "circle_program", id: "octProgram" },
+      latestFor(row(61)),
+      { maxSealedCapsules: 1 },
+      fakeOpen(rows),
+      {
+        enabled: true,
+        reason: null,
+        bin: "octra-sqlite",
+        configPath: null,
+        database: "oct://devnet/octDb",
+        databaseUri: "oct://devnet/octDb",
+        network: "devnet"
+      },
+      { maxLagSnapshots: 1, rememberedSummaries: new Map() }
+    ),
+    /remembered latest summary unavailable/
+  );
+});
+
+test("SQLite history replica rejects a forged lagged tail even inside the one-snapshot window", async () => {
+  const rows = Array.from({ length: 60 }, (_, offset) => row(offset + 1));
+  const forged = {
+    ...rows[59]!,
+    issued_raw: String(BigInt(rows[59]!.issued_raw) + 1n)
+  };
+  await assert.rejects(
+    readSqliteHistoryReplica(
+      { kind: "circle_program", id: "octProgram" },
+      latestFor(row(61)),
+      { maxSealedCapsules: 1 },
+      fakeOpen(rows),
+      {
+        enabled: true,
+        reason: null,
+        bin: "octra-sqlite",
+        configPath: null,
+        database: "oct://devnet/octDb",
+        databaseUri: "oct://devnet/octDb",
+        network: "devnet"
+      },
+      {
+        maxLagSnapshots: 1,
+        rememberedSummaries: remembered(forged)
+      }
+    ),
+    /canonical history tail does not match remembered latest summary row/
   );
 });

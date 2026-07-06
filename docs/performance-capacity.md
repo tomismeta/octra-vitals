@@ -13,7 +13,8 @@ This hardening pass changes only read paths, retention, diagnostics, and the opt
 - The UI requests compact history JSON and samples sparkline hover hit targets.
 - Octra RPC calls share one small concurrency budget.
 - The Lab mirror reads only the gap after its completion watermark.
-- `/api/history` can use the `octra-sqlite` Circle as a read replica, then anchor the latest row against the latest AML snapshot before serving it.
+- `/api/history` can use the `octra-sqlite` Circle as a read replica, then anchor the tail row against the current or recently observed AML latest summary before serving it.
+- A SQLite replica may trail the AML latest snapshot by one row only when that row byte-matches a recent AML `latest_summary` already observed by the gateway. After a restart, or on any mismatch, the gateway falls back to AML instead of serving an unanchored mirror.
 - New raw evidence bodies are stored gzip-compressed on disk.
 - Operator alerts include a 365-day raw-evidence growth projection.
 - `/api/performance` can expose low-impact timing and cache checks when explicitly enabled.
@@ -32,6 +33,7 @@ This hardening pass changes only read paths, retention, diagnostics, and the opt
 VITALS_HISTORY_READ_TTL_MS=3600000
 VITALS_HISTORY_READ_PATH=replica       # replica | canonical | cache_only
 VITALS_HISTORY_REPLICA_FALLBACK_TO_CANONICAL=1
+VITALS_HISTORY_REPLICA_MAX_LAG_SNAPSHOTS=1
 VITALS_HISTORY_REPLICA_PAGE_ROWS=175
 VITALS_HISTORY_STALE_WHILE_REFRESH_MS=21600000
 VITALS_HISTORY_API_STALE_WINDOWS=7d,30d
