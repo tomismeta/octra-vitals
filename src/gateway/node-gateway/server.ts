@@ -1125,6 +1125,24 @@ function historyCacheDiagnostic(cacheKey: string, entry: HistoryCacheEntry | und
   };
 }
 
+function historyTailIndex(history: ProgramHistoryWindow | null | undefined): number | null {
+  const tail = history?.rows[history.rows.length - 1];
+  return typeof tail?.snapshot_index === "number" && Number.isFinite(tail.snapshot_index) ? tail.snapshot_index : null;
+}
+
+function latestResultIndex(result: LatestSnapshotResult): number | null {
+  if (result.source !== "program" || !result.snapshot) return null;
+  const index = Number((result.snapshot as any).snapshot_index || 0);
+  return Number.isFinite(index) && index > 0 ? index : null;
+}
+
+async function cachedHistoryTailMatchesLatest(entry: HistoryCacheEntry | undefined): Promise<boolean> {
+  if (!entry?.value) return false;
+  const latestIndex = latestResultIndex(await getLatestSnapshot());
+  if (latestIndex === null) return true;
+  return historyTailIndex(entry.value) === latestIndex;
+}
+
 function historyStaleAllowed(request: HistoryApiRequest): boolean {
   return Boolean(request.window && historyApiStaleWindows.has(request.window));
 }
@@ -1257,7 +1275,9 @@ async function readHistoryForApi(target: StateTarget, request: HistoryApiRequest
   const age = historyCacheAgeMs(cached);
   historyMetrics.reads += 1;
 
-  if (cached && cached.verified && age !== null && age <= historyReadTtlMs) {
+  const cachedTailMatchesLatest = cached?.verified ? await cachedHistoryTailMatchesLatest(cached) : false;
+
+  if (cached && cached.verified && cachedTailMatchesLatest && age !== null && age <= historyReadTtlMs) {
     historyMetrics.cache_hits += 1;
     return { history: cached.value, cache: historyCacheDiagnostic(cacheKey, cached, "fresh") };
   }
@@ -1265,6 +1285,7 @@ async function readHistoryForApi(target: StateTarget, request: HistoryApiRequest
   if (
     cached &&
     cached.verified &&
+    cachedTailMatchesLatest &&
     historyStaleAllowed(request) &&
     age !== null &&
     age <= historyReadTtlMs + Math.max(0, historyStaleWhileRefreshMs)
