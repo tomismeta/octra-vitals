@@ -616,59 +616,64 @@ function isSoftNativeReadinessWarning(summary: OperatorSummary): boolean {
 export function detectOperatorAlerts(summary: OperatorSummary, thresholds: AlertThresholds): OperatorAlert[] {
   const alerts: OperatorAlert[] = [];
   if (!summary.gateway.latest_ok) {
+    const detail = summary.gateway.latest_error ? ` ${summary.gateway.latest_error}` : "";
     alerts.push({
       id: "gateway_latest",
       severity: "critical",
-      message: `/api/latest is not serving fresh program-backed data${summary.gateway.latest_error ? ` (${summary.gateway.latest_error})` : ""}`
+      message: `Latest data is temporarily unavailable. The gateway failed closed instead of serving an unverified snapshot.${detail}`
     });
   }
   if (summary.gateway.readback_matches === false) {
     alerts.push({
       id: "gateway_latest_readback",
       severity: "critical",
-      message: "latest gateway receipt readback does not match expected values"
+      message: "Latest snapshot write could not be proven against program readback. Treat the newest data as untrusted until the next clean read."
     });
   }
   if (summary.gateway.latest_ok && !summary.gateway.conservation_status) {
     alerts.push({
       id: "conservation_unavailable",
       severity: "critical",
-      message: "latest snapshot does not expose signed conservation status"
+      message: "Latest snapshot is missing its signed conservation verdict, so the accounting check cannot be proven."
     });
   } else if (summary.gateway.conservation_status === "red") {
     alerts.push({
       id: "conservation_red",
       severity: "critical",
-      message: `signed conservation status is red${summary.gateway.conservation_flags.length ? ` (${summary.gateway.conservation_flags.join(", ")})` : ""}`
+      message: `Accounting reconciliation failed. Signed conservation is red${summary.gateway.conservation_flags.length ? `: ${summary.gateway.conservation_flags.join(", ")}` : "."}`
     });
   } else if (summary.gateway.conservation_status === "yellow") {
     alerts.push({
       id: "conservation_yellow",
       severity: "warn",
-      message: `signed conservation status is yellow${summary.gateway.conservation_flags.length ? ` (${summary.gateway.conservation_flags.join(", ")})` : ""}`
+      message: `Accounting reconciliation needs review. Signed conservation is yellow${summary.gateway.conservation_flags.length ? `: ${summary.gateway.conservation_flags.join(", ")}` : "."}`
     });
   }
   if (summary.gateway.latest_age_ms !== null && summary.gateway.latest_age_ms > thresholds.max_snapshot_age_ms) {
     alerts.push({
       id: "snapshot_stale_gateway",
       severity: "critical",
-      message: `latest gateway snapshot is ${duration(summary.gateway.latest_age_ms)} old`
+      message: `The public site is behind. Latest gateway snapshot is ${duration(summary.gateway.latest_age_ms)} old.`
     });
   }
   if (summary.snapshots.run_count === 0) {
-    alerts.push({ id: "snapshot_no_runs", severity: "critical", message: "no snapshot run reports are available" });
+    alerts.push({
+      id: "snapshot_no_runs",
+      severity: "critical",
+      message: "Snapshot collection has no local run history, so we cannot prove the updater is running."
+    });
   } else if (summary.snapshots.latest_status !== "confirmed" || summary.snapshots.latest_readback_matches !== true) {
     alerts.push({
       id: "snapshot_latest_run",
       severity: "critical",
-      message: `latest updater run status is ${summary.snapshots.latest_status || "unknown"}; readback=${String(summary.snapshots.latest_readback_matches)}`
+      message: `The last snapshot write did not finish cleanly. Status=${summary.snapshots.latest_status || "unknown"}; readback=${String(summary.snapshots.latest_readback_matches)}.`
     });
   }
   if (summary.snapshots.latest_age_ms !== null && summary.snapshots.latest_age_ms > thresholds.max_snapshot_age_ms) {
     alerts.push({
       id: "snapshot_stale_run",
       severity: "critical",
-      message: `latest updater run report is ${duration(summary.snapshots.latest_age_ms)} old`
+      message: `Snapshot collection appears delayed. Last updater run report is ${duration(summary.snapshots.latest_age_ms)} old.`
     });
   }
   if (
@@ -680,23 +685,27 @@ export function detectOperatorAlerts(summary: OperatorSummary, thresholds: Alert
     alerts.push({
       id: "native_readiness",
       severity: "warn",
-      message: `native readiness is ${summary.gateway.native_status}`
+      message: `Native verification is not fully ready (${summary.gateway.native_status}). One trust check is degraded even if the site may still be serving data.`
     });
   }
   if (summary.gateway.site_integrity_status === "circle_unavailable") {
     alerts.push({
       id: "site_integrity_unavailable",
       severity: "warn",
-      message: `site integrity proof is temporarily unavailable from Circle RPC (${summary.gateway.site_integrity_error_count} asset read error${summary.gateway.site_integrity_error_count === 1 ? "" : "s"})`
+      message: `Site asset proof is temporarily unavailable from Circle RPC (${summary.gateway.site_integrity_error_count} asset read error${summary.gateway.site_integrity_error_count === 1 ? "" : "s"}).`
     });
   } else if (summary.gateway.site_integrity_ok === false) {
-    alerts.push({ id: "site_integrity", severity: "critical", message: "site integrity is not verified" });
+    alerts.push({
+      id: "site_integrity",
+      severity: "critical",
+      message: "Site asset verification failed. Local and Circle-hosted asset hashes do not currently match."
+    });
   }
   if (summary.disk.used_percent !== null && summary.disk.used_percent >= thresholds.disk_used_percent) {
     alerts.push({
       id: "disk_usage",
       severity: "warn",
-      message: `disk usage is ${summary.disk.used_percent}% on ${summary.disk.path}`
+      message: `Disk headroom is getting tight: ${summary.disk.used_percent}% used on ${summary.disk.path}.`
     });
   }
   if (summary.disk.available_kb !== null) {
@@ -708,15 +717,16 @@ export function detectOperatorAlerts(summary: OperatorSummary, thresholds: Alert
       alerts.push({
         id: "raw_evidence_growth",
         severity: "warn",
-        message: `raw evidence 365d projection is ${bytes(summary.archive.raw_evidence_projected_365d_bytes)} (${Math.round(projectedPercentOfFree)}% of current free disk)`
+        message: `Raw evidence archive growth may pressure disk over a year: projected ${bytes(summary.archive.raw_evidence_projected_365d_bytes)} (${Math.round(projectedPercentOfFree)}% of current free disk).`
       });
     }
   }
   if (summary.traffic.diagnostic_requests_current_hour >= thresholds.diagnostic_requests_current_hour) {
+    const top = topPaths(summary.traffic.last_hour.top_diagnostic_paths);
     alerts.push({
       id: "diagnostic_noise",
       severity: "warn",
-      message: `${summary.traffic.diagnostic_requests_current_hour} diagnostic/probe responses in the current traffic hour`
+      message: `Scanner/probe noise is elevated: ${summary.traffic.diagnostic_requests_current_hour} rejected diagnostic paths this hour${top === "none" ? "." : `; top: ${top}.`}`
     });
   }
   return alerts;
