@@ -304,7 +304,7 @@ submit_snapshot() {
 verify_runtime() {
   local remote
   remote="$(remote_target)"
-  ssh "${remote}" "sudo bash ${APP_ROOT}/current/deploy/mainnet/verify-runtime.sh"
+  ssh "${remote}" "bash ${APP_ROOT}/current/deploy/mainnet/verify-runtime.sh"
 }
 
 enable_timers() {

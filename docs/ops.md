@@ -216,8 +216,12 @@ sudo bash /opt/octra-vitals/current/deploy/mainnet/publish-lab-assets.sh
 The script requires `VITALS_LAB_SITE_CIRCLE_ID`, uploads only changed Lab assets, and verifies the gateway serves them from that public Lab Web Circle. Create the Lab Web Circle once with `VITALS_LAB_SITE_CIRCLE_CREATE=1`; the sealed SQLite history stays in the Lab DB Circle and only the web assets live in the public Lab Web Circle. After publishing, run:
 
 ```bash
-sudo bash /opt/octra-vitals/current/deploy/mainnet/verify-lab-runtime.sh
+bash /opt/octra-vitals/current/deploy/mainnet/verify-lab-runtime.sh
 ```
+
+Runtime verification is intentionally read-only and does not require `sudo`.
+Set `VITALS_RUNTIME_BASE_URL=https://<host>` to run the same check from outside
+the VM.
 
 Production Lab exposure must be explicit. For mainnet, use an `oct://mainnet/<circle>` database URI, set `VITALS_LAB_HISTORY_NETWORK=mainnet`, and set `VITALS_LAB_HISTORY_ALLOW_MAINNET=1` only after a stage rehearsal passes.
 

@@ -2,9 +2,8 @@
 set -euo pipefail
 
 ENV_DIR="${ENV_DIR:-/etc/octra-vitals}"
-PORT="$(sudo grep -E '^PORT=' "${ENV_DIR}/gateway.env" | tail -n1 | cut -d= -f2- || true)"
 PORT="${PORT:-4173}"
-BASE="http://127.0.0.1:${PORT}"
+BASE="${VITALS_RUNTIME_BASE_URL:-${BASE_URL:-http://127.0.0.1:${PORT}}}"
 
 for _ in $(seq 1 20); do
   if curl -fsS "${BASE}/health" >/dev/null 2>&1; then
@@ -17,17 +16,19 @@ curl -fsSI "${BASE}/" | tr -d '\r' | grep -E '^(HTTP/|Content-Type:|X-Octra-Asse
 
 node - <<'NODE' "${BASE}"
 const http = require("http");
+const https = require("https");
 const base = new URL(process.argv[2]);
+const transport = base.protocol === "https:" ? https : http;
 function get(path) {
   return new Promise((resolve, reject) => {
-    http.get({ host: base.hostname, port: base.port, path }, (res) => {
+    transport.get({ host: base.hostname, port: base.port || (base.protocol === "https:" ? 443 : 80), path }, (res) => {
       let data = "";
       res.on("data", (chunk) => data += chunk);
       res.on("end", () => {
         try {
           resolve({ status: res.statusCode, body: JSON.parse(data) });
         } catch (error) {
-          reject(error);
+          reject(new Error(`expected JSON from ${path}, got ${data.slice(0, 80)}`));
         }
       });
     }).on("error", reject);

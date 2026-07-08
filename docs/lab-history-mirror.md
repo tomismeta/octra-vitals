@@ -167,6 +167,12 @@ To create the public Lab Web Circle, run it once with
 to `gateway.env` and `lab-history.env`. The script refuses to publish lab assets
 to the sealed SQLite DB Circle.
 
+Lab runtime verification is read-only and does not require `sudo`. It infers the
+Lab Web Circle from static asset headers and the Lab DB Circle from
+`/api/lab/status`, or accepts explicit `VITALS_LAB_SITE_CIRCLE_ID` and
+`VITALS_LAB_HISTORY_DATABASE_URI` environment overrides. Use
+`VITALS_RUNTIME_BASE_URL=https://<host>` to run it from outside the VM.
+
 ## Review Checklist
 
 1. Set `VITALS_LAB_HISTORY_ENABLED=1`, `VITALS_LAB_HISTORY_DATABASE_URI=oct://devnet/<circle>`, and `VITALS_LAB_HISTORY_WRITE_TOKEN=<host-local secret>` on the devnet gateway/Lab env.

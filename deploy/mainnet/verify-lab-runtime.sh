@@ -2,9 +2,8 @@
 set -euo pipefail
 
 ENV_DIR="${ENV_DIR:-/etc/octra-vitals}"
-PORT="$(sudo grep -E '^PORT=' "${ENV_DIR}/gateway.env" | tail -n1 | cut -d= -f2- || true)"
 PORT="${PORT:-4173}"
-BASE="http://127.0.0.1:${PORT}"
+BASE="${VITALS_RUNTIME_BASE_URL:-${BASE_URL:-http://127.0.0.1:${PORT}}}"
 
 for _ in $(seq 1 20); do
   if curl -fsS "${BASE}/health" >/dev/null 2>&1; then
@@ -13,46 +12,24 @@ for _ in $(seq 1 20); do
   sleep 0.5
 done
 
-LAB_SITE_CIRCLE_ID="$(
-  { sudo grep -h -E '^VITALS_LAB_SITE_CIRCLE_ID=' "${ENV_DIR}/gateway.env" "${ENV_DIR}/lab-history.env" 2>/dev/null || true; } \
-    | tail -n1 \
-    | cut -d= -f2-
-)"
-LAB_DB_URI="$(
-  { sudo grep -h -E '^VITALS_LAB_HISTORY_DATABASE_URI=' "${ENV_DIR}/gateway.env" "${ENV_DIR}/lab-history.env" 2>/dev/null || true; } \
-    | tail -n1 \
-    | cut -d= -f2-
-)"
-
-if [ -z "${LAB_SITE_CIRCLE_ID}" ]; then
-  echo "VITALS_LAB_SITE_CIRCLE_ID is required for lab runtime verification" >&2
-  exit 2
-fi
-if [ -z "${LAB_DB_URI}" ]; then
-  echo "VITALS_LAB_HISTORY_DATABASE_URI is required for lab runtime verification" >&2
-  exit 2
-fi
+LAB_SITE_CIRCLE_ID="${VITALS_LAB_SITE_CIRCLE_ID:-}"
+LAB_DB_URI="${VITALS_LAB_HISTORY_DATABASE_URI:-}"
 
 node - <<'NODE' "${BASE}" "${LAB_SITE_CIRCLE_ID}" "${LAB_DB_URI}"
 const http = require("http");
+const https = require("https");
 
 const base = new URL(process.argv[2]);
-const expectedLabCircle = process.argv[3];
-const labDbUri = process.argv[4];
-const dbMatch = labDbUri.match(/^oct:\/\/([^/]+)\/([^/?#]+)/);
-if (!dbMatch) throw new Error(`invalid lab database uri: ${labDbUri}`);
-const expectedNetwork = dbMatch[1];
-const expectedDbCircle = dbMatch[2];
-if (expectedLabCircle === expectedDbCircle) {
-  throw new Error("Lab Web Circle must be distinct from sealed Lab DB Circle");
-}
+const configuredLabCircle = process.argv[3] || "";
+const configuredLabDbUri = process.argv[4] || "";
+const transport = base.protocol === "https:" ? https : http;
 
 function request(method, path, body = null) {
   return new Promise((resolve, reject) => {
     const payload = body ? Buffer.from(JSON.stringify(body)) : null;
-    const req = http.request({
+    const req = transport.request({
       host: base.hostname,
-      port: base.port,
+      port: base.port || (base.protocol === "https:" ? 443 : 80),
       method,
       path,
       headers: {
@@ -81,6 +58,18 @@ async function head(path) {
 }
 
 (async () => {
+  const status = await request("GET", "/api/lab/status");
+  if (status.status !== 200) {
+    throw new Error(`/api/lab/status returned ${status.status}: ${status.text.slice(0, 160)}`);
+  }
+
+  const authority = status.json?.authority || {};
+  const labDbUri = configuredLabDbUri || authority.lab_database_uri || authority.lab_database || "";
+  const dbMatch = labDbUri.match(/^oct:\/\/([^/]+)\/([^/?#]+)/);
+  if (!dbMatch) throw new Error(`invalid lab database uri: ${labDbUri || "missing"}`);
+  const expectedNetwork = dbMatch[1];
+  const expectedDbCircle = dbMatch[2];
+
   const staticPaths = ["/lab/history", "/lab-history.css", "/lab-history.js"];
   const staticChecks = [];
   for (const path of staticPaths) {
@@ -93,8 +82,15 @@ async function head(path) {
       consistency: res.headers["x-octra-circle-consistency"] || null
     });
   }
+  const inferredLabCircle = staticChecks.find((item) => item.circle)?.circle || "";
+  const expectedLabCircle = configuredLabCircle || inferredLabCircle;
+  if (!expectedLabCircle) {
+    throw new Error("could not infer Lab Web Circle id from static asset headers");
+  }
+  if (expectedLabCircle === expectedDbCircle) {
+    throw new Error("Lab Web Circle must be distinct from sealed Lab DB Circle");
+  }
 
-  const status = await request("GET", "/api/lab/status");
   const history = await request("GET", "/api/lab/history?window=1h&limit=5");
   const tables = await request("GET", "/api/lab/tables");
   const schema = await request("GET", "/api/lab/schema");
@@ -113,7 +109,6 @@ async function head(path) {
   for (const [name, res] of Object.entries({ status, history, tables, schema, query })) {
     if (res.status !== 200) failures.push(`/api/lab/${name} returned ${res.status}: ${res.text.slice(0, 160)}`);
   }
-  const authority = status.json?.authority || {};
   if (authority.lab_database_enabled !== true) failures.push("lab database is not enabled");
   if (authority.lab_database_network !== expectedNetwork) failures.push(`lab database network ${authority.lab_database_network} != ${expectedNetwork}`);
   if (authority.lab_database_uri !== labDbUri) failures.push("lab database URI does not match env");
