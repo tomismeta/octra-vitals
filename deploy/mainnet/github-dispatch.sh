@@ -302,9 +302,10 @@ submit_snapshot() {
 }
 
 verify_runtime() {
-  local remote
+  local remote port
   remote="$(remote_target)"
-  ssh "${remote}" "bash ${APP_ROOT}/current/deploy/mainnet/verify-runtime.sh"
+  printf -v port "%q" "${GATEWAY_PORT}"
+  ssh "${remote}" "PORT=${port} bash ${APP_ROOT}/current/deploy/mainnet/verify-runtime.sh"
 }
 
 enable_timers() {
