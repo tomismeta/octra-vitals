@@ -130,37 +130,38 @@ export function filterHistorySnapshots<T extends NormalizedHistorySnapshot>(snap
   let filtered = snapshots.slice();
   const latestMs = observedMs(filtered[filtered.length - 1] || {});
 
-  if (request.window && latestMs !== null) {
+  if (request.window) {
+    if (latestMs === null) return [];
     const since = latestMs - WINDOW_MS[request.window];
     filtered = filtered.filter((snapshot) => {
       const ms = observedMs(snapshot);
-      return ms === null || ms >= since;
+      return ms !== null && ms >= since;
     });
   }
   if (request.from) {
     const fromMs = Date.parse(request.from);
     filtered = filtered.filter((snapshot) => {
       const ms = observedMs(snapshot);
-      return ms === null || ms >= fromMs;
+      return ms !== null && ms >= fromMs;
     });
   }
   if (request.to) {
     const toMs = Date.parse(request.to);
     filtered = filtered.filter((snapshot) => {
       const ms = observedMs(snapshot);
-      return ms === null || ms <= toMs;
+      return ms !== null && ms <= toMs;
     });
   }
   if (request.from_index !== null) {
     filtered = filtered.filter((snapshot) => {
       const index = snapshotIndex(snapshot);
-      return index === null || index >= request.from_index!;
+      return index !== null && index >= request.from_index!;
     });
   }
   if (request.to_index !== null) {
     filtered = filtered.filter((snapshot) => {
       const index = snapshotIndex(snapshot);
-      return index === null || index <= request.to_index!;
+      return index !== null && index <= request.to_index!;
     });
   }
   return filtered;

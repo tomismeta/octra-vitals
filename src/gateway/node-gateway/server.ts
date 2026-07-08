@@ -10,12 +10,14 @@ import { canonicalJson, responseHash, sha256Hex, sha256Tagged } from "../../lib/
 import { HistoryTailAnchorError, assertHistoryTailWithinLag, configuredStateTarget, readCanonicalHistory as readCanonicalHistoryUncached, type HistoryReadOptions, type HistorySummaryAnchor, type HistoryTailAnchorVerification, type StateTarget } from "../../lib/canonical-history.js";
 import { verifyCircleAssetIntegrity } from "../../lib/circle-asset-integrity.js";
 import { circleProgramViewAtUrl, configuredProgrammedCircleId, stateTargetMode } from "../../lib/circle-program.js";
+import { hostAllowed as hostAllowedByPolicy, trustedClientKey } from "../../lib/gateway-policy.js";
 import { configuredProgramAddress, readLatestCircleProgramSnapshot, readLatestProgramSnapshot } from "../../lib/program-state.js";
 import { circleInfoAtUrl, circleProgramInfoAtUrl, contractCall, contractReceipt, contractSource, octraProgramRpcUrls, octraRpc, octraRpcMetricsSnapshot, vmContract } from "../../lib/octra-rpc.js";
 import { configuredTrafficRecorder } from "../../lib/traffic.js";
 import { runtimeVitalsManifest, stableJson } from "../../lib/vitals-manifest.js";
 import { HISTORY_API_SCHEMA, LEGACY_HISTORY_SCHEMA, emptyHistoryProof, filterHistorySnapshots, historyApiCoverage, historyApiRecommendedCapsuleLimit, parseHistoryApiRequest, verifiedHistoryProof, type HistoryApiRequest } from "../../lib/history-api.js";
 import { labHistorySql, labSchema, labStatus, labTables, mirrorLabHistory } from "../../lib/lab-history.js";
+import { verifyNativeSnapshotReceipt } from "../../lib/native-receipt.js";
 import { octraSqliteConfig, octraSqliteReadOnlyQuery, publicLabQueryError } from "../../lib/octra-sqlite-client.js";
 import { readSqliteHistoryReplica } from "../../lib/sqlite-history-replica.js";
 import { decodeSummaryRow, type ProgramHistoryWindow } from "../../lib/summary-window.js";
@@ -60,6 +62,7 @@ const responseGzipMinBytes = Number(process.env.VITALS_RESPONSE_GZIP_MIN_BYTES |
 const labQueryMaxConcurrent = Math.max(1, Number(process.env.VITALS_LAB_QUERY_MAX_CONCURRENT || 2));
 const labQueryRateWindowMs = Math.max(1_000, Number(process.env.VITALS_LAB_QUERY_RATE_WINDOW_MS || 60_000));
 const labQueryRateMax = Math.max(1, Number(process.env.VITALS_LAB_QUERY_RATE_MAX || 30));
+const labQueryTrustProxyHeaders = process.env.VITALS_LAB_QUERY_TRUST_PROXY_HEADERS === "1";
 const gatewayRole = process.env.VITALS_GATEWAY_ROLE || "dev";
 const exposeErrors = process.env.VITALS_EXPOSE_ERRORS === "1";
 const corsAllowOrigin = process.env.VITALS_CORS_ALLOW_ORIGIN || "*";
@@ -330,41 +333,12 @@ function gatewayOriginHost(): string | null {
   }
 }
 
-function localRequestHost(hostname: string): boolean {
-  return hostname === "localhost" || hostname === "127.0.0.1" || hostname === "::1" || hostname === "[::1]";
-}
-
-function configuredAllowedHosts(): Set<string> {
-  const hosts = new Set(allowedHostValues);
-  const originHost = gatewayOriginHost();
-  if (originHost) {
-    hosts.add(originHost);
-    if (!originHost.startsWith("www.")) hosts.add(`www.${originHost}`);
-  }
-  return hosts;
-}
-
-function parseHostHeader(headerHost: string | undefined): { hostname: string; port: string } | null {
-  if (!headerHost) return null;
-  try {
-    const parsed = new URL(`http://${headerHost}`);
-    return {
-      hostname: parsed.hostname.toLowerCase(),
-      port: parsed.port
-    };
-  } catch {
-    return null;
-  }
-}
-
 function hostAllowed(headerHost: string | undefined): boolean {
-  const parsed = parseHostHeader(headerHost);
-  if (!parsed) return true;
-  if (localRequestHost(parsed.hostname)) return true;
-  const hosts = configuredAllowedHosts();
-  if (hosts.size === 0) return true;
-  if (!hosts.has(parsed.hostname)) return false;
-  return parsed.port === "" || parsed.port === "80" || parsed.port === "443";
+  return hostAllowedByPolicy(headerHost, {
+    allowedHosts: allowedHostValues,
+    gatewayOriginHost: gatewayOriginHost(),
+    servicePort: port
+  });
 }
 
 function misdirectedRequest(res: http.ServerResponse, head = false): void {
@@ -1796,67 +1770,6 @@ function sourceRefsHashOfSnapshot(snapshot: SnapshotArtifact): string {
   );
 }
 
-function nativeReceiptSummary(receipt: any): Record<string, any> | null {
-  if (!receipt || typeof receipt !== "object") return null;
-  return {
-    contract: receipt.contract || null,
-    method: receipt.method || null,
-    success: receipt.success ?? null,
-    effort: receipt.effort ?? null,
-    epoch: receipt.epoch ?? null,
-    ts: receipt.ts ?? null,
-    error: receipt.error ?? null,
-    events: Array.isArray(receipt.events)
-      ? receipt.events.map((event: any) => ({
-        contract: event?.contract || null,
-        event: event?.event || null,
-        values: Array.isArray(event?.values) ? event.values : []
-      }))
-      : []
-  };
-}
-
-function verifyNativeSnapshotReceipt(
-  nativeReceipt: any,
-  submitReceipt: Record<string, any>,
-  snapshot: SnapshotArtifact
-): Record<string, any> {
-  const summary = nativeReceiptSummary(nativeReceipt);
-  if (!summary) {
-    return {
-      verified: false,
-      receipt: null,
-      checks: { receipt_present: false }
-    };
-  }
-  const events = Array.isArray(summary.events) ? summary.events : [];
-  const snapshotEvent = events.find((event: any) => event.event === "SnapshotRecorded");
-  const values = Array.isArray(snapshotEvent?.values) ? snapshotEvent.values : [];
-  const expected = submitReceipt.expected_hashes || {};
-  const targetId = submitReceipt.target_kind === "circle_program"
-    ? submitReceipt.programmed_circle_id
-    : submitReceipt.program_address;
-  const sourceRefsHash = expected.source_refs_hash || sourceRefsHashOfSnapshot(snapshot);
-  const checks = {
-    receipt_present: true,
-    contract_matches: targetId ? summary.contract === targetId : true,
-    method_matches: summary.method === "record_snapshot_v0",
-    success: summary.success === true,
-    snapshot_event_present: Boolean(snapshotEvent),
-    snapshot_id_matches: values[0] === snapshot.envelope.snapshot_id,
-    snapshot_index_matches: submitReceipt.snapshot_index ? String(values[1]) === String(submitReceipt.snapshot_index) : true,
-    payload_hash_matches: values[3] === snapshot.envelope.payload_hash,
-    evidence_hash_matches: values[4] === snapshot.envelope.evidence_manifest_hash,
-    source_refs_hash_matches: values[5] === sourceRefsHash,
-    summary_hash_matches: expected.summary_hash ? values[6] === expected.summary_hash : true
-  };
-  return {
-    verified: Object.values(checks).every(Boolean),
-    receipt: summary,
-    checks
-  };
-}
-
 async function enrichSubmitReceiptWithNativeProof(
   receipt: Record<string, any>,
   snapshot: SnapshotArtifact
@@ -2471,8 +2384,7 @@ function labWriteRequired(res: http.ServerResponse, head = false): void {
 }
 
 function labQueryClientKey(req: http.IncomingMessage): string {
-  const forwarded = labHeaderValue(req, "x-forwarded-for")?.split(",")[0]?.trim();
-  return forwarded || req.socket.remoteAddress || "unknown";
+  return trustedClientKey(req, labQueryTrustProxyHeaders);
 }
 
 function labQueryRateAllowed(req: http.IncomingMessage): boolean {
@@ -2501,45 +2413,72 @@ function releaseLabQuerySlot(): void {
   activeLabQueries = Math.max(0, activeLabQueries - 1);
 }
 
+async function serveLabReadWithCapacity(
+  req: http.IncomingMessage,
+  res: http.ServerResponse,
+  head: boolean,
+  fn: () => Promise<void>
+): Promise<void> {
+  if (!labQueryRateAllowed(req)) {
+    return json(res, 429, {
+      error: "lab_query_rate_limited",
+      message: "Too many Lab queries. Wait a moment and retry."
+    }, { "Retry-After": String(Math.ceil(labQueryRateWindowMs / 1000)) }, head);
+  }
+  if (!acquireLabQuerySlot()) {
+    return json(res, 503, {
+      error: "lab_query_busy",
+      message: "Lab query capacity is busy. Retry shortly."
+    }, {}, head);
+  }
+  try {
+    await fn();
+  } finally {
+    releaseLabQuerySlot();
+  }
+}
+
 async function serveLabApi(req: http.IncomingMessage, res: http.ServerResponse, url: URL, head = false): Promise<void> {
   const config = octraSqliteConfig();
   if (!config.enabled) return notFound(res, head);
   if (url.pathname === "/api/lab/status" && (req.method === "GET" || head)) {
-    let database: Record<string, any> | null = null;
-    try {
-      database = await labStatus();
-    } catch (error) {
-      database = {
-        error: publicError(error instanceof Error ? error : new Error(String(error)), "lab_status_unavailable")
-      };
-    }
-    return json(res, 200, {
-      schema: "octra-vitals-lab-status-v0",
-      generated_at: new Date().toISOString().replace(/\.\d{3}Z$/, "Z"),
-      authority: labHistoryAuthority(config),
-      database
-    }, {}, head);
+    return serveLabReadWithCapacity(req, res, head, async () => {
+      let database: Record<string, any> | null = null;
+      try {
+        database = await labStatus();
+      } catch (error) {
+        database = {
+          error: publicError(error instanceof Error ? error : new Error(String(error)), "lab_status_unavailable")
+        };
+      }
+      return json(res, 200, {
+        schema: "octra-vitals-lab-status-v0",
+        generated_at: new Date().toISOString().replace(/\.\d{3}Z$/, "Z"),
+        authority: labHistoryAuthority(config),
+        database
+      }, {}, head);
+    });
   }
   if (url.pathname === "/api/lab/tables" && (req.method === "GET" || head)) {
-    return json(res, 200, {
+    return serveLabReadWithCapacity(req, res, head, async () => json(res, 200, {
       schema: "octra-vitals-lab-tables-v0",
       authority: labHistoryAuthority(config),
       result: await labTables()
-    }, {}, head);
+    }, {}, head));
   }
   if (url.pathname === "/api/lab/schema" && (req.method === "GET" || head)) {
-    return json(res, 200, {
+    return serveLabReadWithCapacity(req, res, head, async () => json(res, 200, {
       schema: "octra-vitals-lab-schema-v0",
       authority: labHistoryAuthority(config),
       result: await labSchema()
-    }, {}, head);
+    }, {}, head));
   }
   if (url.pathname === "/api/lab/history" && (req.method === "GET" || head)) {
-    return json(res, 200, {
+    return serveLabReadWithCapacity(req, res, head, async () => json(res, 200, {
       schema: "octra-vitals-lab-history-query-v0",
       authority: labHistoryAuthority(config),
       result: await octraSqliteReadOnlyQuery(labHistorySql(url.searchParams.get("window")), url.searchParams.get("limit") || 500)
-    }, {}, head);
+    }, {}, head));
   }
   if (url.pathname === "/api/lab/query" && req.method === "POST") {
     if (!labQueryRateAllowed(req)) {

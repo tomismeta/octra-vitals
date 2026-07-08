@@ -138,12 +138,46 @@ test("lab query guard rejects unsafe SQLite extension functions", () => {
   assert.throws(() => normalizeReadOnlySql("select readfile('/etc/passwd')"), /unsafe_sql_function_not_allowed/);
   assert.throws(() => normalizeReadOnlySql("select writefile('/tmp/x', 'x')"), /unsafe_sql_function_not_allowed/);
   assert.throws(() => normalizeReadOnlySql("select fileio_write('/tmp/x', 'x')"), /unsafe_sql_function_not_allowed/);
+  assert.throws(() => normalizeReadOnlySql("select * from pragma_table_info('snapshots')"), /unsafe_sql_function_not_allowed/);
+});
+
+test("lab query guard rejects recursive and expensive read-looking SQL", () => {
+  assert.throws(
+    () => normalizeReadOnlySql("with recursive n(x) as (values(1) union all select x + 1 from n) select * from n"),
+    /recursive_sql_not_allowed/
+  );
+  assert.throws(
+    () => normalizeReadOnlySql("select * from (with recursive n(x) as (values(1) union all select x + 1 from n) select * from n)"),
+    /recursive_sql_not_allowed/
+  );
+  assert.throws(
+    () => normalizeReadOnlySql("with n(x) as (values(1) union all select x + 1 from n where x < 10) select * from n"),
+    /recursive_sql_not_allowed/
+  );
+  assert.throws(
+    () => normalizeReadOnlySql('with "n"(x) as (values(1) union all select x + 1 from "n" where x < 10) select * from "n"'),
+    /recursive_sql_not_allowed/
+  );
+  assert.throws(
+    () => normalizeReadOnlySql("with a(x) as (select x from b), b(x) as (select x from a) select * from a"),
+    /recursive_sql_not_allowed/
+  );
+  assert.throws(
+    () => normalizeReadOnlySql("with n(x) as (values(1) union all select x + 1 from (select 1 as d), n where x < 10) select * from n"),
+    /recursive_sql_not_allowed/
+  );
+  assert.throws(() => normalizeReadOnlySql("select zeroblob(100000000)"), /expensive_sql_function_not_allowed/);
+  assert.throws(() => normalizeReadOnlySql("select randomblob(100000000)"), /expensive_sql_function_not_allowed/);
 });
 
 test("lab query guard errors are safe to expose publicly", () => {
   assert.deepEqual(publicLabQueryError(new Error("unsafe_sql_function_not_allowed")), {
     error: "unsafe_sql_function_not_allowed",
-    message: "SQLite extension and file access functions are not available in public Lab queries."
+    message: "SQLite extension, pragma, and file access functions are not available in public Lab queries."
+  });
+  assert.deepEqual(publicLabQueryError(new Error("recursive_sql_not_allowed")), {
+    error: "recursive_sql_not_allowed",
+    message: "Recursive queries are not available in public Lab queries."
   });
   assert.equal(publicLabQueryError(new Error("some_internal_circle_error")), null);
 });

@@ -252,20 +252,171 @@ function requestedLimit(limit: unknown): number {
   return Math.min(parsed, MAX_LIMIT);
 }
 
-const unsafeSqlFunctions = /\b(load_extension|readfile|writefile|fileio_[a-z0-9_]*|fsdir|lsmode)\s*\(/i;
+const unsafeSqlFunctions = /\b(load_extension|readfile|writefile|fileio_[a-z0-9_]*|fsdir|lsmode|pragma[_a-z0-9]*)\s*\(/i;
+const expensiveSqlFunctions = /\b(zeroblob|randomblob)\s*\(/i;
 const publicLabQueryMessages: Record<string, string> = {
   sql_required: "Enter a read-only SQL query.",
   only_one_read_only_statement_allowed: "Only one read-only SQL statement is allowed.",
   sql_comments_not_allowed: "SQL comments are not allowed in public Lab queries.",
   only_select_queries_allowed: "Only SELECT or WITH queries are allowed.",
   only_read_only_queries_allowed: "Only read-only queries are allowed.",
-  unsafe_sql_function_not_allowed: "SQLite extension and file access functions are not available in public Lab queries."
+  recursive_sql_not_allowed: "Recursive queries are not available in public Lab queries.",
+  unsafe_sql_function_not_allowed: "SQLite extension, pragma, and file access functions are not available in public Lab queries.",
+  expensive_sql_function_not_allowed: "Expensive SQLite blob functions are not available in public Lab queries."
 };
 
 export function publicLabQueryError(error: unknown): { error: string; message: string } | null {
   const code = error instanceof Error ? error.message : String(error);
   const message = publicLabQueryMessages[code];
   return message ? { error: code, message } : null;
+}
+
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function skipWhitespace(sql: string, index: number): number {
+  while (index < sql.length && /\s/.test(sql[index] || "")) index += 1;
+  return index;
+}
+
+function readIdentifier(sql: string, index: number): { name: string; next: number } | null {
+  const char = sql[index];
+  if (!char) return null;
+  const quotePairs: Record<string, string> = {
+    "\"": "\"",
+    "'": "'",
+    "`": "`",
+    "[": "]"
+  };
+  const close = quotePairs[char];
+  if (close) {
+    let name = "";
+    for (let cursor = index + 1; cursor < sql.length; cursor += 1) {
+      const current = sql[cursor];
+      if (current === close) {
+        if (sql[cursor + 1] === close && close !== "]") {
+          name += close;
+          cursor += 1;
+          continue;
+        }
+        return name ? { name: name.toLowerCase(), next: cursor + 1 } : null;
+      }
+      name += current;
+    }
+    return null;
+  }
+  const match = /^[a-z_][a-z0-9_]*/i.exec(sql.slice(index));
+  if (!match) return null;
+  return { name: match[0].toLowerCase(), next: index + match[0].length };
+}
+
+function matchingParenIndex(sql: string, openIndex: number): number {
+  let depth = 0;
+  let quote: string | null = null;
+  for (let index = openIndex; index < sql.length; index += 1) {
+    const char = sql[index];
+    if (quote) {
+      if (char === quote) {
+        if (sql[index + 1] === quote) {
+          index += 1;
+        } else {
+          quote = null;
+        }
+      }
+      continue;
+    }
+    if (char === "'" || char === "\"" || char === "`") {
+      quote = char;
+      continue;
+    }
+    if (char === "(") depth += 1;
+    if (char === ")") {
+      depth -= 1;
+      if (depth === 0) return index;
+    }
+  }
+  return -1;
+}
+
+interface CteDefinition {
+  name: string;
+  body: string;
+}
+
+function readCteDefinitions(sql: string, withIndex: number): CteDefinition[] {
+  const definitions: CteDefinition[] = [];
+  let cursor = skipWhitespace(sql, withIndex + 4);
+  if (/^recursive\b/i.test(sql.slice(cursor))) {
+    cursor = skipWhitespace(sql, cursor + "recursive".length);
+  }
+  while (cursor < sql.length) {
+    cursor = skipWhitespace(sql, cursor);
+    const identifier = readIdentifier(sql, cursor);
+    if (!identifier) break;
+    cursor = skipWhitespace(sql, identifier.next);
+    if (sql[cursor] === "(") {
+      const columnClose = matchingParenIndex(sql, cursor);
+      if (columnClose <= cursor) break;
+      cursor = skipWhitespace(sql, columnClose + 1);
+    }
+    if (!/^as\b/i.test(sql.slice(cursor))) break;
+    cursor = skipWhitespace(sql, cursor + 2);
+    if (sql[cursor] !== "(") break;
+    const openIndex = cursor;
+    const closeIndex = matchingParenIndex(sql, openIndex);
+    if (closeIndex <= openIndex) break;
+    const body = sql.slice(openIndex + 1, closeIndex);
+    definitions.push({ name: identifier.name, body });
+    cursor = skipWhitespace(sql, closeIndex + 1);
+    if (sql[cursor] !== ",") break;
+    cursor += 1;
+  }
+  return definitions;
+}
+
+function referencesCteName(sql: string, name: string): boolean {
+  const escaped = escapeRegExp(name);
+  const identifier = `(?:"${escaped}"|'${escaped}'|\`${escaped}\`|\\[${escaped}\\]|${escaped}\\b)`;
+  const reference = new RegExp(`(?:\\b(?:from|join)\\s+|,\\s*)${identifier}(?=\\s|,|\\)|$)`, "i");
+  return reference.test(sql);
+}
+
+function hasDependencyCycle(graph: Map<string, Set<string>>): boolean {
+  const visiting = new Set<string>();
+  const visited = new Set<string>();
+  const visit = (name: string): boolean => {
+    if (visiting.has(name)) return true;
+    if (visited.has(name)) return false;
+    visiting.add(name);
+    for (const dependency of graph.get(name) || []) {
+      if (visit(dependency)) return true;
+    }
+    visiting.delete(name);
+    visited.add(name);
+    return false;
+  };
+  return Array.from(graph.keys()).some((name) => visit(name));
+}
+
+function containsRecursiveCte(sql: string): boolean {
+  const withBlocks = Array.from(sql.matchAll(/\bwith\b/ig));
+  for (const withBlock of withBlocks) {
+    if (withBlock.index === undefined) continue;
+    const definitions = readCteDefinitions(sql, withBlock.index);
+    if (definitions.length === 0) continue;
+    const names = new Set(definitions.map((definition) => definition.name));
+    const graph = new Map<string, Set<string>>();
+    for (const definition of definitions) {
+      const dependencies = new Set<string>();
+      for (const name of names) {
+        if (referencesCteName(definition.body, name)) dependencies.add(name);
+      }
+      graph.set(definition.name, dependencies);
+    }
+    if (hasDependencyCycle(graph)) return true;
+  }
+  return false;
 }
 
 export function normalizeReadOnlySql(sql: string, limit?: unknown): { sql: string; limit: number } {
@@ -275,10 +426,12 @@ export function normalizeReadOnlySql(sql: string, limit?: unknown): { sql: strin
   if (trimmed.includes(";")) throw new Error("only_one_read_only_statement_allowed");
   if (/\/\*|--/.test(trimmed)) throw new Error("sql_comments_not_allowed");
   if (!/^(select|with)\b/i.test(trimmed)) throw new Error("only_select_queries_allowed");
+  if (/\bwith\s+recursive\b/i.test(trimmed) || containsRecursiveCte(trimmed)) throw new Error("recursive_sql_not_allowed");
   if (/\b(insert|update|delete|drop|alter|create|replace|attach|detach|vacuum|reindex|pragma|begin|commit|rollback)\b/i.test(trimmed)) {
     throw new Error("only_read_only_queries_allowed");
   }
   if (unsafeSqlFunctions.test(trimmed)) throw new Error("unsafe_sql_function_not_allowed");
+  if (expensiveSqlFunctions.test(trimmed)) throw new Error("expensive_sql_function_not_allowed");
   return {
     sql: `select * from (${trimmed}) limit ${cappedLimit}`,
     limit: cappedLimit

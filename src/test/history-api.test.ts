@@ -106,6 +106,37 @@ test("history API index ranges are inclusive", () => {
   assert.equal(coverage.latest_index, 5);
 });
 
+test("history API filters fail closed for malformed rows inside active bounds", () => {
+  const rows: NormalizedHistorySnapshot[] = [
+    ...snapshots(2),
+    { snapshot_index: 3, observed_at: "not-a-date" },
+    { snapshot_index: 4 },
+    ...snapshots(2).map((row) => ({
+      ...row,
+      snapshot_index: Number(row.snapshot_index) + 4,
+      observed_at: `2026-06-01T0${Number(row.snapshot_index) + 1}:00:00Z`,
+      snapshot_id: `vitals.2026-06-01T0${Number(row.snapshot_index) + 1}:00:00Z`
+    }))
+  ];
+
+  const byTime = filterHistorySnapshots(rows, parseHistoryApiRequest(new URLSearchParams("from=2026-06-01T00:30:00Z")));
+  assert.deepEqual(byTime.map((row) => row.snapshot_index), [5, 6]);
+
+  const byIndex = filterHistorySnapshots(rows, parseHistoryApiRequest(new URLSearchParams("from_index=2")));
+  assert.deepEqual(byIndex.map((row) => row.snapshot_index), [2, 3, 4, 5, 6]);
+});
+
+test("history API window filters fail closed when latest timestamp is invalid", () => {
+  const rows: NormalizedHistorySnapshot[] = [
+    ...snapshots(2),
+    { snapshot_index: 3, observed_at: "not-a-date" }
+  ];
+
+  const filtered = filterHistorySnapshots(rows, parseHistoryApiRequest(new URLSearchParams("window=1h")));
+
+  assert.deepEqual(filtered, []);
+});
+
 test("history API invalid ranges do not return a broad history response", () => {
   const rows = snapshots(10);
   const request = parseHistoryApiRequest(new URLSearchParams("from_index=8&to_index=3"));

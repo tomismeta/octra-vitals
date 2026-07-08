@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import { mkdir, readFile, readdir, rm, stat, writeFile } from "node:fs/promises";
 import { realpathSync } from "node:fs";
+import { randomUUID } from "node:crypto";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { performance } from "node:perf_hooks";
@@ -12,7 +13,17 @@ const root = resolve(new URL("../..", import.meta.url).pathname);
 
 interface UpdateLock {
   path: string;
+  token: string;
+  assertOwned: () => Promise<void>;
   release: () => Promise<void>;
+}
+
+interface UpdateLockPayload {
+  schema?: string;
+  run_id?: string;
+  pid?: number;
+  started_at?: string;
+  token?: string;
 }
 
 function isoNow(): string {
@@ -209,13 +220,42 @@ function ageMs(value: unknown): number | null {
   return Date.now() - parsed;
 }
 
-async function acquireLock(lockPath: string, runId: string, staleMs: number): Promise<UpdateLock> {
+function pidAlive(pid: unknown): boolean {
+  if (!Number.isSafeInteger(pid) || Number(pid) <= 0) return false;
+  try {
+    process.kill(Number(pid), 0);
+    return true;
+  } catch (error: any) {
+    return error?.code === "EPERM";
+  }
+}
+
+async function readLockPayload(lockPath: string): Promise<UpdateLockPayload | null> {
+  try {
+    return JSON.parse(await readFile(lockPath, "utf8")) as UpdateLockPayload;
+  } catch {
+    return null;
+  }
+}
+
+async function lockFileAgeMs(lockPath: string): Promise<number | null> {
+  try {
+    const info = await stat(lockPath);
+    return Date.now() - info.mtimeMs;
+  } catch {
+    return null;
+  }
+}
+
+export async function acquireLock(lockPath: string, runId: string, staleMs: number): Promise<UpdateLock> {
   await mkdir(dirname(lockPath), { recursive: true });
+  const token = randomUUID();
   const body = `${JSON.stringify({
     schema: "octra-vitals-updater-lock-v0",
     run_id: runId,
     pid: process.pid,
-    started_at: isoNow()
+    started_at: isoNow(),
+    token
   }, null, 2)}\n`;
 
   for (let attempt = 0; attempt < 2; attempt += 1) {
@@ -223,24 +263,32 @@ async function acquireLock(lockPath: string, runId: string, staleMs: number): Pr
       await writeFile(lockPath, body, { flag: "wx" });
       return {
         path: lockPath,
+        token,
+        assertOwned: async () => {
+          const current = await readLockPayload(lockPath);
+          if (current?.token !== token || current?.run_id !== runId) {
+            throw new Error(`snapshot updater lock ownership changed at ${lockPath}`);
+          }
+        },
         release: async () => {
-          await rm(lockPath, { force: true });
+          const current = await readLockPayload(lockPath);
+          if (current?.token === token && current?.run_id === runId) {
+            await rm(lockPath, { force: true });
+          }
         }
       };
     } catch (error: any) {
       if (error?.code !== "EEXIST") throw error;
-      let existing: any = null;
-      try {
-        existing = JSON.parse(await readFile(lockPath, "utf8"));
-      } catch {
-        existing = null;
-      }
-      const lockAge = ageMs(existing?.started_at);
+      const existing = await readLockPayload(lockPath);
+      const lockAge = ageMs(existing?.started_at) ?? await lockFileAgeMs(lockPath);
       if (staleMs > 0 && lockAge !== null && lockAge > staleMs) {
+        if (existing && pidAlive(existing.pid)) {
+          throw new Error(`snapshot updater lock is stale but pid ${existing?.pid} is still alive at ${lockPath}${existing?.run_id ? ` by ${existing.run_id}` : ""}`);
+        }
         await rm(lockPath, { force: true });
         continue;
       }
-      throw new Error(`snapshot updater lock is held at ${lockPath}${existing?.run_id ? ` by ${existing.run_id}` : ""}`);
+      throw new Error(`snapshot updater lock is held at ${lockPath}${existing?.run_id ? ` by ${existing.run_id}` : existing ? "" : " by an unreadable owner"}`);
     }
   }
   throw new Error(`could not acquire snapshot updater lock at ${lockPath}`);
@@ -315,11 +363,13 @@ async function runSnapshotUpdate(): Promise<Record<string, any>> {
     await timed(timings, "write_snapshot_artifacts_ms", () => writeSnapshotArtifacts(snapshot, snapshotPath, evidenceDir));
     const call = await timed(timings, "record_call_ms", () => buildRecordSnapshotCall(snapshot));
     await timed(timings, "write_record_call_ms", () => writeRecordSnapshotCall(call, recordCallPath));
+    await lock.assertOwned();
     const submitReport = await timed(timings, "submit_ms", () => submitSnapshotCall(call, {
       dataDir,
       pendingSubmissionPath,
       writeLatestReceipt: false
     }));
+    await lock.assertOwned();
     const report: Record<string, any> = {
       ...submitReport,
       schema: "octra-vitals-snapshot-update-report-v0",
@@ -332,6 +382,7 @@ async function runSnapshotUpdate(): Promise<Record<string, any>> {
     };
     report.retention = await timed(timings, "retention_ms", () => applyRetention(dataDir, runDir, evidenceDir));
     report.lab_history_trigger = await timed(timings, "post_aml_write_trigger_ms", () => writePostAmlWriteTrigger(report, labHistoryTriggerPath));
+    await lock.assertOwned();
     timings.total_ms = ms(performance.now() - totalStarted);
     report.timings_ms = timings;
     await writeSubmitSnapshotReport(report, submitReportPath);
