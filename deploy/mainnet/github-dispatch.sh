@@ -199,8 +199,8 @@ for (const required of [
   "latest_serves_program_data",
   "latest_is_fresh",
   "latest_is_canonical_state_read",
-  "history_is_canonical",
-  "history_proves_rollover_window",
+  "history_is_anchored_or_canonical",
+  "history_has_required_coverage",
   "site_integrity_verified",
   "native_readiness_ready",
   "programmed_circle_runtime"

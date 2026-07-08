@@ -75,15 +75,33 @@ function check(id, ok, detail) {
   const historyLatestIndex = Number(historySnapshots[historySnapshots.length - 1]?.snapshot_index || 0);
   const historyProof = historyBody.proof || {};
   const historyCoverage = historyBody.coverage || {};
+  const historyAuthority = historyBody.authority || {};
+  const historyRead = historyAuthority.history_read || {};
+  const historyReplicaLag = Number(historyRead.replica_lag_snapshots ?? 0);
+  const historyMaxReplicaLag = Number(historyRead.max_replica_lag_snapshots ?? 1);
+  const historyVerificationLevel = historyRead.verification_level || null;
   const historyProvesFullChain = historyProof.proof_status === "fact_family_verified" &&
     historyProof.proof_scope === "full_chain" &&
     historyProof.truncated === false;
+  const historyProvesAnchoredReplica = historyAuthority.source === "sqlite_history_mirror" &&
+    historyRead.usable_for_display === true &&
+    ["sqlite_latest_summary_anchor_verified", "sqlite_prior_summary_anchor_verified"].includes(historyVerificationLevel) &&
+    Number.isFinite(historyReplicaLag) &&
+    Number.isFinite(historyMaxReplicaLag) &&
+    historyReplicaLag <= historyMaxReplicaLag &&
+    historyProof.proof_status === "latest_summary_anchor_verified" &&
+    historyProof.proof_scope === "latest_row_anchor" &&
+    historyProof.truncated === false &&
+    historyCoverage.status === "complete";
   const historyProvesRolloverWindow = historyRows >= 48 &&
     historyFirstIndex > 1 &&
     historyLatestIndex >= minHistoryIndex;
   const historyProvesCanonicalRange = historyProvesFullChain
     ? historyRows >= minHistoryIndex && historyLatestIndex >= minHistoryIndex
-    : historyProvesRolloverWindow;
+    : historyProvesAnchoredReplica
+      ? historyRows >= minHistoryIndex && historyLatestIndex >= minHistoryIndex
+      : historyProvesRolloverWindow;
+  const historyIsAnchoredOrCanonical = historyAuthority.canonical_state_read === true || historyProvesAnchoredReplica;
 
   const summary = {
     gateway_url: gatewayUrl,
@@ -100,6 +118,11 @@ function check(id, ok, detail) {
     history_first_index: historyFirstIndex || null,
     history_latest_index: historyLatestIndex || null,
     history_canonical_state_read: historyBody.authority?.canonical_state_read ?? null,
+    history_authority_source: historyAuthority.source || null,
+    history_read_path: historyRead.serving_path || historyRead.backing_path || null,
+    history_verification_level: historyVerificationLevel,
+    history_replica_lag_snapshots: Number.isFinite(historyReplicaLag) ? historyReplicaLag : null,
+    history_max_replica_lag_snapshots: Number.isFinite(historyMaxReplicaLag) ? historyMaxReplicaLag : null,
     history_window_hash: historyBody.window_hash || null,
     history_model: historyBody.history_model || historyProof.history_model || null,
     history_proof_status: historyProof.proof_status || null,
@@ -130,9 +153,13 @@ function check(id, ok, detail) {
     check("latest_is_fresh", summary.latest_fresh === true, String(summary.latest_fresh)),
     check("latest_is_canonical_state_read", summary.latest_canonical_state_read === true, String(summary.latest_canonical_state_read)),
     check("conservation_not_red", summary.conservation_status && summary.conservation_status !== "red", summary.conservation_status || "missing"),
-    check("history_is_canonical", history.status === 200 && summary.history_canonical_state_read === true, `${history.status} ${summary.history_canonical_state_read}`),
     check(
-      "history_proves_rollover_window",
+      "history_is_anchored_or_canonical",
+      history.status === 200 && historyIsAnchoredOrCanonical,
+      `${history.status} canonical=${summary.history_canonical_state_read} source=${summary.history_authority_source} verification=${summary.history_verification_level} lag=${summary.history_replica_lag_snapshots}/${summary.history_max_replica_lag_snapshots}`
+    ),
+    check(
+      "history_has_required_coverage",
       historyProvesCanonicalRange,
       `rows=${summary.history_rows} first=${summary.history_first_index} latest=${summary.history_latest_index} min_latest=${minHistoryIndex} proof=${summary.history_proof_status}/${summary.history_proof_scope} truncated=${summary.history_proof_truncated}`
     ),
