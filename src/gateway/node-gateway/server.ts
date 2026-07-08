@@ -33,15 +33,15 @@ const host = process.env.HOST || "127.0.0.1";
 const port = Number(process.env.PORT || 4173);
 const staleAfterMs = Number(process.env.VITALS_STALE_AFTER_MS || 20 * 60_000);
 const latestReadTtlMs = Number(process.env.VITALS_LATEST_READ_TTL_MS || 60_000);
-const historyReadTtlMs = Number(process.env.VITALS_HISTORY_READ_TTL_MS || 60 * 60_000);
-const historyStaleWhileRefreshMs = Number(process.env.VITALS_HISTORY_STALE_WHILE_REFRESH_MS || 6 * 60 * 60_000);
+const historyReadTtlMs = Number(process.env.VITALS_HISTORY_READ_TTL_MS || 0);
+const historyStaleWhileRefreshMs = Number(process.env.VITALS_HISTORY_STALE_WHILE_REFRESH_MS || 0);
 const historyApiStaleWindows = new Set(
-  (process.env.VITALS_HISTORY_API_STALE_WINDOWS || "7d,30d")
+  (process.env.VITALS_HISTORY_API_STALE_WINDOWS || "")
     .split(",")
     .map((value) => value.trim())
     .filter(Boolean)
 );
-const historyPrewarmEnabled = process.env.VITALS_HISTORY_PREWARM_ENABLED !== "0";
+const historyPrewarmEnabled = process.env.VITALS_HISTORY_PREWARM_ENABLED === "1";
 const historyPrewarmMinIntervalMs = Number(process.env.VITALS_HISTORY_PREWARM_MIN_INTERVAL_MS || 15 * 60_000);
 const historyPrewarmWindows = (process.env.VITALS_HISTORY_PREWARM_WINDOWS || "1h,1d,7d,30d")
   .split(",")
