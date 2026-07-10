@@ -1,4 +1,5 @@
 import type http from "node:http";
+import { isIP } from "node:net";
 
 export interface HostPolicyOptions {
   allowedHosts: string[];
@@ -6,12 +7,17 @@ export interface HostPolicyOptions {
   servicePort?: number | string | null;
 }
 
+export interface ClientIpPolicyOptions {
+  trustedProxyAddresses: string[];
+  clientIpHeader?: string;
+}
+
 function headerString(value: string | string[] | undefined): string | null {
   if (Array.isArray(value)) return value[0] || null;
   return value || null;
 }
 
-function normalizeIp(value: string | null | undefined): string | null {
+export function normalizeIp(value: string | null | undefined): string | null {
   if (!value) return null;
   let ip = value.trim();
   if (!ip) return null;
@@ -23,23 +29,32 @@ function normalizeIp(value: string | null | undefined): string | null {
   } else if (/^\d{1,3}(?:\.\d{1,3}){3}:\d+$/.test(ip)) {
     ip = ip.slice(0, ip.lastIndexOf(":"));
   }
-  return ip || null;
+  return isIP(ip) ? ip : null;
 }
 
-function proxyIp(req: http.IncomingMessage): string | null {
-  return normalizeIp(
-    headerString(req.headers["x-forwarded-for"]) ||
-      headerString(req.headers["x-real-ip"]) ||
-      headerString(req.headers["cf-connecting-ip"]) ||
-      headerString(req.headers["true-client-ip"]) ||
-      headerString(req.headers["x-client-ip"]) ||
-      headerString(req.headers["fly-client-ip"])
-  );
+function normalizedHeaderName(value: string | undefined): string {
+  const name = (value || "x-forwarded-for").trim().toLowerCase();
+  if (!/^[a-z0-9-]+$/.test(name)) throw new Error("client IP header name is invalid");
+  return name;
 }
 
-export function trustedClientKey(req: http.IncomingMessage, trustProxyHeaders: boolean): string {
-  const proxied = trustProxyHeaders ? proxyIp(req) : null;
-  return proxied || normalizeIp(req.socket.remoteAddress) || "unknown";
+export function trustedClientIdentity(
+  req: http.IncomingMessage,
+  options: ClientIpPolicyOptions
+): { ip: string | null; source: "remote" | "proxy" | "none" } {
+  const remote = normalizeIp(req.socket.remoteAddress);
+  const trusted = new Set(options.trustedProxyAddresses.map((value) => normalizeIp(value)).filter(Boolean));
+  if (remote && trusted.has(remote)) {
+    const headerName = normalizedHeaderName(options.clientIpHeader);
+    const rawHeader = headerString(req.headers[headerName]);
+    const proxied = rawHeader && !rawHeader.includes(",") ? normalizeIp(rawHeader) : null;
+    if (proxied) return { ip: proxied, source: "proxy" };
+  }
+  return remote ? { ip: remote, source: "remote" } : { ip: null, source: "none" };
+}
+
+export function trustedClientKey(req: http.IncomingMessage, options: ClientIpPolicyOptions): string {
+  return trustedClientIdentity(req, options).ip || "unknown";
 }
 
 function localRequestHost(hostname: string): boolean {

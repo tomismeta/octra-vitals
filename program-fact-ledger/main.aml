@@ -100,6 +100,7 @@ contract VitalsFactLedgerState {
 
   constructor() {
     self.initialized = false
+    self.owner = caller
     self.snapshot_count = 0
     self.latest_snapshot_index = 0
     self.latest_snapshot_id = ""
@@ -188,6 +189,22 @@ contract VitalsFactLedgerState {
     assert_digit(substr(observed_at, 17, 1))
     assert_digit(substr(observed_at, 18, 1))
     require(substr(observed_at, 19, 1) == "Z", "observed_at UTC suffix")
+    let month_text = substr(observed_at, 5, 2)
+    let day_text = substr(observed_at, 8, 2)
+    let hour_text = substr(observed_at, 11, 2)
+    let minute_text = substr(observed_at, 14, 2)
+    let second_text = substr(observed_at, 17, 2)
+    require(month_text >= "01" && month_text <= "12", "observed_at month range")
+    require(day_text >= "01" && day_text <= "31", "observed_at day range")
+    if month_text == "02" {
+      require(day_text <= "29", "observed_at February day range")
+    }
+    if month_text == "04" || month_text == "06" || month_text == "09" || month_text == "11" {
+      require(day_text <= "30", "observed_at short month day range")
+    }
+    require(hour_text >= "00" && hour_text <= "23", "observed_at hour range")
+    require(minute_text >= "00" && minute_text <= "59", "observed_at minute range")
+    require(second_text >= "00" && second_text <= "59", "observed_at second range")
   }
 
   private fn capsule_base_id_for_observed_at(observed_at: string): string {
@@ -414,9 +431,28 @@ contract VitalsFactLedgerState {
   private fn assert_fact_row(family_id: string, schema_id: string, snapshot_index: int, payload_hash: string, row: string) {
     require(len(row) == FACT_ROW_BYTES, "row length")
     require(substr(row, 0, 2) == FACT_LEDGER_VERSION, "row version")
+    require(substr(row, 2, 1) == "|", "row version separator")
     require(substr(row, 3, 10) == decimal_10(snapshot_index), "row snapshot index")
+    require(substr(row, 13, 1) == "|", "row snapshot separator")
+    require(substr(row, 26, 1) == "|", "row observed separator")
+    require(substr(row, 230, 1) == "|", "row payload separator")
     require(substr(row, 231, 64) == substr(payload_hash, 7, 64), "row payload hash")
     require(schema_id == substr(self.family_definition_by_id[family_id], 47, 4), "row schema")
+  }
+
+  private fn assert_core_row_shape(row: string) {
+    require(substr(row, 39, 1) == "|", "core epoch separator")
+    require(substr(row, 52, 1) == "|", "core block separator")
+    require(substr(row, 73, 1) == "|", "core max separator")
+    require(substr(row, 94, 1) == "|", "core issued separator")
+    require(substr(row, 115, 1) == "|", "core burned separator")
+    require(substr(row, 136, 1) == "|", "core encrypted separator")
+    require(substr(row, 157, 1) == "|", "core locked separator")
+    require(substr(row, 178, 1) == "|", "core wrapped separator")
+    require(substr(row, 199, 1) == "|", "core unclaimed separator")
+    require(substr(row, 220, 1) == "|", "core vault separator")
+    require(substr(row, 223, 1) == "|", "core unit separator")
+    require(substr(row, 225, 1) == "|", "core status separator")
   }
 
   private fn aux_fact_family_id(snapshot_index: int, payload_hash: string, row: string): string {
@@ -424,6 +460,14 @@ contract VitalsFactLedgerState {
     require(substr(row, 0, 2) == FACT_LEDGER_VERSION, "aux row version")
     require(substr(row, 3, 10) == decimal_10(snapshot_index), "aux row snapshot index")
     require(substr(row, 231, 64) == substr(payload_hash, 7, 64), "aux row payload hash")
+    require(substr(row, 2, 1) == "|", "aux row version separator")
+    require(substr(row, 13, 1) == "|", "aux row snapshot separator")
+    require(substr(row, 26, 1) == "|", "aux row observed separator")
+    require(substr(row, 31, 1) == "|", "aux row family separator")
+    require(substr(row, 36, 1) == "|", "aux row schema separator")
+    require(substr(row, 39, 1) == "|", "aux row slot separator")
+    require(substr(row, 208, 1) == "|", "aux row reserved separator")
+    require(substr(row, 230, 1) == "|", "aux row payload separator")
     let family_id = substr(row, 27, 4)
     let schema_id = substr(row, 32, 4)
     assert_code4(family_id)
@@ -563,7 +607,12 @@ contract VitalsFactLedgerState {
         self.family_open_capsule_base_id_by_id[family_id] = capsule_base_id
         self.family_open_capsule_segment_by_id[family_id] = 0
       }
-      self.family_open_capsule_id_by_id[family_id] = capsule_id_for(capsule_base_id, self.family_open_capsule_segment_by_id[family_id])
+      let next_capsule_id = capsule_id_for(capsule_base_id, self.family_open_capsule_segment_by_id[family_id])
+      let next_capsule_key = family_capsule_key(family_id, next_capsule_id)
+      require(is_empty_slot(self.family_capsule_body_by_key[next_capsule_key]), "capsule body slot occupied")
+      require(is_empty_slot(self.family_capsule_meta_by_key[next_capsule_key]), "capsule meta slot occupied")
+      require(is_empty_slot(self.family_capsule_root_after_by_key[next_capsule_key]), "capsule root slot occupied")
+      self.family_open_capsule_id_by_id[family_id] = next_capsule_id
       self.family_open_capsule_first_index_by_id[family_id] = snapshot_index
       self.family_open_capsule_start_root_by_id[family_id] = self.family_open_capsule_end_root_by_id[family_id]
     }
@@ -593,7 +642,12 @@ contract VitalsFactLedgerState {
         self.family_open_capsule_base_id_by_id[family_id] = capsule_base_id
         self.family_open_capsule_segment_by_id[family_id] = 0
       }
-      self.family_open_capsule_id_by_id[family_id] = capsule_id_for(capsule_base_id, self.family_open_capsule_segment_by_id[family_id])
+      let next_capsule_id = capsule_id_for(capsule_base_id, self.family_open_capsule_segment_by_id[family_id])
+      let next_capsule_key = family_capsule_key(family_id, next_capsule_id)
+      require(is_empty_slot(self.family_capsule_body_by_key[next_capsule_key]), "capsule body slot occupied")
+      require(is_empty_slot(self.family_capsule_meta_by_key[next_capsule_key]), "capsule meta slot occupied")
+      require(is_empty_slot(self.family_capsule_root_after_by_key[next_capsule_key]), "capsule root slot occupied")
+      self.family_open_capsule_id_by_id[family_id] = next_capsule_id
       self.family_open_capsule_first_index_by_id[family_id] = snapshot_index
       self.family_open_capsule_start_root_by_id[family_id] = self.family_open_capsule_end_root_by_id[family_id]
     }
@@ -901,6 +955,7 @@ contract VitalsFactLedgerState {
 
   public fn initialize_fact_ledger(operator_addr: address, predecessor_addr: address, predecessor_final_root: string, predecessor_final_index: int, era_first_snapshot_index: int, network_id: string, era_program_addr: address, core_family_definition: string): bool {
     require(!self.initialized, "already initialized")
+    require(caller == self.owner, "not deployment owner")
     assert_address(operator_addr)
     assert_address(predecessor_addr)
     assert_address(era_program_addr)
@@ -911,7 +966,6 @@ contract VitalsFactLedgerState {
     assert_family_definition(core_family_definition, CORE_FAMILY_ID)
 
     self.initialized = true
-    self.owner = caller
     self.operator = operator_addr
     self.successor_program = era_program_addr
     self.successor_set = false
@@ -993,6 +1047,7 @@ contract VitalsFactLedgerState {
     assert_observed_at(observed_at)
     assert_capsule_base_id(capsule_base_id)
     require(capsule_base_id == capsule_base_id_for_observed_at(observed_at), "capsule observed_at mismatch")
+    require(self.latest_observed_at == "" || observed_at > self.latest_observed_at, "observed_at not increasing")
     require(snapshot_index == self.snapshot_count + 1, "snapshot index")
     require(snapshot_index >= self.era_first_snapshot_index, "snapshot before era")
     require(epoch_id >= self.latest_epoch || self.latest_epoch == 0, "snapshot epoch moved backward")
@@ -1009,6 +1064,7 @@ contract VitalsFactLedgerState {
     let summary_hash = concat("sha256:", sha256(concat(concat(SUMMARY_HASH_DOMAIN, "\n"), summary_row)))
     assert_core_row_matches_summary(summary_row, core_history_row)
     assert_fact_row(CORE_FAMILY_ID, CORE_SCHEMA_ID, snapshot_index, payload_hash, core_history_row)
+    assert_core_row_shape(core_history_row)
 
     let active_capsule_id = append_core_fact_row(capsule_base_id, snapshot_index, payload_hash, core_history_row)
     let core_row_hash = row_hash(CORE_FAMILY_ID, CORE_SCHEMA_ID, core_history_row)
@@ -1041,6 +1097,7 @@ contract VitalsFactLedgerState {
     assert_observed_at(observed_at)
     assert_capsule_base_id(capsule_base_id)
     require(capsule_base_id == capsule_base_id_for_observed_at(observed_at), "capsule observed_at mismatch")
+    require(self.latest_observed_at == "" || observed_at > self.latest_observed_at, "observed_at not increasing")
     require(snapshot_index == self.snapshot_count + 1, "snapshot index")
     require(snapshot_index >= self.era_first_snapshot_index, "snapshot before era")
     require(epoch_id >= self.latest_epoch || self.latest_epoch == 0, "snapshot epoch moved backward")
@@ -1059,6 +1116,7 @@ contract VitalsFactLedgerState {
     let summary_hash = concat("sha256:", sha256(concat(concat(SUMMARY_HASH_DOMAIN, "\n"), summary_row)))
     assert_core_row_matches_summary(summary_row, core_history_row)
     assert_fact_row(CORE_FAMILY_ID, CORE_SCHEMA_ID, snapshot_index, payload_hash, core_history_row)
+    assert_core_row_shape(core_history_row)
 
     let active_capsule_id = append_core_fact_row(capsule_base_id, snapshot_index, payload_hash, core_history_row)
     let last_aux_family_id = CORE_FAMILY_ID

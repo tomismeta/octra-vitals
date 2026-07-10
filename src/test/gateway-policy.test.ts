@@ -27,6 +27,9 @@ test("host policy allows explicit host-port allowlist entries", () => {
 test("lab client key ignores spoofed proxy headers unless trusted", () => {
   const incoming = req({ "x-forwarded-for": "198.51.100.10" }, "10.0.0.5");
 
-  assert.equal(trustedClientKey(incoming, false), "10.0.0.5");
-  assert.equal(trustedClientKey(incoming, true), "198.51.100.10");
+  assert.equal(trustedClientKey(incoming, { trustedProxyAddresses: [] }), "10.0.0.5");
+  assert.equal(trustedClientKey(incoming, { trustedProxyAddresses: ["127.0.0.1"] }), "10.0.0.5");
+  assert.equal(trustedClientKey(incoming, { trustedProxyAddresses: ["10.0.0.5"] }), "198.51.100.10");
+  const ambiguous = req({ "x-forwarded-for": "198.51.100.10, 203.0.113.9" }, "10.0.0.5");
+  assert.equal(trustedClientKey(ambiguous, { trustedProxyAddresses: ["10.0.0.5"] }), "10.0.0.5");
 });

@@ -5,10 +5,11 @@ Wants=network-online.target
 
 [Service]
 Type=oneshot
-User=root
-Group=octra-vitals
+User=octra-vitals-watchdog
+Group=octra-vitals-watchdog
 WorkingDirectory=/opt/octra-vitals/current
 Environment=VITALS_WATCH_DATA_DIR=/var/lib/octra-vitals
+Environment=VITALS_WATCH_REPORT_PATH=/var/lib/octra-vitals-watchdog/latest_updater_watchdog.json
 Environment=VITALS_WATCH_GATEWAY_URL=http://127.0.0.1:4173
 Environment=VITALS_WATCH_UPDATER_TIMER=octra-vitals-updater.timer
 Environment=VITALS_WATCH_UPDATER_SERVICE=octra-vitals-updater.service
@@ -24,7 +25,8 @@ PrivateTmp=yes
 PrivateDevices=yes
 ProtectSystem=strict
 ProtectHome=read-only
-ReadWritePaths=/var/lib/octra-vitals
+ReadOnlyPaths=/var/lib/octra-vitals
+ReadWritePaths=/var/lib/octra-vitals-watchdog
 RestrictSUIDSGID=yes
 LockPersonality=yes
 RemoveIPC=yes
@@ -41,4 +43,4 @@ RestrictRealtime=yes
 CapabilityBoundingSet=
 AmbientCapabilities=
 SystemCallArchitectures=native
-UMask=0007
+UMask=0077

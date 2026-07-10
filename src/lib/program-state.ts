@@ -1,6 +1,6 @@
 import { canonicalJson, sha256Tagged } from "./canonical-json.js";
 import { circleProgramViewAtUrl } from "./circle-program.js";
-import { contractCallAtUrl, octraProgramRpcUrls } from "./octra-rpc.js";
+import { contractCallAtUrl, octraProgramRpcUrls, rpcUrlLabel } from "./octra-rpc.js";
 import {
   decodeHistoryV1CapsuleMeta,
   decodeHistoryV1Rows,
@@ -24,6 +24,7 @@ import {
 } from "./aml-fact-ledger.js";
 import { assertLatestSummaryMatchesSnapshot, encodeSummaryRow, parseSummaryWindow, summaryHash, summaryWindowHash, SUMMARY_ROW_LEN, type ProgramHistoryEra, type ProgramHistoryWindow, type SummaryRow } from "./summary-window.js";
 import type { EvidenceEntry, EvidenceManifest, SnapshotArtifact, SnapshotEnvelope, SnapshotPayload, SourceRef } from "./types.js";
+import { parseFactLedgerLatestBundle } from "./fact-ledger-deployment.js";
 
 const SNAPSHOT_HASH_DOMAIN = process.env.VITALS_SNAPSHOT_HASH_DOMAIN || "octra-vitals:snapshot:v0";
 const EVIDENCE_HASH_DOMAIN = process.env.VITALS_EVIDENCE_HASH_DOMAIN || "octra-vitals:evidence:v0";
@@ -35,6 +36,7 @@ interface SnapshotReadback {
   latest_summary: string;
   latest_summary_hash: string;
   submitter: string;
+  latest_bundle: string | null;
 }
 
 export interface ProgramHistoryReadOptions {
@@ -48,6 +50,15 @@ export function configuredProgramAddress(value = process.env.VITALS_STATE_PROGRA
 
 function isoNow(): string {
   return new Date().toISOString().replace(/\.\d{3}Z$/, "Z");
+}
+
+function boundedIntegerEnv(name: string, fallback: number, min: number, max: number): number {
+  const configured = process.env[name];
+  const parsed = configured !== undefined && configured !== "" ? Number(configured) : fallback;
+  if (!Number.isSafeInteger(parsed) || parsed < min || parsed > max) {
+    throw new Error(`${name} must be an integer from ${min} to ${max}`);
+  }
+  return parsed;
 }
 
 function assertHash(label: string, actual: string, expected: string): void {
@@ -86,11 +97,12 @@ function assertSameLatestSnapshot(primary: SnapshotReadback, candidate: Snapshot
     ["canonical_source_refs", candidate.snapshot.canonical_source_refs, primary.snapshot.canonical_source_refs],
     ["latest_summary", candidate.latest_summary, primary.latest_summary],
     ["latest_summary_hash", candidate.latest_summary_hash, primary.latest_summary_hash],
-    ["submitter", candidate.submitter, primary.submitter]
+    ["submitter", candidate.submitter, primary.submitter],
+    ["latest_bundle", candidate.latest_bundle, primary.latest_bundle]
   ];
   for (const [label, actual, expected] of fields) {
     if (actual !== expected) {
-      throw new Error(`program RPC mismatch from ${url}: ${label}`);
+      throw new Error(`program RPC mismatch from ${rpcUrlLabel(url)}: ${label}`);
     }
   }
 }
@@ -101,11 +113,16 @@ function assertSameHistory(primary: ProgramHistoryWindow, candidate: ProgramHist
     ["row_count", candidate.row_count, primary.row_count],
     ["row_len", candidate.row_len, primary.row_len],
     ["window_hash", candidate.window_hash, primary.window_hash],
-    ["window", candidate.window, primary.window]
+    ["window", candidate.window, primary.window],
+    ["history_root", candidate.history_root, primary.history_root],
+    ["capsules_root", candidate.capsules_root, primary.capsules_root],
+    ["history_discovery", candidate.history_discovery, primary.history_discovery],
+    ["proof", JSON.stringify(candidate.proof || null), JSON.stringify(primary.proof || null)],
+    ["eras", JSON.stringify(candidate.eras || null), JSON.stringify(primary.eras || null)]
   ];
   for (const [label, actual, expected] of fields) {
     if (actual !== expected) {
-      throw new Error(`program history RPC mismatch from ${url}: ${label}`);
+      throw new Error(`program history RPC mismatch from ${rpcUrlLabel(url)}: ${label}`);
     }
   }
 }
@@ -299,10 +316,10 @@ function isFactLedgerManifest(manifest: string): boolean {
 }
 
 function factLedgerHistoryCapsuleLimit(options: ProgramHistoryReadOptions = {}): number {
-  const configured = Number(process.env.VITALS_FACT_LEDGER_HISTORY_CAPSULE_LIMIT || 64);
-  const configuredLimit = Number.isInteger(configured) && configured > 0 ? Math.min(configured, 256) : 64;
-  const requested = Number(options.maxSealedCapsules || 0);
-  if (!Number.isInteger(requested) || requested < 1) return configuredLimit;
+  const configuredLimit = boundedIntegerEnv("VITALS_FACT_LEDGER_HISTORY_CAPSULE_LIMIT", 64, 1, 256);
+  if (options.maxSealedCapsules === null || options.maxSealedCapsules === undefined) return configuredLimit;
+  const requested = Number(options.maxSealedCapsules);
+  if (!Number.isSafeInteger(requested) || requested < 1) throw new Error("maxSealedCapsules must be a positive safe integer");
   return Math.min(configuredLimit, requested);
 }
 
@@ -323,7 +340,6 @@ function hexRootOrNull(value: unknown): string | null {
 
 function verifiedHistoryWindowFromFactLedger(input: {
   manifest?: string | null;
-  catalogRoot: string;
   familyRoot: string;
   familyCapsulesRoot?: string | null;
   sealedCapsules: Array<{ id: string; body: string; meta: string; rootAfter: string }>;
@@ -389,6 +405,9 @@ function verifiedHistoryWindowFromFactLedger(input: {
     if (previousRoot && meta.start_root_hex !== previousRoot) {
       throw new Error("fact capsule root continuity mismatch");
     }
+    if (previousCapsulesRoot && meta.family_root_before_hex !== previousCapsulesRoot) {
+      throw new Error("fact capsule accumulator continuity mismatch");
+    }
     previousRoot = meta.end_root_hex;
     previousCapsulesRoot = meta.family_root_after_hex;
     bodies.push(capsule.body);
@@ -397,7 +416,6 @@ function verifiedHistoryWindowFromFactLedger(input: {
   if (
     expectedCapsulesRoot &&
     previousCapsulesRoot &&
-    fullSealedChainRead &&
     expectedCapsulesRoot !== previousCapsulesRoot
   ) {
     throw new Error("fact family capsules root does not match latest sealed capsule chain root");
@@ -459,7 +477,11 @@ function verifiedHistoryWindowFromFactLedger(input: {
 }
 
 async function readLatestProgramSnapshotFromUrl(programAddress: string, url: string): Promise<SnapshotReadback> {
-  const [snapshotIndex, latestEpoch, snapshotId, observedAtStored, payloadHash, evidenceManifestHash, sourceRefsHashStored, canonicalPayload, canonicalEvidenceManifest, canonicalSourceRefs, submitter, latestSummary, latestSummaryHash] = await Promise.all([
+  const manifest = await contractCallAtUrl<string>(url, programAddress, "manifest").catch(() => "");
+  const latestBundleBefore = isFactLedgerManifest(manifest)
+    ? String(await contractCallAtUrl<string>(url, programAddress, "get_latest_bundle"))
+    : null;
+  const [snapshotIndex, latestEpoch, snapshotId, observedAtStored, payloadHash, evidenceManifestHash, sourceRefsHashStored, canonicalPayload, canonicalEvidenceManifest, canonicalSourceRefs, submitter, latestSummary, latestSummaryHash, latestHistoryRowHash] = await Promise.all([
     contractCallAtUrl<number>(url, programAddress, "get_latest_snapshot_index"),
     contractCallAtUrl<number>(url, programAddress, "get_latest_epoch"),
     contractCallAtUrl<string>(url, programAddress, "get_latest_snapshot_id"),
@@ -472,8 +494,24 @@ async function readLatestProgramSnapshotFromUrl(programAddress: string, url: str
     contractCallAtUrl<string>(url, programAddress, "get_latest_source_refs"),
     contractCallAtUrl<string>(url, programAddress, "get_latest_submitter").catch(() => ""),
     contractCallAtUrl<string>(url, programAddress, "get_latest_summary"),
-    contractCallAtUrl<string>(url, programAddress, "get_latest_summary_hash")
+    contractCallAtUrl<string>(url, programAddress, "get_latest_summary_hash"),
+    isFactLedgerManifest(manifest)
+      ? contractCallAtUrl<string>(url, programAddress, "get_latest_history_row_hash")
+      : Promise.resolve("")
   ]);
+  const latestBundleAfter = latestBundleBefore === null
+    ? null
+    : String(await contractCallAtUrl<string>(url, programAddress, "get_latest_bundle"));
+  if (latestBundleBefore !== latestBundleAfter) throw new Error(`latest program state advanced during fenced read from ${rpcUrlLabel(url)}`);
+  if (latestBundleAfter) {
+    const bundle = parseFactLedgerLatestBundle(latestBundleAfter);
+    if (
+      bundle.snapshot_index !== Number(snapshotIndex || 0) ||
+      bundle.snapshot_id !== snapshotId ||
+      bundle.payload_hash !== payloadHash ||
+      bundle.history_row_hash !== latestHistoryRowHash
+    ) throw new Error(`latest program bundle did not match component views from ${rpcUrlLabel(url)}`);
+  }
 
   if (!snapshotId || !canonicalPayload || !canonicalEvidenceManifest) {
     throw new Error("Vitals State Program has no recorded snapshot yet");
@@ -531,7 +569,8 @@ async function readLatestProgramSnapshotFromUrl(programAddress: string, url: str
     snapshot_index: Number(snapshotIndex || 0),
     latest_summary: latestSummary,
     latest_summary_hash: latestSummaryHash,
-    submitter: submitter || ""
+    submitter: submitter || "",
+    latest_bundle: latestBundleAfter
   };
 }
 
@@ -555,7 +594,11 @@ export async function readLatestProgramSnapshot(programAddress: string): Promise
 }
 
 async function readLatestCircleProgramSnapshotFromUrl(circleId: string, url: string): Promise<SnapshotReadback> {
-  const [snapshotIndex, latestEpoch, snapshotId, observedAtStored, payloadHash, evidenceManifestHash, sourceRefsHashStored, canonicalPayload, canonicalEvidenceManifest, canonicalSourceRefs, submitter, latestSummary, latestSummaryHash] = await Promise.all([
+  const manifest = await circleProgramViewAtUrl<string>(url, circleId, "manifest").catch(() => "");
+  const latestBundleBefore = isFactLedgerManifest(manifest)
+    ? String(await circleProgramViewAtUrl<string>(url, circleId, "get_latest_bundle"))
+    : null;
+  const [snapshotIndex, latestEpoch, snapshotId, observedAtStored, payloadHash, evidenceManifestHash, sourceRefsHashStored, canonicalPayload, canonicalEvidenceManifest, canonicalSourceRefs, submitter, latestSummary, latestSummaryHash, latestHistoryRowHash] = await Promise.all([
     circleProgramViewAtUrl<number>(url, circleId, "get_latest_snapshot_index"),
     circleProgramViewAtUrl<number>(url, circleId, "get_latest_epoch"),
     circleProgramViewAtUrl<string>(url, circleId, "get_latest_snapshot_id"),
@@ -568,8 +611,24 @@ async function readLatestCircleProgramSnapshotFromUrl(circleId: string, url: str
     circleProgramViewAtUrl<string>(url, circleId, "get_latest_source_refs"),
     circleProgramViewAtUrl<string>(url, circleId, "get_latest_submitter").catch(() => ""),
     circleProgramViewAtUrl<string>(url, circleId, "get_latest_summary"),
-    circleProgramViewAtUrl<string>(url, circleId, "get_latest_summary_hash")
+    circleProgramViewAtUrl<string>(url, circleId, "get_latest_summary_hash"),
+    isFactLedgerManifest(manifest)
+      ? circleProgramViewAtUrl<string>(url, circleId, "get_latest_history_row_hash")
+      : Promise.resolve("")
   ]);
+  const latestBundleAfter = latestBundleBefore === null
+    ? null
+    : String(await circleProgramViewAtUrl<string>(url, circleId, "get_latest_bundle"));
+  if (latestBundleBefore !== latestBundleAfter) throw new Error(`latest Circle program state advanced during fenced read from ${rpcUrlLabel(url)}`);
+  if (latestBundleAfter) {
+    const bundle = parseFactLedgerLatestBundle(latestBundleAfter);
+    if (
+      bundle.snapshot_index !== Number(snapshotIndex || 0) ||
+      bundle.snapshot_id !== snapshotId ||
+      bundle.payload_hash !== payloadHash ||
+      bundle.history_row_hash !== latestHistoryRowHash
+    ) throw new Error(`latest Circle bundle did not match component views from ${rpcUrlLabel(url)}`);
+  }
 
   if (!canonicalPayload || !canonicalEvidenceManifest) {
     throw new Error("Vitals Circle Program has no recorded snapshot yet");
@@ -631,7 +690,8 @@ async function readLatestCircleProgramSnapshotFromUrl(circleId: string, url: str
     snapshot_index: Number(snapshotIndex || 0),
     latest_summary: latestSummary,
     latest_summary_hash: latestSummaryHash,
-    submitter: submitter || ""
+    submitter: submitter || "",
+    latest_bundle: latestBundleAfter
   };
 }
 
@@ -721,7 +781,6 @@ async function readProgramSummaryHistoryFromUrlFactLedger(programAddress: string
   }
   return verifiedHistoryWindowFromFactLedger({
     manifest: "octra-vitals-fact-ledger.v2",
-    catalogRoot,
     familyRoot,
     sealedCapsules,
     openBody,
@@ -801,6 +860,7 @@ async function readCircleProgramSummaryHistoryFromUrlV1(circleId: string, url: s
 }
 
 async function readCircleProgramSummaryHistoryFromUrlFactLedger(circleId: string, url: string, options: ProgramHistoryReadOptions = {}): Promise<ProgramHistoryWindow> {
+  const latestBundleBefore = String(await circleProgramViewAtUrl<string>(url, circleId, "get_latest_bundle"));
   const [manifest, eraProgram, eraNetworkId, predecessorProgram, predecessorFinalRoot, predecessorFinalIndex, predecessorAnchorHash, eraFirstSnapshotIndex, catalogRoot, familyRoot, familyCapsulesRoot, openBody, openRowCount, openStartRoot, openEndRoot, capsuleCount] = await Promise.all([
     circleProgramViewAtUrl<string>(url, circleId, "manifest").catch(() => ""),
     circleProgramViewAtUrl<string>(url, circleId, "get_era_program").catch(() => circleId),
@@ -837,7 +897,6 @@ async function readCircleProgramSummaryHistoryFromUrlFactLedger(circleId: string
   }
   const history = verifiedHistoryWindowFromFactLedger({
     manifest,
-    catalogRoot,
     familyRoot,
     familyCapsulesRoot,
     sealedCapsules,
@@ -869,6 +928,14 @@ async function readCircleProgramSummaryHistoryFromUrlFactLedger(circleId: string
   if (history.proof?.scope) era.proof_scope = history.proof.scope;
   if (history.proof?.truncated !== undefined) era.proof_truncated = history.proof.truncated;
   history.eras = [era];
+  const latestBundleAfter = String(await circleProgramViewAtUrl<string>(url, circleId, "get_latest_bundle"));
+  if (latestBundleBefore !== latestBundleAfter) {
+    throw new Error(`fact-ledger history advanced during fenced read from ${rpcUrlLabel(url)}`);
+  }
+  const latestBundle = parseFactLedgerLatestBundle(latestBundleAfter);
+  if (latestBundle.history_root !== familyRoot || latestBundle.catalog_root !== catalogRoot) {
+    throw new Error(`fact-ledger history roots did not match latest bundle from ${rpcUrlLabel(url)}`);
+  }
   return history;
 }
 
@@ -893,7 +960,9 @@ function meaningfulPredecessor(era: ProgramHistoryEra | undefined, circleId: str
 
 async function readCircleProgramSummaryHistoryFromUrlStitched(circleId: string, url: string, options: ProgramHistoryReadOptions = {}, seen = new Set<string>()): Promise<ProgramHistoryWindow> {
   if (seen.has(circleId)) throw new Error(`cycle in history era predecessor chain at ${circleId}`);
-  if (seen.size >= Number(process.env.VITALS_HISTORY_ERA_LIMIT || 8)) throw new Error("history era predecessor chain exceeds configured limit");
+  if (seen.size >= boundedIntegerEnv("VITALS_HISTORY_ERA_LIMIT", 8, 1, 64)) {
+    throw new Error("history era predecessor chain exceeds configured limit");
+  }
   const nextSeen = new Set(seen);
   nextSeen.add(circleId);
   const current = await readCircleProgramSummaryHistoryFromUrl(circleId, url, options);

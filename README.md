@@ -35,7 +35,7 @@ Derived values are labeled as derived. Residuals are shown openly rather than hi
 
 **The gateway is a shim.** It adapts normal browser HTTP to Octra reads, serves APIs, and runs operator diagnostics. It should not invent truth.
 
-**The browser verifies before rendering.** In a normal browser, the page re-derives hashes, checks commitments, recomputes the conservation verdict, and exposes the on-chain anchors. In a Circle-native client, the trust boundary can be stronger because the client can read the Circle directly.
+**The browser verifies before rendering.** In a normal HTTPS browser, the page re-derives hashes, checks commitments, recomputes the conservation verdict, and labels that result as response self-consistency within the HTTPS origin. A Circle-native client can additionally authenticate the state by reading the Circle directly.
 
 **Failures are visible.** If required program-backed data is stale, missing, or inconsistent, the UI fails closed instead of rendering sample values.
 
@@ -198,7 +198,7 @@ Related:
 
 No wallet material belongs in git, chat, Circle assets, or public logs.
 
-Host secrets live under `/etc/octra-vitals`. Runtime data lives under `/var/lib/octra-vitals`. The gateway exposes verification artifacts, not operator credentials.
+Host secrets live under `/etc/octra-vitals`, with cold owner and hot operator files separated. Owner actions also run under a dedicated service-free Unix identity, separate from the scheduled updater. Canonical runtime artifacts live under producer-owned `/var/lib/octra-vitals`; the gateway has read-only access and writes only to `/var/lib/octra-vitals-gateway`. Owner/operator reports, notifier state, and watchdog state use separate private directories.
 
 If something cannot be verified, the product should say so plainly.
 

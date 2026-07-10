@@ -71,6 +71,12 @@ host release and gateway restart are usually enough.
 
 If AML changed, do not assume a new era is required. Use a compatible in-place code update only when old state layout, old getters, row encodings, capsule immutability, and authorization semantics remain valid. Use a fresh era when any of those change.
 
+The current security hardening is an in-place update candidate: the state field list, getters, row encodings, roots, and existing initialized owner/operator values are unchanged. It does **not** require a new Circle or history era. It does require the existing Circle's AML code to be updated after compilation and state-preservation rehearsal on devnet. Pause both the updater and the fact ledger before the update; `update-programmed-circle-code` refuses an unpaused ledger, fences all state reads, compares every invariant before and after, and requires byte-for-byte previous bytecode for verified rollback.
+
+Normal `npm run program:compile` is verification-only and must match `program-fact-ledger/approved-release.json`. A new candidate is approved only with `npm run program:compile:refresh`, two agreeing compiler RPCs, `VITALS_REFRESH_AML_PINS_ACK=sha256:<candidate-source-hash>`, and a previous compile artifact matching every old approved hash. Refresh preserves that recovery input as the tracked `program-fact-ledger/previous-approved-compile.json` and a build copy; a clean checkout without a matching current recovery artifact must supply `VITALS_PROGRAM_UPDATE_PREVIOUS_COMPILE_ARTIFACT`. Never refresh pins as a side effect of deployment.
+
+Promotion carries the resulting `build/program-fact-ledger/compile.json` and, when present, its preserved `previous-approved-compile.json` into the host release. The host runs `program:compile:artifact:dist` offline and requires the v2 quorum schema, compiler agreement metadata, decoded-bytecode/certificate validation, and exact approved pins; it does not recompile through a mainnet RPC.
+
 ## Circle Asset Batch Publishing
 
 Circle asset publishing defaults to changed-only uploads. The publisher compares

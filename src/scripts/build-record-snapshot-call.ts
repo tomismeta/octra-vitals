@@ -5,7 +5,7 @@ import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { canonicalJson } from "../lib/canonical-json.js";
 import { circleProgramViewAtUrl, configuredProgrammedCircleId, stateTargetMode } from "../lib/circle-program.js";
-import { contractCallAtUrl, octraProgramRpcUrls } from "../lib/octra-rpc.js";
+import { contractCallAtUrl, octraProgramRpcUrls, rpcUrlLabel } from "../lib/octra-rpc.js";
 import {
   encodeHistoryV1Row,
   historyV1RowFromSnapshot,
@@ -20,6 +20,7 @@ import {
   factLedgerRowHashHex
 } from "../lib/aml-fact-ledger.js";
 import { sourceRefsHash, verifySnapshotArtifactHashes } from "../lib/program-state.js";
+import { assertObservationTimeSafe, configuredObservationFutureSkewMs } from "../lib/observation-time.js";
 import { encodeSummaryRow, summaryHash, summaryRowFromSnapshot, SUMMARY_SCHEMA_VERSION } from "../lib/summary-window.js";
 import type { SnapshotArtifact } from "../lib/types.js";
 
@@ -179,10 +180,30 @@ function isDirectCli(metaUrl: string, argvPath: string | undefined): boolean {
 function minProgramRpcUrls(forceMultiRpc: boolean): number {
   const configured = process.env.VITALS_MIN_PROGRAM_RPC_URLS;
   const parsed = configured ? Number(configured) : forceMultiRpc ? 2 : 1;
-  if (!Number.isInteger(parsed) || parsed <= 0) {
+  if (!Number.isSafeInteger(parsed) || parsed <= 0) {
     throw new Error("VITALS_MIN_PROGRAM_RPC_URLS must be a positive integer");
   }
   return Math.max(forceMultiRpc ? 2 : 1, parsed);
+}
+
+function positiveIntegerSetting(value: unknown, label: string, max = Number.MAX_SAFE_INTEGER): number {
+  const parsed = Number(value);
+  if (!Number.isSafeInteger(parsed) || parsed <= 0 || parsed > max) {
+    throw new Error(`${label} must be a positive integer no greater than ${max}`);
+  }
+  return parsed;
+}
+
+function nonNegativeIntegerSetting(value: unknown, label: string, max = Number.MAX_SAFE_INTEGER): number {
+  const parsed = Number(value);
+  if (!Number.isSafeInteger(parsed) || parsed < 0 || parsed > max) {
+    throw new Error(`${label} must be a non-negative integer no greater than ${max}`);
+  }
+  return parsed;
+}
+
+function positiveIntegerEnv(name: string, fallback: number, max = Number.MAX_SAFE_INTEGER): number {
+  return positiveIntegerSetting(process.env[name] ?? fallback, name, max);
 }
 
 function byteLength(value: string): number {
@@ -215,10 +236,10 @@ function buildSizeHeadroom(input: {
   const summaryRowBytes = byteLength(input.summaryRow);
   const historyRowBytes = input.historyRow ? byteLength(input.historyRow) : null;
   const paramsJsonBytes = byteLength(JSON.stringify(input.params));
-  const payloadLimit = Number(process.env.VITALS_AML_MAX_PAYLOAD_BYTES || 12_000);
-  const evidenceLimit = Number(process.env.VITALS_AML_MAX_EVIDENCE_BYTES || 8_000);
-  const sourceRefsLimit = Number(process.env.VITALS_AML_MAX_SOURCE_REFS_BYTES || 4_096);
-  const capsuleRowLimit = Number(process.env.VITALS_FACT_LEDGER_CAPSULE_ROW_LIMIT || 48);
+  const payloadLimit = positiveIntegerEnv("VITALS_AML_MAX_PAYLOAD_BYTES", 12_000, 64 * 1024 * 1024);
+  const evidenceLimit = positiveIntegerEnv("VITALS_AML_MAX_EVIDENCE_BYTES", 8_000, 64 * 1024 * 1024);
+  const sourceRefsLimit = positiveIntegerEnv("VITALS_AML_MAX_SOURCE_REFS_BYTES", 4_096, 64 * 1024 * 1024);
+  const capsuleRowLimit = positiveIntegerEnv("VITALS_FACT_LEDGER_CAPSULE_ROW_LIMIT", 48, 10_000);
   const warnings: string[] = [];
   warnIfLow("payload", payloadBytes, payloadLimit, warnings);
   warnIfLow("evidence_manifest", evidenceBytes, evidenceLimit, warnings);
@@ -273,7 +294,7 @@ function factLedgerCapsuleBaseId(observedAt: string): string {
 
 async function nextSnapshotIndex(options: BuildRecordSnapshotCallOptions = {}): Promise<number> {
   if (options.snapshotIndex !== undefined) {
-    if (!Number.isInteger(options.snapshotIndex) || options.snapshotIndex <= 0) {
+    if (!Number.isSafeInteger(options.snapshotIndex) || options.snapshotIndex <= 0) {
       throw new Error("snapshotIndex must be a positive integer");
     }
     return options.snapshotIndex;
@@ -282,7 +303,7 @@ async function nextSnapshotIndex(options: BuildRecordSnapshotCallOptions = {}): 
   const envValue = process.env.VITALS_NEXT_SNAPSHOT_INDEX;
   if (envValue) {
     const parsed = Number(envValue);
-    if (!Number.isInteger(parsed) || parsed <= 0) throw new Error("VITALS_NEXT_SNAPSHOT_INDEX must be a positive integer");
+    if (!Number.isSafeInteger(parsed) || parsed <= 0) throw new Error("VITALS_NEXT_SNAPSHOT_INDEX must be a positive safe integer");
     return parsed;
   }
 
@@ -304,7 +325,7 @@ async function nextSnapshotIndex(options: BuildRecordSnapshotCallOptions = {}): 
     if (!primary) throw new Error("no Octra program RPC URL configured");
     for (const candidate of rest) {
       if (candidate.count !== primary.count) {
-        throw new Error(`program RPC mismatch from ${candidate.url}: get_snapshot_count`);
+        throw new Error(`program RPC mismatch from ${rpcUrlLabel(candidate.url)}: get_snapshot_count`);
       }
     }
     return primary.count;
@@ -319,7 +340,7 @@ async function nextSnapshotIndex(options: BuildRecordSnapshotCallOptions = {}): 
     }
     const counts = await Promise.all(urls.map(async (url) => ({
       url,
-      count: Number(await circleProgramViewAtUrl<number>(url, circleId, "get_snapshot_count") || 0)
+      count: nonNegativeIntegerSetting(await circleProgramViewAtUrl<number>(url, circleId, "get_snapshot_count"), "Circle snapshot_count")
     })));
     return assertSameCount(counts) + 1;
   }
@@ -332,7 +353,7 @@ async function nextSnapshotIndex(options: BuildRecordSnapshotCallOptions = {}): 
 
   const counts = await Promise.all(urls.map(async (url) => ({
     url,
-    count: Number(await contractCallAtUrl<number>(url, programAddress, "get_snapshot_count") || 0)
+    count: nonNegativeIntegerSetting(await contractCallAtUrl<number>(url, programAddress, "get_snapshot_count"), "program snapshot_count")
   })));
   return assertSameCount(counts) + 1;
 }
@@ -342,6 +363,9 @@ export async function buildRecordSnapshotCall(
   options: BuildRecordSnapshotCallOptions = {}
 ): Promise<RecordSnapshotCall> {
   verifySnapshotArtifactHashes(snapshot);
+  assertObservationTimeSafe(snapshot.envelope.observed_at, {
+    maxFutureSkewMs: configuredObservationFutureSkewMs()
+  });
 
   const envelope = snapshot.envelope;
   const payload = envelope.payload;
@@ -402,8 +426,11 @@ export async function buildRecordSnapshotCall(
         ...(version === "fact-v2" ? [auxCount, ...auxRows] : [])
       ];
       const compactMessageBytes = Buffer.byteLength(JSON.stringify(params));
-      const compactMaxMessageBytes = options.compactMaxMessageBytes ??
-        Number(process.env.VITALS_COMPACT_SNAPSHOT_MAX_MESSAGE_BYTES || 22_000);
+      const compactMaxMessageBytes = positiveIntegerSetting(
+        options.compactMaxMessageBytes ?? process.env.VITALS_COMPACT_SNAPSHOT_MAX_MESSAGE_BYTES ?? 22_000,
+        "VITALS_COMPACT_SNAPSHOT_MAX_MESSAGE_BYTES",
+        16 * 1024 * 1024
+      );
       if (compactMessageBytes > compactMaxMessageBytes) {
         throw new Error(`record_snapshot_${version} call would be ${compactMessageBytes} bytes, above VITALS_COMPACT_SNAPSHOT_MAX_MESSAGE_BYTES=${compactMaxMessageBytes}`);
       }
@@ -535,8 +562,11 @@ export async function buildRecordSnapshotCall(
       historyRow
     ];
     const compactMessageBytes = Buffer.byteLength(JSON.stringify(params));
-    const compactMaxMessageBytes = options.compactMaxMessageBytes ??
-      Number(process.env.VITALS_COMPACT_SNAPSHOT_MAX_MESSAGE_BYTES || 20_000);
+    const compactMaxMessageBytes = positiveIntegerSetting(
+      options.compactMaxMessageBytes ?? process.env.VITALS_COMPACT_SNAPSHOT_MAX_MESSAGE_BYTES ?? 20_000,
+      "VITALS_COMPACT_SNAPSHOT_MAX_MESSAGE_BYTES",
+      16 * 1024 * 1024
+    );
     if (compactMessageBytes > compactMaxMessageBytes) {
       throw new Error(`record_snapshot_v1 call would be ${compactMessageBytes} bytes, above VITALS_COMPACT_SNAPSHOT_MAX_MESSAGE_BYTES=${compactMaxMessageBytes}`);
     }
@@ -605,8 +635,11 @@ export async function buildRecordSnapshotCall(
     summaryRow
   ];
   const compactMessageBytes = Buffer.byteLength(JSON.stringify(params));
-  const compactMaxMessageBytes = options.compactMaxMessageBytes ??
-    Number(process.env.VITALS_COMPACT_SNAPSHOT_MAX_MESSAGE_BYTES || 16_000);
+  const compactMaxMessageBytes = positiveIntegerSetting(
+    options.compactMaxMessageBytes ?? process.env.VITALS_COMPACT_SNAPSHOT_MAX_MESSAGE_BYTES ?? 16_000,
+    "VITALS_COMPACT_SNAPSHOT_MAX_MESSAGE_BYTES",
+    16 * 1024 * 1024
+  );
   if (compactMessageBytes > compactMaxMessageBytes) {
     throw new Error(`record_snapshot_v0 call would be ${compactMessageBytes} bytes, above VITALS_COMPACT_SNAPSHOT_MAX_MESSAGE_BYTES=${compactMaxMessageBytes}`);
   }

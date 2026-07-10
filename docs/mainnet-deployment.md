@@ -22,9 +22,18 @@ Create separate protected deployment environments for stage and mainnet. Use the
 DEPLOY_SSH_PRIVATE_KEY
 DEPLOY_SSH_USER
 DEPLOY_UPDATER_ENV_B64
+DEPLOY_OWNER_ENV_B64
 ```
 
 Prefer installing `/etc/octra-vitals/updater.env` out of band as `0600 root:root`. The base64 secret path is useful for stage and break-glass automation, but mainnet signer env should stay on the host unless explicitly accepted.
+
+Custody uses two root-owned files:
+
+- `/etc/octra-vitals/updater.env` contains only the hot `VITALS_OPERATOR_*` signer used for snapshots.
+- `/etc/octra-vitals/owner.env` contains only the cold `VITALS_DEPLOYER_*` signer used for Circle deploy, code update, and asset publication.
+
+The production scripts reject owner-key material in `updater.env` and do not fall back from owner actions to the hot operator key.
+They also execute owner operations as the dedicated, service-free `octra-vitals-owner` Unix identity and keep owner-generated reports under `/var/lib/octra-vitals-owner`; the scheduled updater identity cannot read that process environment or alter those reports.
 
 The updater env must include:
 
@@ -33,7 +42,7 @@ The updater env must include:
 - relayer and Ethereum RPC URLs;
 - source fetch retry limits;
 - payload/evidence/source-ref hash-domain strings;
-- deployer/operator public addresses and private key material;
+- operator public address and hot operator private key material;
 - programmed-Circle and fact-ledger deployment settings;
 - `VITALS_SUBMIT=1` only for write-capable contexts.
 
@@ -50,6 +59,7 @@ verify_only
 plan_release
 push_release
 deploy_programmed_circle
+update_programmed_circle_code
 configure_runtime
 publish_assets
 submit_snapshot
@@ -119,6 +129,10 @@ Use the plan to decide which deployment objects must move. Do not infer from loc
 7. one manual snapshot submit;
 8. runtime verification.
 
+AML code updates additionally require the fact ledger to be paused on-chain, `VITALS_DEPLOY_WAIT` to remain enabled, `VITALS_PROGRAM_UPDATE_PREVIOUS_COMPILE_ARTIFACT` whose decoded bytecode hash matches the live code, and `VITALS_PROGRAM_UPDATE_COMPATIBILITY_ACK=<circle>:<old-hash>-><new-hash>`. The update script restores that previous bytecode if confirmation is ambiguous, the new code hash differs, or any fenced state invariant changes. Unpause only after the new code and preserved state have been verified. Do not set the mainnet allow flag until the same artifact and acknowledgements have passed devnet.
+
+On a configured host, run the precompiled update through `sudo bash deploy/mainnet/update-programmed-circle-code.sh`. It is dry-run by default and executes under `octra-vitals-owner`; set `VITALS_UPDATE_PROGRAMMED_CIRCLE=1` only for the rehearsed write, together with the exact compatibility acknowledgement, previous compile artifact, and network allow flag.
+
 It deliberately does not enable recurring timers.
 
 For a clean first mainnet fact-ledger era, set:
@@ -149,6 +163,8 @@ Common safe patch order:
 7. restore updater timer.
 
 Asset publishing is changed-only by default. Batch submission is optional and only reduces RPC submit round trips; each selected asset still has its own signed transaction, hash, confirmation, and readback gate.
+
+Mainnet Site Circle creation or asset publication also requires `VITALS_DEPLOY_SITE_CIRCLE_ALLOW_MAINNET=1` in the owner-only environment. Leave it unset for devnet and local rehearsals.
 
 ## Guardrails
 

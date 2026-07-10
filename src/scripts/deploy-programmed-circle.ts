@@ -2,9 +2,11 @@
 import { createHash } from "node:crypto";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { dirname, join, resolve } from "node:path";
-import { contractReceipt, feeTelemetry, octraProgramRpcUrl, octraRpc, recommendedOu } from "../lib/octra-rpc.js";
+import { contractReceipt, feeTelemetry, isExplicitDevelopmentRpcUrl, octraProgramRpcUrl, octraProgramRpcUrls, octraRpc, recommendedOu, rpcUrlLabel } from "../lib/octra-rpc.js";
 import { loadWalletFromEnv, publicTransactionJson, signTransaction, transactionHash, type OctraTransaction, type OperatorWallet } from "../lib/octra-transaction.js";
 import { sha256Hex } from "../lib/canonical-json.js";
+import { assertAmlCompileApproved, readApprovedAmlRelease, validateAmlCompile, type AmlCompileResult } from "../lib/aml-artifacts.js";
+import { assertDistinctProductionRoles, parseFactLedgerLatestBundle } from "../lib/fact-ledger-deployment.js";
 import {
   FACT_LEDGER_MANIFEST,
   coreFactFamilyDefinition,
@@ -23,7 +25,14 @@ function assertProgramKind(): void {
 assertProgramKind();
 const programKind = "fact-ledger";
 const artifactDir = process.env.VITALS_PROGRAMMED_CIRCLE_ARTIFACT_DIR || "program-fact-ledger";
-const sourcePath = process.env.VITALS_PROGRAMMED_CIRCLE_SOURCE || join(root, artifactDir, "main.aml");
+if (!/^[A-Za-z0-9._/-]+$/.test(artifactDir) || artifactDir.startsWith("/") || artifactDir.split("/").includes("..")) {
+  throw new Error("VITALS_PROGRAMMED_CIRCLE_ARTIFACT_DIR must stay within the release");
+}
+const artifactRoot = resolve(root, artifactDir);
+const sourcePath = resolve(root, process.env.VITALS_PROGRAMMED_CIRCLE_SOURCE || join(artifactDir, "main.aml"));
+if (sourcePath !== artifactRoot && !sourcePath.startsWith(`${artifactRoot}/`)) {
+  throw new Error("VITALS_PROGRAMMED_CIRCLE_SOURCE must stay within its artifact directory");
+}
 const outPath = process.argv.find((arg) => arg.endsWith(".json")) || join(root, "build", "programmed-circle-deploy.json");
 const deployEnabled = process.env.VITALS_DEPLOY_PROGRAMMED_CIRCLE === "1";
 const deployAcknowledged = process.env.VITALS_DEPLOY_PROGRAMMED_CIRCLE_ACK === "1";
@@ -31,19 +40,7 @@ const waitForConfirmations = process.env.VITALS_DEPLOY_WAIT !== "0";
 const requireContractReceipt = waitForConfirmations && process.env.VITALS_REQUIRE_CONTRACT_RECEIPT !== "0";
 const expectedAmlManifest = FACT_LEDGER_MANIFEST;
 
-interface CompileResult {
-  bytecode?: string;
-  bytecode_b64?: string;
-  size?: number;
-  instructions?: number;
-  version?: string;
-  verification?: unknown;
-  certificate?: {
-    source_hash?: string;
-    bytecode_hash?: string;
-    verification_hash?: string;
-  };
-}
+interface CompileResult extends AmlCompileResult {}
 
 function assertSafeCompile(compile: CompileResult): void {
   const verification = compile.verification as any;
@@ -214,16 +211,37 @@ function isoNow(): string {
 async function nextNonce(address: string): Promise<number> {
   const balance = await octraRpc<any>("octra_balance", [address]);
   const nonce = Number(balance?.pending_nonce ?? balance?.nonce ?? 0);
-  if (!Number.isInteger(nonce) || nonce < 0) throw new Error(`invalid nonce response for ${address}`);
+  if (!Number.isSafeInteger(nonce) || nonce < 0 || nonce >= Number.MAX_SAFE_INTEGER) {
+    throw new Error(`invalid nonce response for ${address}`);
+  }
   return nonce + 1;
 }
 
-async function submitTx(wallet: OperatorWallet, tx: OctraTransaction) {
+async function submitTx(
+  wallet: OperatorWallet,
+  tx: OctraTransaction,
+  onPrepared: (prepared: Record<string, unknown>) => Promise<void>
+) {
   const signed = signTransaction(tx, wallet);
+  const localTxHash = transactionHash(signed);
+  await onPrepared({
+    tx_hash: localTxHash,
+    nonce: tx.nonce,
+    op_type: tx.op_type,
+    to: tx.to_,
+    confirmation_status: "prepared"
+  });
   const txJson = publicTransactionJson(signed);
   const submitResult = await octraRpc<any>("octra_submit", [txJson]);
+  const reportedTxHash = submitResult?.tx_hash || submitResult?.hash;
+  if (reportedTxHash) {
+    const normalized = String(reportedTxHash).replace(/^sha256:/, "").toLowerCase();
+    if (!/^[0-9a-f]{64}$/.test(normalized) || normalized !== localTxHash) {
+      throw new Error("programmed-Circle deploy RPC returned a transaction hash that does not match the signed transaction");
+    }
+  }
   return {
-    tx_hash: submitResult?.tx_hash || submitResult?.hash || transactionHash(signed),
+    tx_hash: localTxHash,
     submit_result: submitResult
   };
 }
@@ -301,18 +319,22 @@ async function circleView(circleId: string, method: string, caller: string): Pro
   return result;
 }
 
-async function circleViewOptional<T = unknown>(circleId: string, method: string, caller: string, fallback: T): Promise<T> {
-  try {
-    const value = await circleView(circleId, method, caller);
-    return value as T;
-  } catch {
-    return fallback;
-  }
+async function circleViewAtUrl(url: string, circleId: string, method: string, caller: string): Promise<unknown> {
+  const result = await octraRpc<any>("octra_circleView", [circleId, method, [], caller, false], { url });
+  if (result && typeof result === "object" && "result" in result) return result.result;
+  return result;
 }
 
-function hex64OrFallback(value: unknown, fallback: string): string {
+function requiredHex64(value: unknown, label: string): string {
   const text = String(value || "").replace(/^sha256:/, "").toLowerCase();
-  return /^[0-9a-f]{64}$/.test(text) ? text : fallback;
+  if (!/^[0-9a-f]{64}$/.test(text)) throw new Error(`${label} must be 64 lowercase hex characters`);
+  return text;
+}
+
+function requiredAddress(value: unknown, label: string): string {
+  const text = String(value || "");
+  if (!/^oct[1-9A-HJ-NP-Za-km-z]{44}$/.test(text)) throw new Error(`${label} is not a valid Octra address`);
+  return text;
 }
 
 async function resolveFactLedgerPredecessor(callerAddress: string, nextCircleId: string) {
@@ -321,42 +343,85 @@ async function resolveFactLedgerPredecessor(callerAddress: string, nextCircleId:
     process.env.VITALS_FACT_LEDGER_PREDECESSOR_PROGRAM ||
     process.env.VITALS_PREDECESSOR_PROGRAM ||
     "";
+  if (!configuredPredecessor) {
+    throw new Error("VITALS_FACT_LEDGER_PREDECESSOR_PROGRAM must explicitly name a predecessor or genesis");
+  }
   const cleanGenesis = /^(self|none|genesis|clean)$/i.test(configuredPredecessor);
-  const predecessorAddress = cleanGenesis
-    ? nextCircleId
-    : configuredPredecessor ||
-      process.env.VITALS_PROGRAMMED_CIRCLE_ID ||
-      nextCircleId;
+  const predecessorAddress = cleanGenesis ? nextCircleId : requiredAddress(configuredPredecessor, "fact-ledger predecessor");
   const explicitIndex = process.env.VITALS_FACT_LEDGER_PREDECESSOR_FINAL_INDEX || process.env.VITALS_PREDECESSOR_FINAL_INDEX;
   const explicitRoot = process.env.VITALS_FACT_LEDGER_PREDECESSOR_FINAL_ROOT || process.env.VITALS_PREDECESSOR_FINAL_ROOT;
-  let predecessorFinalIndex = explicitIndex ? Number(explicitIndex) : 0;
-  if (!Number.isInteger(predecessorFinalIndex) || predecessorFinalIndex < 0) {
-    throw new Error("VITALS_FACT_LEDGER_PREDECESSOR_FINAL_INDEX must be a non-negative integer");
+  if (cleanGenesis) {
+    if (explicitIndex && Number(explicitIndex) !== 0) throw new Error("genesis predecessor index must be zero");
+    if (explicitRoot && requiredHex64(explicitRoot, "genesis predecessor root") !== zeroRoot) {
+      throw new Error("genesis predecessor root must be zero");
+    }
+    return {
+      predecessorAddress,
+      predecessorFinalIndex: 0,
+      predecessorFinalRoot: zeroRoot,
+      eraFirstSnapshotIndex: 1,
+      rpcUrlsChecked: 0,
+      predecessorFrozen: true
+    };
   }
-  if (!explicitIndex && predecessorAddress && predecessorAddress !== nextCircleId) {
-    predecessorFinalIndex = Number(await circleViewOptional(predecessorAddress, "get_snapshot_count", callerAddress, 0) || 0);
+
+  const reads = await Promise.all(octraProgramRpcUrls().map(async (url) => {
+    const beforeText = String(await circleViewAtUrl(url, predecessorAddress, "get_latest_bundle", callerAddress));
+    const [count, historyRoot, paused, successorSet] = await Promise.all([
+      circleViewAtUrl(url, predecessorAddress, "get_snapshot_count", callerAddress),
+      circleViewAtUrl(url, predecessorAddress, "get_history_root", callerAddress),
+      circleViewAtUrl(url, predecessorAddress, "is_paused", callerAddress),
+      circleViewAtUrl(url, predecessorAddress, "is_successor_set", callerAddress)
+    ]);
+    const afterText = String(await circleViewAtUrl(url, predecessorAddress, "get_latest_bundle", callerAddress));
+    if (beforeText !== afterText) throw new Error(`predecessor advanced during fenced read from ${rpcUrlLabel(url)}`);
+    const bundle = parseFactLedgerLatestBundle(afterText);
+    if (Number(count) !== bundle.snapshot_index) throw new Error(`predecessor snapshot count mismatch from ${rpcUrlLabel(url)}`);
+    if (requiredHex64(historyRoot, "predecessor history root") !== bundle.history_root) {
+      throw new Error(`predecessor history root mismatch from ${rpcUrlLabel(url)}`);
+    }
+    return {
+      url,
+      bundle,
+      frozen: paused === true || paused === "true" || successorSet === true || successorSet === "true"
+    };
+  }));
+  const primary = reads[0];
+  if (!primary) throw new Error("no predecessor RPC URL configured");
+  for (const candidate of reads.slice(1)) {
+    if (JSON.stringify(candidate.bundle) !== JSON.stringify(primary.bundle) || candidate.frozen !== primary.frozen) {
+      throw new Error(`predecessor RPC disagreement from ${rpcUrlLabel(candidate.url)}`);
+    }
   }
-  let predecessorFinalRoot = explicitRoot ? hex64OrFallback(explicitRoot, "") : "";
-  if (!predecessorFinalRoot && predecessorAddress && predecessorAddress !== nextCircleId) {
-    const rootRead =
-      await circleViewOptional(predecessorAddress, "get_history_root", callerAddress, "") ||
-      await circleViewOptional(predecessorAddress, "get_open_capsule_end_root", callerAddress, "") ||
-      await circleViewOptional(predecessorAddress, "get_recent_summary_window_hash", callerAddress, "");
-    predecessorFinalRoot = hex64OrFallback(rootRead, zeroRoot);
+  if (!primary.frozen) throw new Error("predecessor must be paused or have its successor set before a new era is deployed");
+  const predecessorFinalIndex = primary.bundle.snapshot_index;
+  const predecessorFinalRoot = primary.bundle.history_root;
+  if (explicitIndex && Number(explicitIndex) !== predecessorFinalIndex) throw new Error("explicit predecessor index does not match fenced read");
+  if (explicitRoot && requiredHex64(explicitRoot, "explicit predecessor root") !== predecessorFinalRoot) {
+    throw new Error("explicit predecessor root does not match fenced read");
   }
-  if (!predecessorFinalRoot) predecessorFinalRoot = zeroRoot;
+  const expectedFreezeAck = `${predecessorAddress}:${predecessorFinalIndex}:${predecessorFinalRoot}`;
+  if (process.env.VITALS_PREDECESSOR_FROZEN_ACK !== expectedFreezeAck) {
+    throw new Error(`predecessor freeze requires VITALS_PREDECESSOR_FROZEN_ACK=${expectedFreezeAck}`);
+  }
   return {
     predecessorAddress,
     predecessorFinalIndex,
     predecessorFinalRoot,
-    eraFirstSnapshotIndex: predecessorFinalIndex + 1
+    eraFirstSnapshotIndex: predecessorFinalIndex + 1,
+    rpcUrlsChecked: reads.length,
+    predecessorFrozen: true
   };
 }
 
 function factLedgerNetworkId(): string {
   const configured = process.env.VITALS_FACT_LEDGER_NETWORK_ID || process.env.VITALS_OCTRA_NETWORK_ID;
-  if (configured) return configured;
-  return /devnet/i.test(octraProgramRpcUrl()) ? "octra-devnet" : "octra-mainnet";
+  if (configured) {
+    if (!/^[A-Za-z0-9._-]{1,32}$/.test(configured)) throw new Error("VITALS_FACT_LEDGER_NETWORK_ID is invalid");
+    return configured;
+  }
+  if (deployEnabled) throw new Error("VITALS_FACT_LEDGER_NETWORK_ID is required for deployment");
+  return "pending";
 }
 
 async function writeReport(report: unknown): Promise<void> {
@@ -386,24 +451,49 @@ const [source, recommendedDeployOu, recommendedUpdateOu, recommendedCallOu, depl
 const deployOu = process.env.VITALS_DEPLOY_CIRCLE_OU || recommendedDeployOu;
 const updateOu = process.env.VITALS_PROGRAM_UPDATE_OU || process.env.VITALS_CIRCLE_PROGRAM_UPDATE_OU || recommendedUpdateOu;
 const callOu = process.env.VITALS_INITIALIZE_CALL_OU || process.env.VITALS_CALL_OU || recommendedCallOu;
-const compile = await octraRpc<CompileResult>("octra_compileAml", [source]);
+const buildRoot = resolve(root, "build");
+const compilePath = resolve(root, process.env.VITALS_PROGRAMMED_CIRCLE_COMPILE_ARTIFACT || join("build", artifactDir, "compile.json"));
+if (compilePath !== buildRoot && !compilePath.startsWith(`${buildRoot}/`)) {
+  throw new Error("VITALS_PROGRAMMED_CIRCLE_COMPILE_ARTIFACT must stay under build/");
+}
+const compileRaw = JSON.parse(await readFile(compilePath, "utf8")) as CompileResult & { compiler_version?: string };
+const compile: CompileResult = { ...compileRaw };
+if (!compile.version && compileRaw.compiler_version) compile.version = compileRaw.compiler_version;
 assertSafeCompile(compile);
-const codeB64 = compile.bytecode || compile.bytecode_b64;
-if (!codeB64) throw new Error("octra_compileAml did not return bytecode");
-await assertCompileMatchesPinnedArtifacts(source, compile, codeB64);
+const validatedCompile = validateAmlCompile(source, compile);
+await assertCompileMatchesPinnedArtifacts(source, compile, validatedCompile.code_b64);
+await assertAmlCompileApproved(
+  validatedCompile,
+  await readApprovedAmlRelease(join(root, artifactDir, "approved-release.json"))
+);
+const codeB64 = validatedCompile.code_b64;
 
 const wallet = loadWalletFromEnv({
-  privateKeyEnv: ["VITALS_DEPLOYER_PRIVATE_KEY_B64", "VITALS_OPERATOR_PRIVATE_KEY_B64", "OCTRA_PRIVATE_KEY_B64"],
-  addressEnv: ["VITALS_DEPLOYER_ADDRESS", "VITALS_OPERATOR_ADDRESS"],
+  privateKeyEnv: ["VITALS_DEPLOYER_PRIVATE_KEY_B64"],
+  addressEnv: ["VITALS_DEPLOYER_ADDRESS"],
   label: "programmed Circle deployer"
 });
-const deployerAddress = wallet?.address || process.env.VITALS_DEPLOYER_ADDRESS || process.env.VITALS_OPERATOR_ADDRESS || null;
-const operatorAddress = process.env.VITALS_INITIAL_OPERATOR_ADDRESS || process.env.VITALS_OPERATOR_ADDRESS || deployerAddress || null;
+const deployerAddress = wallet?.address || process.env.VITALS_DEPLOYER_ADDRESS || null;
+const operatorAddress = process.env.VITALS_INITIAL_OPERATOR_ADDRESS || null;
+if (deployerAddress) requiredAddress(deployerAddress, "programmed Circle deployer");
+if (operatorAddress) requiredAddress(operatorAddress, "initial operator");
+const configuredRpcUrls = octraProgramRpcUrls();
+const productionWrite = deployEnabled && !isExplicitDevelopmentRpcUrl(octraProgramRpcUrl());
+const minimumProgramRpcUrls = Number(process.env.VITALS_MIN_PROGRAM_RPC_URLS || (productionWrite ? 2 : 1));
+if (!Number.isSafeInteger(minimumProgramRpcUrls) || minimumProgramRpcUrls < (productionWrite ? 2 : 1)) {
+  throw new Error(`VITALS_MIN_PROGRAM_RPC_URLS must be at least ${productionWrite ? 2 : 1}`);
+}
+if (deployerAddress && operatorAddress) assertDistinctProductionRoles(deployerAddress, operatorAddress, productionWrite);
 const missing = [
-  deployerAddress ? null : "VITALS_DEPLOYER_ADDRESS or VITALS_OPERATOR_ADDRESS",
-  operatorAddress ? null : "VITALS_INITIAL_OPERATOR_ADDRESS or VITALS_OPERATOR_ADDRESS",
-  deployEnabled && !wallet ? "VITALS_DEPLOYER_PRIVATE_KEY_B64 or VITALS_OPERATOR_PRIVATE_KEY_B64" : null,
-  deployEnabled && !deployAcknowledged ? "VITALS_DEPLOY_PROGRAMMED_CIRCLE_ACK=1" : null
+  deployerAddress ? null : "VITALS_DEPLOYER_ADDRESS",
+  operatorAddress ? null : "VITALS_INITIAL_OPERATOR_ADDRESS",
+  deployEnabled && !wallet ? "VITALS_DEPLOYER_PRIVATE_KEY_B64" : null,
+  deployEnabled && !deployAcknowledged ? "VITALS_DEPLOY_PROGRAMMED_CIRCLE_ACK=1" : null,
+  deployEnabled && !waitForConfirmations ? "VITALS_DEPLOY_WAIT must not be 0" : null,
+  deployEnabled && configuredRpcUrls.length < minimumProgramRpcUrls
+    ? `${minimumProgramRpcUrls} distinct OCTRA_PROGRAM_RPC_URLS` : null,
+  productionWrite && process.env.VITALS_DEPLOY_PROGRAMMED_CIRCLE_ALLOW_MAINNET !== "1"
+    ? "VITALS_DEPLOY_PROGRAMMED_CIRCLE_ALLOW_MAINNET=1" : null
 ].filter((value): value is string => Boolean(value));
 if (deployEnabled && missing.length) throw new Error(`missing requirements: ${missing.join(", ")}`);
 
@@ -421,13 +511,14 @@ const baseReport = {
   schema: "octra-vitals-programmed-circle-deploy-v0",
   generated_at: isoNow(),
   status: deployEnabled ? "submitting" : "dry_run",
-  rpc_url: octraProgramRpcUrl(),
+  rpc_url: rpcUrlLabel(octraProgramRpcUrl()),
   program_kind: programKind,
   artifact_dir: artifactDir,
   source_path: sourcePath.replace(`${root}/`, ""),
-  source_hash: `sha256:${sha256Hex(source)}`,
-  bytecode_hash: compile.certificate?.bytecode_hash ? `sha256:${compile.certificate.bytecode_hash}` : null,
-  verification_hash: compile.certificate?.verification_hash ? `sha256:${compile.certificate.verification_hash}` : null,
+  compile_path: compilePath.replace(`${root}/`, ""),
+  source_hash: validatedCompile.source_hash,
+  bytecode_hash: validatedCompile.bytecode_hash,
+  verification_hash: validatedCompile.verification_hash,
   compiler_version: compile.version || null,
   instructions: compile.instructions || null,
   size: compile.size || null,
@@ -442,7 +533,9 @@ const baseReport = {
     predecessor_program: factLedgerPredecessor.predecessorAddress,
     predecessor_final_root: factLedgerPredecessor.predecessorFinalRoot,
     predecessor_final_index: factLedgerPredecessor.predecessorFinalIndex,
-    era_first_snapshot_index: factLedgerPredecessor.eraFirstSnapshotIndex
+    era_first_snapshot_index: factLedgerPredecessor.eraFirstSnapshotIndex,
+    predecessor_frozen: factLedgerPredecessor.predecessorFrozen,
+    predecessor_rpc_urls_checked: factLedgerPredecessor.rpcUrlsChecked
   } : null,
   missing_requirements: missing,
   deploy_payload: JSON.parse(canonicalPayload),
@@ -477,7 +570,11 @@ if (!deployEnabled) {
     op_type: "deploy_circle",
     message: canonicalPayload
   };
-  const deploySubmission = await submitTx(wallet, deployTx);
+  const deploySubmission = await submitTx(wallet, deployTx, (prepared) => writeReport({
+    ...baseReport,
+    status: "deploy_prepared",
+    pending_transaction: { label: "deploy_circle", ...prepared }
+  }));
   const deployConfirmation = await requireConfirmed(deploySubmission.tx_hash, "programmed Circle deploy");
   currentNonce += 1;
 
@@ -491,9 +588,27 @@ if (!deployEnabled) {
     op_type: "circle_program_update",
     message: JSON.stringify({ code_b64: codeB64 })
   };
-  const updateSubmission = await submitTx(wallet, updateTx);
+  const updateSubmission = await submitTx(wallet, updateTx, (prepared) => writeReport({
+    ...baseReport,
+    status: "program_update_prepared",
+    deploy_tx_hash: deploySubmission.tx_hash,
+    deploy_tx: txSummary(deployConfirmation),
+    pending_transaction: { label: "circle_program_update", ...prepared }
+  }));
   const updateConfirmation = await requireConfirmed(updateSubmission.tx_hash, "programmed Circle program_update");
   currentNonce += 1;
+
+  const [preInitializeOwner, preInitializeState] = await Promise.all([
+    circleView(circleId, "get_owner", wallet.address),
+    circleView(circleId, "is_initialized", wallet.address)
+  ]);
+  if (preInitializeOwner !== wallet.address || preInitializeState === true || preInitializeState === "true") {
+    throw new Error(`program constructor ownership check failed before initialization: ${JSON.stringify({
+      owner: preInitializeOwner,
+      expected_owner: wallet.address,
+      initialized: preInitializeState
+    })}`);
+  }
 
   const initMethod = "initialize_fact_ledger";
   const initParams = [
@@ -526,7 +641,15 @@ if (!deployEnabled) {
     encrypted_data: initMethod,
     message: JSON.stringify(initParams)
   };
-  const initSubmission = await submitTx(wallet, initTx);
+  const initSubmission = await submitTx(wallet, initTx, (prepared) => writeReport({
+    ...baseReport,
+    status: "initialize_prepared",
+    deploy_tx_hash: deploySubmission.tx_hash,
+    deploy_tx: txSummary(deployConfirmation),
+    program_update_tx_hash: updateSubmission.tx_hash,
+    program_update_tx: txSummary(updateConfirmation),
+    pending_transaction: { label: initMethod, ...prepared }
+  }));
   const initConfirmation = await requireConfirmed(initSubmission.tx_hash, `programmed Circle ${initMethod}`);
   let initReceipt: Record<string, unknown> | null = null;
   let initReceiptError: string | null = null;
@@ -644,9 +767,9 @@ if (!deployEnabled) {
       VITALS_RECORD_SNAPSHOT_VERSION: "fact-v2",
       VITALS_FACT_LEDGER_CUTOVER_ACK: `fact-v2:circle_program:${circleId}`,
       VITALS_FACT_LEDGER_NETWORK_ID: factLedgerNetwork,
-      VITALS_FACT_LEDGER_PROGRAMMED_CIRCLE_SOURCE_HASH: `sha256:${sha256Hex(source)}`,
-      VITALS_FACT_LEDGER_PROGRAMMED_CIRCLE_BYTECODE_HASH: compile.certificate?.bytecode_hash ? `sha256:${compile.certificate.bytecode_hash}` : null,
-      VITALS_FACT_LEDGER_PROGRAMMED_CIRCLE_VERIFICATION_HASH: compile.certificate?.verification_hash ? `sha256:${compile.certificate.verification_hash}` : null
+      VITALS_FACT_LEDGER_PROGRAMMED_CIRCLE_SOURCE_HASH: validatedCompile.source_hash,
+      VITALS_FACT_LEDGER_PROGRAMMED_CIRCLE_BYTECODE_HASH: validatedCompile.bytecode_hash,
+      VITALS_FACT_LEDGER_PROGRAMMED_CIRCLE_VERIFICATION_HASH: validatedCompile.verification_hash
     }
   });
 }

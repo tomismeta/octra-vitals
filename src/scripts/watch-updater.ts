@@ -23,10 +23,19 @@ const dataDir = resolve(process.env.VITALS_WATCH_DATA_DIR || process.env.VITALS_
 const receiptPath = process.env.VITALS_WATCH_RECEIPT_PATH || join(dataDir, "latest_submit_receipt.json");
 const latestRunReportPath = process.env.VITALS_WATCH_RUN_REPORT_PATH || join(dataDir, "latest_snapshot_update_report.json");
 const reportPath = process.env.VITALS_WATCH_REPORT_PATH || join(dataDir, "watchdog", "latest_updater_watchdog.json");
-const maxReceiptAgeMs = Number(process.env.VITALS_WATCH_MAX_RECEIPT_AGE_MS || 45 * 60_000);
-const requestTimeoutMs = Number(process.env.VITALS_WATCH_REQUEST_TIMEOUT_MS || 30_000);
-const recoveryWaitMs = Number(process.env.VITALS_WATCH_RECOVERY_WAIT_MS || 20_000);
+const maxReceiptAgeMs = boundedIntegerEnv("VITALS_WATCH_MAX_RECEIPT_AGE_MS", 45 * 60_000, 1, 7 * 24 * 60 * 60_000);
+const requestTimeoutMs = boundedIntegerEnv("VITALS_WATCH_REQUEST_TIMEOUT_MS", 30_000, 1, 300_000);
+const recoveryWaitMs = boundedIntegerEnv("VITALS_WATCH_RECOVERY_WAIT_MS", 20_000, 0, 300_000);
 const recoveryEnabled = process.env.VITALS_WATCH_RECOVERY_ENABLED !== "0";
+
+function boundedIntegerEnv(name: string, fallback: number, min: number, max: number): number {
+  const configured = process.env[name];
+  const parsed = configured !== undefined && configured !== "" ? Number(configured) : fallback;
+  if (!Number.isSafeInteger(parsed) || parsed < min || parsed > max) {
+    throw new Error(`${name} must be an integer from ${min} to ${max}`);
+  }
+  return parsed;
+}
 
 function isoNow(): string {
   return new Date().toISOString().replace(/\.\d{3}Z$/, "Z");

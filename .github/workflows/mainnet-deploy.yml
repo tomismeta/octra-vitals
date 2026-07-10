@@ -25,6 +25,7 @@ on:
           - plan_release
           - push_release
           - deploy_programmed_circle
+          - update_programmed_circle_code
           - configure_runtime
           - publish_assets
           - submit_snapshot
@@ -88,4 +89,5 @@ jobs:
           DEPLOY_SSH_USER: ${{ secrets.DEPLOY_SSH_USER }}
           DEPLOY_SSH_PRIVATE_KEY: ${{ secrets.DEPLOY_SSH_PRIVATE_KEY }}
           DEPLOY_UPDATER_ENV_B64: ${{ secrets.DEPLOY_UPDATER_ENV_B64 }}
+          DEPLOY_OWNER_ENV_B64: ${{ secrets.DEPLOY_OWNER_ENV_B64 }}
         run: bash deploy/mainnet/github-dispatch.sh

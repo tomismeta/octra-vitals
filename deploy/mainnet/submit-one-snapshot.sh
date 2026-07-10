@@ -13,14 +13,14 @@ if [ "$(id -u)" -ne 0 ]; then
 fi
 
 cd "${CURRENT}"
-
-set -a
-. "${ENV_DIR}/updater.env"
-set +a
-export VITALS_SUBMIT=1
-
-sudo --preserve-env -u "${APP_OPERATOR_USER}" env HOME="${VITALS_DATA_DIR:-/var/lib/octra-vitals}" bash --noprofile --norc -lc "
+sudo -u "${APP_OPERATOR_USER}" env -i \
+  PATH="/usr/local/bin:/usr/bin:/bin" \
+  HOME="${VITALS_DATA_DIR:-/var/lib/octra-vitals}" \
+  bash --noprofile --norc -c "
   set -euo pipefail
   cd '${CURRENT}'
-  npm run program:update:dist
-"
+  . deploy/lib/env-file.sh
+  load_env_file_data /dev/stdin
+  export VITALS_SUBMIT=1
+  node dist/scripts/run-snapshot-update.js
+" < "${ENV_DIR}/updater.env"

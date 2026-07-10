@@ -12,6 +12,7 @@ SSH_PRIVATE_KEY="${DEPLOY_SSH_PRIVATE_KEY:-${MAINNET_SSH_PRIVATE_KEY:-}}"
 SSH_KNOWN_HOSTS_B64="${DEPLOY_SSH_KNOWN_HOSTS_B64:-${MAINNET_SSH_KNOWN_HOSTS_B64:-}}"
 SSH_HOST_KEY_LINE="${DEPLOY_SSH_HOST_KEY_LINE:-${MAINNET_SSH_HOST_KEY_LINE:-}}"
 UPDATER_ENV_B64="${DEPLOY_UPDATER_ENV_B64:-${MAINNET_UPDATER_ENV_B64:-}}"
+OWNER_ENV_B64="${DEPLOY_OWNER_ENV_B64:-${MAINNET_OWNER_ENV_B64:-}}"
 DEVNET_REHEARSAL_ACK="${DEPLOY_DEVNET_REHEARSAL_ACK:-${MAINNET_DEVNET_REHEARSAL_ACK:-}}"
 DEVNET_REHEARSAL_REPORT_B64="${DEPLOY_DEVNET_REHEARSAL_REPORT_B64:-${MAINNET_DEVNET_REHEARSAL_REPORT_B64:-}}"
 DEVNET_REHEARSAL_MAX_AGE_HOURS="${DEPLOY_DEVNET_REHEARSAL_MAX_AGE_HOURS:-48}"
@@ -114,7 +115,7 @@ require_deploy_confirmation() {
 
 is_write_action() {
   case "${ACTION}" in
-    push_release|deploy_programmed_circle|configure_runtime|publish_assets|submit_snapshot|enable_timers|full_cutover)
+    push_release|deploy_programmed_circle|update_programmed_circle_code|configure_runtime|publish_assets|submit_snapshot|enable_timers|full_cutover)
       return 0
       ;;
     *)
@@ -233,6 +234,20 @@ install_updater_env() {
   ssh "${remote}" "sudo install -m 600 -o root -g root /tmp/octra-vitals-updater.env /etc/octra-vitals/updater.env && rm -f /tmp/octra-vitals-updater.env"
 }
 
+install_owner_env() {
+  if [ -z "${OWNER_ENV_B64}" ]; then
+    echo "DEPLOY_OWNER_ENV_B64 not set; using existing /etc/octra-vitals/owner.env on host"
+    return
+  fi
+  local remote tmp
+  remote="$(remote_target)"
+  tmp="$(mktemp)"
+  printf '%s' "${OWNER_ENV_B64}" | base64 -d > "${tmp}"
+  scp "${tmp}" "${remote}:/tmp/octra-vitals-owner.env"
+  rm -f "${tmp}"
+  ssh "${remote}" "sudo install -m 600 -o root -g root /tmp/octra-vitals-owner.env /etc/octra-vitals/owner.env && rm -f /tmp/octra-vitals-owner.env"
+}
+
 push_release() {
   local remote
   remote="$(remote_target)"
@@ -280,6 +295,12 @@ deploy_programmed_circle() {
     env_args="${env_args} VITALS_FACT_LEDGER_PREDECESSOR_FINAL_ROOT=${value_q}"
   fi
   ssh "${remote}" "sudo env ${env_args} bash ${script_q}"
+}
+
+update_programmed_circle_code() {
+  local remote
+  remote="$(remote_target)"
+  ssh "${remote}" "sudo bash ${APP_ROOT}/current/deploy/mainnet/update-programmed-circle-code.sh"
 }
 
 configure_runtime() {
@@ -337,7 +358,15 @@ case "${ACTION}" in
     require_deploy_confirmation
     run_local_verify
     install_updater_env
+    install_owner_env
     deploy_programmed_circle
+    ;;
+  update_programmed_circle_code)
+    require_deploy_confirmation
+    run_local_verify
+    install_updater_env
+    install_owner_env
+    update_programmed_circle_code
     ;;
   configure_runtime)
     require_deploy_confirmation
@@ -348,6 +377,7 @@ case "${ACTION}" in
   publish_assets)
     require_deploy_confirmation
     run_local_verify
+    install_owner_env
     publish_assets
     ;;
   submit_snapshot)
@@ -368,6 +398,7 @@ case "${ACTION}" in
     run_local_verify
     push_release
     install_updater_env
+    install_owner_env
     deploy_programmed_circle
     configure_runtime
     publish_assets

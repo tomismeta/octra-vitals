@@ -311,21 +311,8 @@ function requireEqual(label, actual, expected){
 }
 
 function canonicalJsonBrowser(value){
-  if(value === null) return "null";
-  if(Array.isArray(value)) return `[${value.map((item)=>canonicalJsonBrowser(item)).join(",")}]`;
-  if(typeof value === "object"){
-    const entries = Object.entries(value)
-      .filter(([, entryValue])=>entryValue !== undefined)
-      .sort(([a], [b])=>a < b ? -1 : a > b ? 1 : 0);
-    return `{${entries.map(([key, entryValue])=>`${JSON.stringify(key)}:${canonicalJsonBrowser(entryValue)}`).join(",")}}`;
-  }
-  if(typeof value === "string") return JSON.stringify(value);
-  if(typeof value === "number"){
-    if(!Number.isFinite(value)) throw new TypeError("Cannot canonicalize non-finite number");
-    return JSON.stringify(value);
-  }
-  if(typeof value === "boolean") return value ? "true" : "false";
-  throw new TypeError(`Cannot canonicalize value of type ${typeof value}`);
+  if(!globalThis.OctraVitalsVerifier) throw new Error("browser verifier is unavailable");
+  return globalThis.OctraVitalsVerifier.canonicalJson(value);
 }
 
 function requireCanonicalString(label, value){
@@ -368,25 +355,38 @@ async function verifyLatestResultInBand(latestResult){
   requireEqual("evidence hash", await sha256TaggedBrowser("octra-vitals:evidence:v0", canonicalEvidence), envelope.evidence_manifest_hash);
   const sourceRefsHash = await sha256TaggedBrowser("octra-vitals:source-refs:v0", canonicalSourceRefs);
   const expectedSourceRefsHash = body.receipt?.expected_hashes?.source_refs_hash || body.source_refs_hash || authority.source_refs_hash || null;
-  if(expectedSourceRefsHash) requireEqual("source refs hash", sourceRefsHash, expectedSourceRefsHash);
+  if(!expectedSourceRefsHash) throw new Error("source refs hash commitment missing");
+  requireEqual("source refs hash", sourceRefsHash, expectedSourceRefsHash);
 
   const latestSummary = latestSummaryFromBody(body);
   const latestSummaryHash = latestSummaryHashFromBody(body);
-  if(latestSummary || latestSummaryHash){
-    if(typeof latestSummary !== "string" || !latestSummary) throw new Error("latest summary missing");
-    requireEqual("summary hash", await sha256TaggedBrowser("octra-vitals:summary:v0", latestSummary), latestSummaryHash);
-    verifyLatestSummaryRow(latestSummary, body.snapshot_index || authority.snapshot_index || body.receipt?.snapshot_index, envelope.observed_at || evidenceManifest.observed_at, envelope.payload_hash, payload);
-  }
+  if(typeof latestSummary !== "string" || !latestSummary || !latestSummaryHash) throw new Error("latest summary commitment missing");
+  requireEqual("summary hash", await sha256TaggedBrowser("octra-vitals:summary:v0", latestSummary), latestSummaryHash);
+  const snapshotIndex = body.snapshot_index || authority.snapshot_index || body.receipt?.snapshot_index;
+  const semantics = globalThis.OctraVitalsVerifier.verifySnapshotSemantics({
+    envelope,
+    payload,
+    evidenceManifest,
+    sourceRefs,
+    summaryRow: latestSummary,
+    snapshotIndex,
+    staleAfterMs: Number(body.stale_after_ms || 20 * 60_000),
+    maxFutureSkewMs: 5 * 60_000
+  });
+  if(body.fresh !== undefined) requireEqual("freshness", body.fresh, semantics.fresh);
+  body.fresh = semantics.fresh;
 
   body.authority = {
     ...authority,
-    client_verified: true,
+    self_consistency_verified: true,
+    authenticity_verified: false,
+    trust_boundary: "https_origin",
     client_verification: {
       payload_hash: envelope.payload_hash,
       evidence_manifest_hash: envelope.evidence_manifest_hash,
       source_refs_hash: sourceRefsHash,
       summary_hash: latestSummaryHash || null,
-      source: "browser-in-band"
+      source: "https-response-self-consistency"
     }
   };
   body.client_verification = body.authority.client_verification;
@@ -398,28 +398,12 @@ async function verifyLatestResultInBand(latestResult){
 
 function isNativeVerificationFailure(error){
   const message = String(error?.message || error || "");
-  return /mismatch|canonical|hash|summary|field count|length|parse|JSON|epoch/i.test(message);
+  return /native (?:state|history) verification failed/i.test(message);
 }
 
 function parseSummaryRow(row){
-  if(typeof row !== "string" || row.length !== 208) throw new Error("summary row length mismatch");
-  const fields = row.split("|");
-  if(fields.length !== 13) throw new Error("summary row field count mismatch");
-  return {
-    row_version: fields[0],
-    snapshot_index: Number(fields[1]),
-    observed_at_unix: Number(fields[2]),
-    octra_epoch: Number(fields[3]),
-    external_block: Number(fields[4]),
-    issued_raw: String(BigInt(fields[5])),
-    burned_raw: String(BigInt(fields[6])),
-    encrypted_raw: String(BigInt(fields[7])),
-    total_locked_raw: String(BigInt(fields[8])),
-    total_wrapped_raw: String(BigInt(fields[9])),
-    total_unclaimed_raw: String(BigInt(fields[10])),
-    route_count: Number(fields[11]),
-    payload_hash_prefix: fields[12]
-  };
+  if(!globalThis.OctraVitalsVerifier) throw new Error("browser verifier is unavailable");
+  return globalThis.OctraVitalsVerifier.parseSummaryRow(row);
 }
 
 function verifyLatestSummaryRow(row, snapshotIndex, observedAt, payloadHash, payload){
@@ -428,18 +412,21 @@ function verifyLatestSummaryRow(row, snapshotIndex, observedAt, payloadHash, pay
   requireEqual("summary snapshot_index", parsed.snapshot_index, Number(snapshotIndex || 0));
   requireEqual("summary observed_at", parsed.observed_at_unix, observedUnix);
   requireEqual("summary octra_epoch", parsed.octra_epoch, Number(payload.octra?.epoch || 0));
+  requireEqual("summary external_block", parsed.external_block, parseEthBlock(payload.ethereum?.block_number));
   requireEqual("summary issued", parsed.issued_raw, rawText(payload.supply?.issued_oct_raw));
   requireEqual("summary burned", parsed.burned_raw, rawText(payload.supply?.confirmed_burned_oct_raw || payload.supply?.burned_oct_raw));
   requireEqual("summary encrypted", parsed.encrypted_raw, rawText(payload.supply?.encrypted_oct_raw));
   requireEqual("summary locked", parsed.total_locked_raw, rawText(payload.bridge?.total_locked_oct_raw));
   requireEqual("summary wrapped", parsed.total_wrapped_raw, rawText(payload.bridge?.woct_supply_raw));
   requireEqual("summary unclaimed", parsed.total_unclaimed_raw, rawText(payload.bridge?.unclaimed_oct_raw));
+  requireEqual("summary route_count", parsed.route_count, Array.isArray(payload.routes) ? payload.routes.length : 0);
   requireEqual("summary payload hash prefix", parsed.payload_hash_prefix, String(payloadHash).replace(/^sha256:/, "").slice(0,24));
 }
 
 async function loadNativeProgramLatest(config=APP_CONFIG){
   const target = nativeStateTarget(config);
   if(!target) throw new Error("native state target unavailable for native read");
+  const latestBundleBefore = await nativeStateCall(target, "get_latest_bundle");
   const [
     snapshotIndex,
     latestEpoch,
@@ -453,7 +440,8 @@ async function loadNativeProgramLatest(config=APP_CONFIG){
     canonicalSourceRefs,
     submitter,
     latestSummary,
-    latestSummaryHash
+    latestSummaryHash,
+    latestHistoryRowHash
   ] = await Promise.all([
     nativeStateCall(target, "get_latest_snapshot_index"),
     nativeStateCall(target, "get_latest_epoch"),
@@ -467,20 +455,55 @@ async function loadNativeProgramLatest(config=APP_CONFIG){
     nativeStateCall(target, "get_latest_source_refs"),
     nativeStateCall(target, "get_latest_submitter"),
     nativeStateCall(target, "get_latest_summary"),
-    nativeStateCall(target, "get_latest_summary_hash")
+    nativeStateCall(target, "get_latest_summary_hash"),
+    nativeStateCall(target, "get_latest_history_row_hash")
   ]);
+  const latestBundleAfter = await nativeStateCall(target, "get_latest_bundle");
+  try{
+  requireEqual("native latest bundle fence", latestBundleAfter, latestBundleBefore);
+  const bundleFields = String(latestBundleAfter || "").split("|");
+  if(bundleFields.length !== 6) throw new Error("native latest bundle field count mismatch");
+  if(!/^\d+$/.test(bundleFields[0] || "") || !Number.isSafeInteger(Number(bundleFields[0]))) throw new Error("native bundle index is invalid");
+  if(!/^sha256:[0-9a-f]{64}$/.test(bundleFields[2] || "")) throw new Error("native bundle payload hash is invalid");
+  for(const index of [3,4,5]){
+    if(!/^[0-9a-f]{64}$/.test(bundleFields[index] || "")) throw new Error(`native bundle hash field ${index} is invalid`);
+  }
+  requireEqual("native bundle index", Number(bundleFields[0]), Number(snapshotIndex));
+  requireEqual("native bundle snapshot id", bundleFields[1], snapshotId);
+  requireEqual("native bundle payload hash", bundleFields[2], payloadHash);
+  requireEqual("native bundle history row hash", bundleFields[3], latestHistoryRowHash);
   if(!snapshotId || !canonicalPayload || !canonicalEvidence) throw new Error("native state program has no latest snapshot");
   requireEqual("payload hash", await sha256TaggedBrowser("octra-vitals:snapshot:v0", canonicalPayload), payloadHash);
   requireEqual("evidence hash", await sha256TaggedBrowser("octra-vitals:evidence:v0", canonicalEvidence), evidenceHash);
   requireEqual("source refs hash", await sha256TaggedBrowser("octra-vitals:source-refs:v0", canonicalSourceRefs), sourceRefsHash);
   requireEqual("summary hash", await sha256TaggedBrowser("octra-vitals:summary:v0", latestSummary), latestSummaryHash);
-  const payload = JSON.parse(canonicalPayload);
-  const evidenceManifest = JSON.parse(canonicalEvidence);
-  const sourceRefs = JSON.parse(canonicalSourceRefs);
+  const payload = requireCanonicalString("native canonical payload", canonicalPayload);
+  const evidenceManifest = requireCanonicalString("native canonical evidence", canonicalEvidence);
+  const sourceRefs = requireCanonicalString("native canonical source refs", canonicalSourceRefs);
   requireEqual("payload epoch", Number(payload.octra?.epoch || 0), Number(latestEpoch || 0));
   const realObservedAt = observedAt || evidenceManifest.observed_at || String(snapshotId).replace(/^vitals\./, "");
-  verifyLatestSummaryRow(latestSummary, snapshotIndex, realObservedAt, payloadHash, payload);
-  const fresh = Number.isFinite(Date.parse(realObservedAt)) && Date.now() - Date.parse(realObservedAt) <= 20 * 60_000;
+  const envelope = {
+    schema_version: "octra-vitals-envelope-v0",
+    snapshot_id: snapshotId,
+    observed_at: realObservedAt,
+    payload_hash: payloadHash,
+    evidence_manifest_hash: evidenceHash,
+    canonicalization: "jcs-rfc8785-or-equivalent-v1",
+    payload,
+    source_refs: sourceRefs,
+    submitted_by: submitter || ""
+  };
+  const semantics = globalThis.OctraVitalsVerifier.verifySnapshotSemantics({
+    envelope,
+    payload,
+    evidenceManifest,
+    sourceRefs,
+    summaryRow: latestSummary,
+    snapshotIndex,
+    staleAfterMs: 20 * 60_000,
+    maxFutureSkewMs: 5 * 60_000
+  });
+  const fresh = semantics.fresh;
   return {
     url: target.kind === "circle_program" ? "octra-native:circle_program_view" : "octra-native:contract_call",
     body: {
@@ -497,7 +520,9 @@ async function loadNativeProgramLatest(config=APP_CONFIG){
         site_circle_id: config?.site_circle_id || null,
         state_read_from: target.kind === "circle_program" ? "circle-browser-program_view" : "circle-browser-contract_call",
         canonical_state_read: true,
-        client_verified: true,
+        self_consistency_verified: true,
+        authenticity_verified: true,
+        trust_boundary: "octra_native_state",
         client_verification: {
           payload_hash: payloadHash,
           evidence_manifest_hash: evidenceHash,
@@ -506,17 +531,7 @@ async function loadNativeProgramLatest(config=APP_CONFIG){
           source: "native-program-read"
         }
       },
-      envelope: {
-        schema_version: "octra-vitals-envelope-v0",
-        snapshot_id: snapshotId,
-        observed_at: realObservedAt,
-        payload_hash: payloadHash,
-        evidence_manifest_hash: evidenceHash,
-        canonicalization: "jcs-rfc8785-or-equivalent-v1",
-        payload,
-        source_refs: sourceRefs,
-        submitted_by: submitter || ""
-      },
+      envelope,
       evidence_manifest: evidenceManifest,
       canonical_source_refs: canonicalSourceRefs,
       canonical_payload: canonicalPayload,
@@ -524,6 +539,9 @@ async function loadNativeProgramLatest(config=APP_CONFIG){
       generated_at: new Date().toISOString().replace(/\.\d{3}Z$/, "Z")
     }
   };
+  }catch(error){
+    throw new Error(`native state verification failed: ${String(error?.message || error)}`);
+  }
 }
 
 async function loadNativeProgramHistory(config=APP_CONFIG){
@@ -538,12 +556,17 @@ async function loadNativeProgramHistory(config=APP_CONFIG){
   requireEqual("summary window hash", await sha256TaggedBrowser("octra-vitals:summary-window:v0", windowText || ""), windowHash);
   const count = Number(rowCount || 0);
   const first = Number(firstIndex || 0);
+  if(!Number.isSafeInteger(count) || count < 0 || count > 10000) throw new Error("native history row count is invalid");
+  if(!Number.isSafeInteger(first) || first < 0) throw new Error("native history first index is invalid");
+  if(typeof windowText !== "string" || windowText.length !== count * 208) throw new Error("native history window length mismatch");
   const snapshots = [];
   for(let i=0; i<count; i++){
     const row = parseSummaryRow(String(windowText || "").slice(i * 208, (i + 1) * 208));
+    const summaryRow = String(windowText || "").slice(i * 208, (i + 1) * 208);
     const observed_at = new Date(row.observed_at_unix * 1000).toISOString().replace(/\.\d{3}Z$/, "Z");
     snapshots.push({
       snapshot_index: row.snapshot_index,
+      summary_row: summaryRow,
       snapshot_id: `vitals.${observed_at}`,
       observed_at,
       octra_epoch: row.octra_epoch,
@@ -572,10 +595,22 @@ async function loadNativeProgramHistory(config=APP_CONFIG){
       row_count: count,
       row_len: 208,
       window_hash: windowHash,
+      response_rows_hash: windowHash,
+      proof: {
+        proof_status: "summary_window_verified",
+        proof_scope: "summary_window",
+        truncated: true,
+        eras: [],
+        families: [],
+        capsules: []
+      },
       snapshots,
       authority: {
         source: target.kind === "circle_program" ? "vitals_circle_program_history" : "vitals_state_program_history",
         canonical_state_read: true,
+        self_consistency_verified: true,
+        authenticity_verified: true,
+        trust_boundary: "octra_native_state",
         history_discovery: "aml_summary_window",
         state_target_mode: target.kind,
         state_program_address: target.kind === "state_program" ? target.id : null,
@@ -843,7 +878,7 @@ function adaptSnapshot(latestResult, versionResult, historyResult){
   const route = Array.isArray(payload.routes) && payload.routes[0] ? payload.routes[0] : {};
   const version = versionResult?.body || {};
   const authority = body.authority || version.authority || {};
-  if(sampleFallback || body.source !== "program" || authority.canonical_state_read !== true || authority.client_verified !== true){
+  if(sampleFallback || body.source !== "program" || authority.canonical_state_read !== true || authority.self_consistency_verified !== true){
     throw new Error("latest snapshot is not canonical AML program state");
   }
   if(body.fresh === false){
@@ -851,7 +886,7 @@ function adaptSnapshot(latestResult, versionResult, historyResult){
   }
   const historyRead = historyAuthority.history_read || {};
   const historyCanonical = historyAuthority.canonical_state_read === true;
-  const historyVerified = historyCanonical || historyRead.usable_for_display === true;
+  const historyVerified = historyAuthority.self_consistency_verified === true && (historyCanonical || historyRead.usable_for_display === true);
   const currentStateTargetMode = authority.state_target_mode || version.state_target_mode || body.native_readiness?.state_target_mode || "state_program";
   const programRef = currentStateTargetMode === "circle_program"
     ? pickText(authority.programmed_circle_id, version.programmed_circle_id, body.native_readiness?.state_target_id)
@@ -954,8 +989,10 @@ function adaptSnapshot(latestResult, versionResult, historyResult){
       version_url: versionResult?.url || null,
       history_url: historyResult?.url || null,
       fresh: sampleFallback ? false : body.fresh !== false,
-      canonical_state_read: !sampleFallback && authority.canonical_state_read === true && authority.client_verified === true,
-      client_verified: !sampleFallback && authority.client_verified === true,
+      canonical_state_read: !sampleFallback && authority.canonical_state_read === true,
+      self_consistency_verified: !sampleFallback && authority.self_consistency_verified === true,
+      authenticity_verified: !sampleFallback && authority.authenticity_verified === true,
+      trust_boundary: authority.trust_boundary || null,
       history_canonical: historyCanonical,
       history_verified: historyVerified,
       history_source: historyAuthority.source || null,
@@ -1006,14 +1043,76 @@ async function loadInitialData(){
 async function loadCanonicalHistory(versionResult, windowName=DEFAULT_HISTORY_WINDOW){
   if(versionResult?.body || APP_CONFIG?.state_program_address){
     try{
-      return await loadNativeProgramHistory(versionResult?.body || APP_CONFIG);
+      const result = await loadNativeProgramHistory(versionResult?.body || APP_CONFIG);
+      try{
+        await verifyHistoryResult(result);
+      }catch(error){
+        throw new Error(`native history verification failed: ${String(error?.message || error)}`);
+      }
+      return result;
     }catch(error){
+      if(isNativeVerificationFailure(error)) throw error;
       console.warn("[Octra Vitals] direct Octra history read unavailable; falling back to gateway", error);
     }
   }
-  return fetchFirst(endpointCandidates(historyApiPath(windowName), null, {
+  const result = await fetchFirst(endpointCandidates(historyApiPath(windowName), null, {
     gatewayOrigin: configuredGatewayOrigin(versionResult?.body || APP_CONFIG)
   }));
+  await verifyHistoryResult(result);
+  return result;
+}
+
+async function verifyHistoryResult(historyResult){
+  const body = historyResult?.body || {};
+  const authority = body.authority || {};
+  const usable = authority.canonical_state_read === true || authority.history_read?.usable_for_display === true;
+  if(!usable) throw new Error("history is not backed by a verified state read");
+  if(!Array.isArray(body.snapshots)) throw new Error("history snapshots are missing");
+  if(!Number.isSafeInteger(Number(body.row_count)) || Number(body.row_count) !== body.snapshots.length) throw new Error("history row count mismatch");
+  if(Number(body.row_len) !== 208) throw new Error("history row length is invalid");
+  let previousIndex = null;
+  const encodedRows = [];
+  for(const [index, snapshot] of body.snapshots.entries()){
+    const rowText = snapshot?.summary_row;
+    const row = parseSummaryRow(rowText);
+    const observedMs = globalThis.OctraVitalsVerifier.canonicalUtcSecond(snapshot.observed_at, `history snapshot ${index} observed_at`);
+    requireEqual(`history ${index} snapshot id`, snapshot.snapshot_id, `vitals.${snapshot.observed_at}`);
+    requireEqual(`history ${index} index`, row.snapshot_index, Number(snapshot.snapshot_index));
+    requireEqual(`history ${index} observed`, row.observed_at_unix, Math.floor(observedMs / 1000));
+    requireEqual(`history ${index} epoch`, row.octra_epoch, Number(snapshot.octra_epoch));
+    requireEqual(`history ${index} block`, row.external_block, Number(snapshot.external_block));
+    requireEqual(`history ${index} issued`, row.issued_raw, rawText(snapshot.supply?.issued_oct_raw));
+    requireEqual(`history ${index} burned`, row.burned_raw, rawText(snapshot.supply?.confirmed_burned_oct_raw || snapshot.supply?.burned_oct_raw));
+    requireEqual(`history ${index} encrypted`, row.encrypted_raw, rawText(snapshot.supply?.encrypted_oct_raw));
+    requireEqual(`history ${index} locked`, row.total_locked_raw, rawText(snapshot.bridge?.total_locked_oct_raw));
+    requireEqual(`history ${index} wrapped`, row.total_wrapped_raw, rawText(snapshot.bridge?.woct_supply_raw));
+    requireEqual(`history ${index} unclaimed`, row.total_unclaimed_raw, rawText(snapshot.bridge?.unclaimed_oct_raw));
+    requireEqual(`history ${index} route count`, row.route_count, Number(snapshot.route_count));
+    requireEqual(`history ${index} payload prefix`, row.payload_hash_prefix, snapshot.payload_hash_prefix);
+    if(previousIndex !== null && row.snapshot_index <= previousIndex) throw new Error("history snapshot indexes are not increasing");
+    previousIndex = row.snapshot_index;
+    encodedRows.push(rowText);
+  }
+  const responseRowsHash = await sha256TaggedBrowser("octra-vitals:summary-window:v0", encodedRows.join(""));
+  requireEqual("history response rows hash", responseRowsHash, body.response_rows_hash);
+  const proof = body.proof;
+  if(!proof || !["fact_family_verified", "latest_summary_anchor_verified", "summary_window_verified"].includes(proof.proof_status)){
+    throw new Error("history proof metadata is unavailable");
+  }
+  if(!["full_chain", "tail_window", "summary_window", "latest_row_anchor"].includes(proof.proof_scope)){
+    throw new Error("history proof scope is invalid");
+  }
+  if(typeof proof.truncated !== "boolean" || !Array.isArray(proof.eras) || !Array.isArray(proof.families) || !Array.isArray(proof.capsules)){
+    throw new Error("history proof metadata is malformed");
+  }
+  const nativeRead = String(historyResult?.url || "").startsWith("octra-native:");
+  body.authority = {
+    ...authority,
+    self_consistency_verified: true,
+    authenticity_verified: nativeRead && authority.authenticity_verified === true,
+    trust_boundary: nativeRead ? "octra_native_state" : "https_origin"
+  };
+  return historyResult;
 }
 
 function accounting(d){
@@ -1115,7 +1214,9 @@ function snapshotStatusText(){
   const signed = A.health?.conservation || null;
   const cross = conservationCrossCheck(signed);
   const status = !signed ? "red" : cross.ok ? signed.status : "red";
-  const proof = A.source?.canonical_state_read && A.source?.client_verified ? "browser-verified program" : "program unavailable";
+  const proof = A.source?.authenticity_verified
+    ? "Octra-native verified"
+    : A.source?.self_consistency_verified ? "HTTPS response verified" : "program unavailable";
   const readback = A.source?.fresh === false ? "stale" : "fresh";
   const parts = [healthStatusText(status).toLowerCase(), "signed", readback, proof];
   if(!cross.ok) parts.push("browser arithmetic mismatch");

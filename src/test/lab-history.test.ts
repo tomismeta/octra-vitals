@@ -530,6 +530,9 @@ test("lab mirror history read planner stays bounded to the missing gap", async (
     assert.deepEqual(historyReadOptionsForGap(300, 1), { maxSealedCapsules: 4 });
     assert.deepEqual(historyReadOptionsForGap(300, 299), { maxSealedCapsules: 3 });
   });
+  await withEnv({ VITALS_LAB_HISTORY_SYNC_TAIL_ROWS: "NaN" }, async () => {
+    assert.throws(() => historyReadOptionsForGap(300, 299), /must be an integer/);
+  });
 });
 
 test("core snapshot updater does not depend on the optional Lab mirror", async () => {
