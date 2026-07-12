@@ -546,7 +546,8 @@ async function fetchOctraBatch(observedAt: string): Promise<{
       throw new Error("Octra observation providers disagreed on fenced critical state");
     }
   }
-  const normalized = successful.map((value, providerIndex) => {
+  const retained = successful.slice(0, minimum);
+  const normalized = retained.map((value, providerIndex) => {
     const suffix = providerIndex === 0 ? "" : `.provider_${providerIndex + 1}`;
     return {
       ...value,
@@ -805,7 +806,8 @@ async function fetchEthereumWoct(observedAt: string): Promise<{ blockNumber: str
       candidate.woctDecimals !== primary.woctDecimals
     ) throw new Error("Ethereum observation providers disagreed on pinned wOCT state");
   }
-  const normalized = successful.map((value, providerIndex) => {
+  const retained = successful.slice(0, minimum);
+  const normalized = retained.map((value, providerIndex) => {
     const suffix = providerIndex === 0 ? "" : `.provider_${providerIndex + 1}`;
     return {
       ...value,
