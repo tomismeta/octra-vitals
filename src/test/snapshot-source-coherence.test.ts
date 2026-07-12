@@ -14,7 +14,7 @@ test("live snapshot collection fences Octra and Ethereum source state", async ()
     txid_hi: "123",
     network_version: "testnet",
     validator: "oct11111111111111111111111111111111111111111111",
-    timestamp: "1783700000"
+    timestamp: 1783700000.504342
   };
   globalThis.fetch = (async (input: string | URL | Request, init?: RequestInit) => {
     const url = String(input);
@@ -56,6 +56,7 @@ test("live snapshot collection fences Octra and Ethereum source state", async ()
     const observedAt = new Date().toISOString().replace(/\.\d{3}Z$/, "Z");
     const snapshot = await buildLiveSnapshot({ observedAt });
     assert.equal(snapshot.envelope.payload.octra.epoch, 100);
+    assert.equal(snapshot.envelope.payload.octra.timestamp, "1783700000.504342");
     assert.equal(snapshot.envelope.payload.ethereum?.block_hash, `0x${"a".repeat(64)}`);
     assert.equal(snapshot.envelope.payload.bridge.woct_supply_raw, "40");
     assert.ok(snapshot.evidence_manifest.entries.some((entry) => entry.id === "octra.status_after"));

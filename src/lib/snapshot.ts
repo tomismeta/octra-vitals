@@ -247,6 +247,14 @@ function requiredSafeInteger(value: unknown, label: string): number {
   return parsed;
 }
 
+function requiredNonNegativeFiniteNumber(value: unknown, label: string): number {
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed) || parsed < 0 || parsed > Number.MAX_SAFE_INTEGER) {
+    throw new Error(`${label} must be a non-negative finite number`);
+  }
+  return parsed;
+}
+
 function requiredUnsignedRaw(value: unknown, label: string): string {
   const text = String(value ?? "");
   if (!/^\d+$/.test(text)) throw new Error(`${label} must be unsigned decimal digits`);
@@ -416,7 +424,7 @@ function validatedOctraStatus(value: OctraStatus, label: string): OctraStatus {
     network_version: requiredText(value?.network_version, `${label}.network_version`),
     validator: requiredText(value?.validator, `${label}.validator`),
     timestamp: typeof value?.timestamp === "number"
-      ? requiredSafeInteger(value.timestamp, `${label}.timestamp`)
+      ? requiredNonNegativeFiniteNumber(value.timestamp, `${label}.timestamp`)
       : requiredText(value?.timestamp, `${label}.timestamp`)
   };
 }
