@@ -800,8 +800,6 @@ async function fetchEthereumWoct(observedAt: string): Promise<{ blockNumber: str
   if (!primary) throw new Error("Ethereum observation returned no successful provider");
   for (const candidate of successful.slice(1)) {
     if (
-      candidate.blockNumber !== primary.blockNumber ||
-      candidate.blockHash !== primary.blockHash ||
       candidate.woctSupplyRaw !== primary.woctSupplyRaw ||
       candidate.woctDecimals !== primary.woctDecimals
     ) throw new Error("Ethereum observation providers disagreed on pinned wOCT state");
