@@ -3,7 +3,7 @@ import { createHash } from "node:crypto";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { dirname, join, resolve } from "node:path";
 import { contractReceipt, feeTelemetry, isExplicitDevelopmentRpcUrl, octraProgramRpcUrl, octraProgramRpcUrls, octraRpc, recommendedOu, rpcUrlLabel } from "../lib/octra-rpc.js";
-import { loadWalletFromEnv, publicTransactionJson, signTransaction, transactionHash, type OctraTransaction, type OperatorWallet } from "../lib/octra-transaction.js";
+import { loadWalletFromEnv, publicTransactionJson, signTransaction, submittedTransactionHash, transactionHash, type OctraTransaction, type OperatorWallet } from "../lib/octra-transaction.js";
 import { sha256Hex } from "../lib/canonical-json.js";
 import { assertAmlCompileApproved, readApprovedAmlRelease, validateAmlCompile, type AmlCompileResult } from "../lib/aml-artifacts.js";
 import { assertDistinctProductionRoles, parseFactLedgerLatestBundle } from "../lib/fact-ledger-deployment.js";
@@ -225,7 +225,9 @@ async function submitTx(
   const signed = signTransaction(tx, wallet);
   const localTxHash = transactionHash(signed);
   await onPrepared({
+    prepared_tx_hash: localTxHash,
     tx_hash: localTxHash,
+    hash_source: "prepared_transaction",
     nonce: tx.nonce,
     op_type: tx.op_type,
     to: tx.to_,
@@ -233,15 +235,12 @@ async function submitTx(
   });
   const txJson = publicTransactionJson(signed);
   const submitResult = await octraRpc<any>("octra_submit", [txJson]);
-  const reportedTxHash = submitResult?.tx_hash || submitResult?.hash;
-  if (reportedTxHash) {
-    const normalized = String(reportedTxHash).replace(/^sha256:/, "").toLowerCase();
-    if (!/^[0-9a-f]{64}$/.test(normalized) || normalized !== localTxHash) {
-      throw new Error("programmed-Circle deploy RPC returned a transaction hash that does not match the signed transaction");
-    }
-  }
+  const { txHash, returnedTxHash, hashSource } = submittedTransactionHash(submitResult, localTxHash);
   return {
-    tx_hash: localTxHash,
+    prepared_tx_hash: localTxHash,
+    tx_hash: txHash,
+    returned_tx_hash: returnedTxHash,
+    hash_source: hashSource,
     submit_result: submitResult
   };
 }

@@ -4,7 +4,7 @@ import { mkdir, readFile, stat, writeFile } from "node:fs/promises";
 import { dirname, extname, join, resolve } from "node:path";
 import { verifyCircleAssetIntegrity } from "../lib/circle-asset-integrity.js";
 import { feeTelemetry, isExplicitDevelopmentRpcUrl, octraProgramRpcUrl, octraRpc } from "../lib/octra-rpc.js";
-import { loadWalletFromEnv, publicTransactionJson, signTransaction, transactionHash, type OctraTransaction } from "../lib/octra-transaction.js";
+import { loadWalletFromEnv, publicTransactionJson, signTransaction, submittedTransactionHash, transactionHash, type OctraTransaction } from "../lib/octra-transaction.js";
 import { runtimeVitalsManifest, stableJson } from "../lib/vitals-manifest.js";
 
 const BASE58_ALPHABET = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz";
@@ -166,15 +166,21 @@ async function submitCall(
   onPrepared: (prepared: Record<string, unknown>) => Promise<void>
 ) {
   const { txJson, txHash } = signedSubmission(wallet, tx);
-  await onPrepared({ tx_hash: txHash, nonce: tx.nonce, op_type: tx.op_type, to: tx.to_ });
-  const submitResult = await octraRpc<any>("octra_submit", [txJson]);
-  const rawReturnedHash = submitResult?.tx_hash || submitResult?.hash;
-  const returnedHash = normalizeTransactionHash(rawReturnedHash);
-  if (rawReturnedHash && returnedHash !== txHash) {
-    throw new Error("Site Circle RPC returned a transaction hash that does not match the signed transaction");
-  }
-  return {
+  await onPrepared({
+    prepared_tx_hash: txHash,
     tx_hash: txHash,
+    hash_source: "prepared_transaction",
+    nonce: tx.nonce,
+    op_type: tx.op_type,
+    to: tx.to_
+  });
+  const submitResult = await octraRpc<any>("octra_submit", [txJson]);
+  const { txHash: chainTxHash, returnedTxHash, hashSource } = submittedTransactionHash(submitResult, txHash);
+  return {
+    prepared_tx_hash: txHash,
+    tx_hash: chainTxHash,
+    returned_tx_hash: returnedTxHash,
+    hash_source: hashSource,
     submit_result: submitResult
   };
 }
@@ -275,6 +281,7 @@ interface PreparedAssetTx {
   nonce: number;
   ou: string;
   op_type: string;
+  prepared_tx_hash: string;
   tx_hash: string;
   tx_json: Record<string, unknown>;
 }
@@ -331,18 +338,17 @@ function validateBatchSubmitResult(batchSubmitResult: unknown, assetTxs: Prepare
       errors.push(`batch result ${index} for ${asset.path} was not accepted`);
     }
     const normalizedReturnedHash = normalizeTransactionHash(returnedHash);
-    if (returnedHash && normalizedReturnedHash !== asset.tx_hash) {
-      errors.push(`batch result ${index} for ${asset.path} returned a mismatched transaction hash`);
-    }
+    if (returnedHash && !normalizedReturnedHash) errors.push(`batch result ${index} for ${asset.path} returned a malformed transaction hash`);
+    const txHash = normalizedReturnedHash || asset.tx_hash;
     return {
       path: asset.path,
       nonce: asset.nonce,
-      prepared_tx_hash: asset.tx_hash,
-      tx_hash: asset.tx_hash,
+      prepared_tx_hash: asset.prepared_tx_hash,
+      tx_hash: txHash,
       batch_result_index: index,
       status,
       returned_tx_hash: returnedHash,
-      hash_source: "prepared_transaction",
+      hash_source: normalizedReturnedHash ? "rpc" : "prepared_transaction",
       accepted: acceptedResult
     };
   });
@@ -755,6 +761,7 @@ if (!deployEnabled) {
       nonce,
       ou: asset.ou,
       op_type: tx.op_type,
+      prepared_tx_hash: signed.txHash,
       tx_hash: signed.txHash,
       tx_json: signed.txJson
     };
@@ -795,8 +802,10 @@ if (!deployEnabled) {
         nonce: asset.nonce,
         ou: asset.ou,
         op_type: asset.op_type,
-        prepared_tx_hash: asset.tx_hash,
+        prepared_tx_hash: asset.prepared_tx_hash,
         tx_hash: txHash,
+        returned_tx_hash: perAssetValidation?.returned_tx_hash || null,
+        hash_source: perAssetValidation?.hash_source || "prepared_transaction",
         submit_result: results[index] || batchSubmitResult,
         batch_result_index: index,
         batch_validation: perAssetValidation,
@@ -806,18 +815,17 @@ if (!deployEnabled) {
   } else {
     for (const asset of assetTxs) {
       const submitResult = await octraRpc<any>("octra_submit", [asset.tx_json]);
-      const returnedHash = normalizeTransactionHash(submitResult?.tx_hash || submitResult?.hash);
-      if ((submitResult?.tx_hash || submitResult?.hash) && returnedHash !== asset.tx_hash) {
-        throw new Error(`asset upload ${asset.path} returned a mismatched transaction hash`);
-      }
-      const txHash = asset.tx_hash;
+      const { txHash, returnedTxHash, hashSource } = submittedTransactionHash(submitResult, asset.tx_hash);
       const confirmation = await requireConfirmed(txHash, `asset upload ${asset.path}`);
       assetSubmissions.push({
         path: asset.path,
         nonce: asset.nonce,
         ou: asset.ou,
         op_type: asset.op_type,
+        prepared_tx_hash: asset.prepared_tx_hash,
         tx_hash: txHash,
+        returned_tx_hash: returnedTxHash,
+        hash_source: hashSource,
         submit_result: submitResult,
         tx: txSummary(confirmation)
       });

@@ -5,7 +5,7 @@ import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { circleProgramViewAtUrl, configuredProgrammedCircleId, stateTargetMode, type StateTargetMode } from "../lib/circle-program.js";
 import { contractCall, contractCallAtUrl, contractReceipt, feeTelemetry, octraProgramRpcUrls, octraRpc, recommendedOu, rpcUrlLabel } from "../lib/octra-rpc.js";
-import { loadOperatorWalletFromEnv, publicTransactionJson, signTransaction, transactionHash, type OctraTransaction } from "../lib/octra-transaction.js";
+import { loadOperatorWalletFromEnv, publicTransactionJson, signTransaction, submittedTransactionHash, transactionHash, type OctraTransaction } from "../lib/octra-transaction.js";
 import {
   decodeHistoryV1CapsuleMeta,
   historyV1CapsuleBodyHashHex,
@@ -1401,26 +1401,24 @@ export async function submitSnapshotCall(
         snapshot_index: call.snapshot_index || null,
         method: spec.method,
         nonce: tx.nonce,
+        prepared_tx_hash: precomputedTxHash,
         tx_hash: precomputedTxHash,
+        hash_source: "prepared_transaction",
         expected_hashes: call.expected_hashes
       });
     }
     const txJson = publicTransactionJson(signed);
     const submitResult = await octraRpc<any>("octra_submit", [txJson]);
-    const reportedTxHash = submitResult?.tx_hash || submitResult?.hash;
-    if (reportedTxHash) {
-      const normalized = String(reportedTxHash).replace(/^sha256:/, "").toLowerCase();
-      if (!/^[0-9a-f]{64}$/.test(normalized) || normalized !== precomputedTxHash) {
-        throw new Error("snapshot submit RPC returned a transaction hash that does not match the signed transaction");
-      }
-    }
-    const txHash = precomputedTxHash;
+    const { txHash, returnedTxHash, hashSource } = submittedTransactionHash(submitResult, precomputedTxHash);
     submissions.push({
       label: spec.label,
       method: spec.method,
       nonce: tx.nonce,
       tx_hash: txHash,
+      prepared_tx_hash: precomputedTxHash,
       precomputed_tx_hash: precomputedTxHash,
+      returned_tx_hash: returnedTxHash,
+      hash_source: hashSource,
       submit_result: submitResult
     });
   }

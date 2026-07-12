@@ -10,7 +10,7 @@ import {
 } from "../lib/aml-artifacts.js";
 import { circleProgramViewAtUrl } from "../lib/circle-program.js";
 import { circleProgramInfoAtUrl, isExplicitDevelopmentRpcUrl, octraProgramRpcUrls, octraRpc, recommendedOu, rpcUrlLabel } from "../lib/octra-rpc.js";
-import { loadWalletFromEnv, publicTransactionJson, signTransaction, transactionHash, type OctraTransaction, type OperatorWallet } from "../lib/octra-transaction.js";
+import { loadWalletFromEnv, publicTransactionJson, signTransaction, submittedTransactionHash, transactionHash, type OctraTransaction, type OperatorWallet } from "../lib/octra-transaction.js";
 import { writeJsonAtomic } from "./submit-snapshot.js";
 
 const root = resolve(new URL("../..", import.meta.url).pathname);
@@ -120,22 +120,21 @@ async function submitUpdate(
   const signed = signTransaction(tx, wallet);
   const localTxHash = transactionHash(signed);
   const prepared = {
+    prepared_tx_hash: localTxHash,
     tx_hash: localTxHash,
+    hash_source: "prepared_transaction",
     nonce,
     ou,
     confirmation_status: "prepared"
   };
   onPrepared(prepared);
   const submitResult = await octraRpc<any>("octra_submit", [publicTransactionJson(signed)]);
-  const reportedTxHash = submitResult?.tx_hash || submitResult?.hash;
-  if (reportedTxHash) {
-    const normalized = String(reportedTxHash).replace(/^sha256:/, "").toLowerCase();
-    if (!/^[0-9a-f]{64}$/.test(normalized) || normalized !== localTxHash) {
-      throw new Error("programmed-Circle update RPC returned a transaction hash that does not match the signed transaction");
-    }
-  }
+  const { txHash, returnedTxHash, hashSource } = submittedTransactionHash(submitResult, localTxHash);
   return {
     ...prepared,
+    tx_hash: txHash,
+    returned_tx_hash: returnedTxHash,
+    hash_source: hashSource,
     submit_result: submitResult,
     confirmation_status: "submitted"
   };
