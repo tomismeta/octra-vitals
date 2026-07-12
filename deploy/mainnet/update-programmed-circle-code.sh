@@ -53,6 +53,8 @@ write_selected_env_file "${UPDATE_ENV}" \
   VITALS_DEPLOYER_ADDRESS VITALS_DEPLOYER_PRIVATE_KEY_B64 \
   VITALS_PROGRAM_UPDATE_PREVIOUS_COMPILE_ARTIFACT VITALS_PROGRAM_UPDATE_COMPATIBILITY_ACK \
   VITALS_PROGRAM_UPDATE_OU VITALS_CIRCLE_PROGRAM_UPDATE_OU
+chown "${APP_OWNER_USER}:${APP_OWNER_USER}" "${UPDATE_ENV}"
+chmod 600 "${UPDATE_ENV}"
 
 sudo -u "${APP_OWNER_USER}" env -i \
   PATH="/usr/local/bin:/usr/bin:/bin" \
@@ -61,8 +63,8 @@ sudo -u "${APP_OWNER_USER}" env -i \
   set -euo pipefail
   cd "$1"
   . deploy/lib/env-file.sh
-  load_env_file_data /dev/stdin
+  load_env_file_data "$3"
   export VITALS_PROGRAMMED_CIRCLE_UPDATE_OUT="$2"
   umask 077
   node dist/scripts/update-programmed-circle-code.js
-' bash "${CURRENT}" "${REPORT}" < "${UPDATE_ENV}"
+' bash "${CURRENT}" "${REPORT}" "${UPDATE_ENV}"

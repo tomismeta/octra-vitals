@@ -71,6 +71,8 @@ write_selected_env_file "${DEPLOY_ENV}" \
   VITALS_PROGRAMMED_CIRCLE_SOURCE VITALS_ALLOW_PROGRAMMED_CIRCLE_ARTIFACT_DRIFT \
   VITALS_DEPLOY_CIRCLE_OU VITALS_PROGRAM_UPDATE_OU VITALS_CIRCLE_PROGRAM_UPDATE_OU \
   VITALS_INITIALIZE_CALL_OU VITALS_CALL_OU
+chown "${APP_OWNER_USER}:${APP_OWNER_USER}" "${DEPLOY_ENV}"
+chmod 600 "${DEPLOY_ENV}"
 
 sudo -u "${APP_OWNER_USER}" env -i \
   PATH="/usr/local/bin:/usr/bin:/bin" \
@@ -79,7 +81,7 @@ sudo -u "${APP_OWNER_USER}" env -i \
   set -euo pipefail
   cd "$1"
   . deploy/lib/env-file.sh
-  load_env_file_data /dev/stdin
+  load_env_file_data "$3"
   umask 077
   node dist/scripts/deploy-programmed-circle.js "$2"
-' bash "${CURRENT}" "${REPORT}" < "${DEPLOY_ENV}"
+' bash "${CURRENT}" "${REPORT}" "${DEPLOY_ENV}"
