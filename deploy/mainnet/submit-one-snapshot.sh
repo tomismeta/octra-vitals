@@ -30,7 +30,7 @@ cd "${CURRENT}"
 
 SUBMIT_ENV="$(mktemp)"
 cp "${ENV_DIR}/updater.env" "${SUBMIT_ENV}"
-chown "${APP_OPERATOR_USER}:${APP_OPERATOR_USER}" "${SUBMIT_ENV}"
+chown "${APP_OPERATOR_USER}" "${SUBMIT_ENV}"
 chmod 600 "${SUBMIT_ENV}"
 
 sudo -u "${APP_OPERATOR_USER}" env -i \
