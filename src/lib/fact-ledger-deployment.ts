@@ -7,14 +7,22 @@ export interface FactLedgerLatestBundle {
   catalog_root: string;
 }
 
-export function parseFactLedgerLatestBundle(value: unknown): FactLedgerLatestBundle {
+export interface FactLedgerLatestBundleParseOptions {
+  allowRootOnly?: boolean;
+}
+
+export function parseFactLedgerLatestBundle(value: unknown, options: FactLedgerLatestBundleParseOptions = {}): FactLedgerLatestBundle {
   if (typeof value !== "string") throw new Error("fact-ledger latest bundle must be a string");
   const fields = value.split("|");
   if (fields.length !== 6) throw new Error(`fact-ledger latest bundle had ${fields.length} fields`);
   const [indexText = "", snapshotId = "", payloadHash = "", historyRowHash = "", historyRoot = "", catalogRoot = ""] = fields;
   const snapshotIndex = Number(indexText);
   if (!Number.isSafeInteger(snapshotIndex) || snapshotIndex < 0) throw new Error("fact-ledger latest bundle index is invalid");
-  if (snapshotIndex > 0 && !/^vitals\.\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$/.test(snapshotId)) {
+  const rootOnlyBundle = snapshotIndex > 0 && snapshotId === "" && payloadHash === "" && historyRowHash === "";
+  if (snapshotIndex > 0 && !rootOnlyBundle && !/^vitals\.\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$/.test(snapshotId)) {
+    throw new Error("fact-ledger latest bundle snapshot id is invalid");
+  }
+  if (rootOnlyBundle && !options.allowRootOnly) {
     throw new Error("fact-ledger latest bundle snapshot id is invalid");
   }
   for (const [label, hash, tagged] of [
@@ -24,6 +32,7 @@ export function parseFactLedgerLatestBundle(value: unknown): FactLedgerLatestBun
     ["catalog root", catalogRoot, false]
   ] as const) {
     if (snapshotIndex === 0 && hash === "") continue;
+    if (rootOnlyBundle && (label === "payload hash" || label === "history row hash")) continue;
     const pattern = tagged ? /^sha256:[0-9a-f]{64}$/ : /^[0-9a-f]{64}$/;
     if (!pattern.test(hash)) throw new Error(`fact-ledger latest bundle ${label} is invalid`);
   }

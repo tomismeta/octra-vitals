@@ -932,7 +932,9 @@ async function readCircleProgramSummaryHistoryFromUrlFactLedger(circleId: string
   if (latestBundleBefore !== latestBundleAfter) {
     throw new Error(`fact-ledger history advanced during fenced read from ${rpcUrlLabel(url)}`);
   }
-  const latestBundle = parseFactLedgerLatestBundle(latestBundleAfter);
+  const latestBundle = parseFactLedgerLatestBundle(latestBundleAfter, {
+    allowRootOnly: history.row_count === 0 && Boolean(predecessorProgram)
+  });
   if (latestBundle.history_root !== familyRoot || latestBundle.catalog_root !== catalogRoot) {
     throw new Error(`fact-ledger history roots did not match latest bundle from ${rpcUrlLabel(url)}`);
   }

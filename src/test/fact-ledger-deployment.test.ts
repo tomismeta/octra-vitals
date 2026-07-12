@@ -10,6 +10,19 @@ test("fact-ledger latest bundle parsing is strict", () => {
   assert.throws(() => parseFactLedgerLatestBundle(value.replace(/^12\|/, "bad|")), /index/);
 });
 
+test("fact-ledger latest bundle parser gates legacy root-only anchors", () => {
+  const value = `23||||${"c".repeat(64)}|${"d".repeat(64)}`;
+  assert.throws(() => parseFactLedgerLatestBundle(value), /snapshot id/);
+
+  const parsed = parseFactLedgerLatestBundle(value, { allowRootOnly: true });
+  assert.equal(parsed.snapshot_index, 23);
+  assert.equal(parsed.snapshot_id, "");
+  assert.equal(parsed.payload_hash, "");
+  assert.equal(parsed.history_row_hash, "");
+  assert.equal(parsed.history_root, "c".repeat(64));
+  assert.equal(parsed.catalog_root, "d".repeat(64));
+});
+
 test("production owner/operator collapse requires an exact break-glass acknowledgement", () => {
   const old = process.env.VITALS_BREAK_GLASS_ROLE_COLLAPSE_ACK;
   delete process.env.VITALS_BREAK_GLASS_ROLE_COLLAPSE_ACK;
