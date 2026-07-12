@@ -336,6 +336,12 @@ function requiredAddress(value: unknown, label: string): string {
   return text;
 }
 
+function requiredSafeIndex(value: unknown, label: string): number {
+  const parsed = Number(value);
+  if (!Number.isSafeInteger(parsed) || parsed < 0) throw new Error(`${label} is invalid`);
+  return parsed;
+}
+
 async function resolveFactLedgerPredecessor(callerAddress: string, nextCircleId: string) {
   const zeroRoot = "0".repeat(64);
   const configuredPredecessor =
@@ -366,21 +372,41 @@ async function resolveFactLedgerPredecessor(callerAddress: string, nextCircleId:
 
   const reads = await Promise.all(octraProgramRpcUrls().map(async (url) => {
     const beforeText = String(await circleViewAtUrl(url, predecessorAddress, "get_latest_bundle", callerAddress));
-    const [count, historyRoot, paused, successorSet] = await Promise.all([
+    const [manifest, count, paused, successorSet] = await Promise.all([
+      circleViewAtUrl(url, predecessorAddress, "manifest", callerAddress).catch(() => ""),
       circleViewAtUrl(url, predecessorAddress, "get_snapshot_count", callerAddress),
-      circleViewAtUrl(url, predecessorAddress, "get_history_root", callerAddress),
-      circleViewAtUrl(url, predecessorAddress, "is_paused", callerAddress),
-      circleViewAtUrl(url, predecessorAddress, "is_successor_set", callerAddress)
+      circleViewAtUrl(url, predecessorAddress, "is_paused", callerAddress).catch(() => false),
+      circleViewAtUrl(url, predecessorAddress, "is_successor_set", callerAddress).catch(() => false)
     ]);
+    const countNumber = requiredSafeIndex(count, "predecessor snapshot count");
     const afterText = String(await circleViewAtUrl(url, predecessorAddress, "get_latest_bundle", callerAddress));
     if (beforeText !== afterText) throw new Error(`predecessor advanced during fenced read from ${rpcUrlLabel(url)}`);
-    const bundle = parseFactLedgerLatestBundle(afterText);
-    if (Number(count) !== bundle.snapshot_index) throw new Error(`predecessor snapshot count mismatch from ${rpcUrlLabel(url)}`);
-    if (requiredHex64(historyRoot, "predecessor history root") !== bundle.history_root) {
-      throw new Error(`predecessor history root mismatch from ${rpcUrlLabel(url)}`);
+    let bundle;
+    if (manifest === "vitals-circle-state.v0") {
+      const legacyBundleIndex = requiredSafeIndex(afterText.split("|")[0], "v0 predecessor latest bundle index");
+      if (legacyBundleIndex !== countNumber) {
+        throw new Error(`v0 predecessor snapshot count mismatch from ${rpcUrlLabel(url)}`);
+      }
+      const summaryWindowHash = await circleViewAtUrl(url, predecessorAddress, "get_recent_summary_window_hash", callerAddress);
+      bundle = {
+        snapshot_index: countNumber,
+        snapshot_id: "",
+        payload_hash: "",
+        history_row_hash: "",
+        history_root: requiredHex64(summaryWindowHash, "v0 predecessor summary window hash"),
+        catalog_root: ""
+      };
+    } else {
+      bundle = parseFactLedgerLatestBundle(afterText, { allowRootOnly: true });
+      const historyRoot = await circleViewAtUrl(url, predecessorAddress, "get_history_root", callerAddress);
+      if (countNumber !== bundle.snapshot_index) throw new Error(`predecessor snapshot count mismatch from ${rpcUrlLabel(url)}`);
+      if (requiredHex64(historyRoot, "predecessor history root") !== bundle.history_root) {
+        throw new Error(`predecessor history root mismatch from ${rpcUrlLabel(url)}`);
+      }
     }
     return {
       url,
+      manifest,
       bundle,
       frozen: paused === true || paused === "true" || successorSet === true || successorSet === "true"
     };
@@ -388,7 +414,7 @@ async function resolveFactLedgerPredecessor(callerAddress: string, nextCircleId:
   const primary = reads[0];
   if (!primary) throw new Error("no predecessor RPC URL configured");
   for (const candidate of reads.slice(1)) {
-    if (JSON.stringify(candidate.bundle) !== JSON.stringify(primary.bundle) || candidate.frozen !== primary.frozen) {
+    if (candidate.manifest !== primary.manifest || JSON.stringify(candidate.bundle) !== JSON.stringify(primary.bundle) || candidate.frozen !== primary.frozen) {
       throw new Error(`predecessor RPC disagreement from ${rpcUrlLabel(candidate.url)}`);
     }
   }

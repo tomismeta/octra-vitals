@@ -803,13 +803,37 @@ async function readProgramSummaryHistoryFromUrl(programAddress: string, url: str
 }
 
 async function readCircleProgramSummaryHistoryFromUrlV0(circleId: string, url: string): Promise<ProgramHistoryWindow> {
-  const [window, windowHash, firstIndex, rowCount] = await Promise.all([
+  const [manifest, window, windowHash, firstIndex, rowCount] = await Promise.all([
+    circleProgramViewAtUrl<string>(url, circleId, "manifest").catch(() => "vitals-circle-state.v0"),
     circleProgramViewAtUrl<string>(url, circleId, "get_recent_summary_window"),
     circleProgramViewAtUrl<string>(url, circleId, "get_recent_summary_window_hash"),
     circleProgramViewAtUrl<number>(url, circleId, "get_recent_summary_window_first_index"),
     circleProgramViewAtUrl<number>(url, circleId, "get_recent_summary_window_row_count")
   ]);
-  return parseSummaryWindow(window || "", Number(firstIndex || 0), Number(rowCount || 0), windowHash);
+  const history = parseSummaryWindow(window || "", Number(firstIndex || 0), Number(rowCount || 0), windowHash);
+  const rootHash = hexRootOrNull(windowHash);
+  history.history_discovery = "aml_summary_window_verified";
+  if (rootHash) history.history_root = rootHash;
+  history.eras = [{
+    era_id: circleId,
+    era_program: circleId,
+    manifest: manifest || "vitals-circle-state.v0",
+    history_model: history.history_discovery,
+    first_index: historyFirstIndex(history),
+    latest_index: historyLatestIndex(history),
+    row_count: history.row_count,
+    root_hash: rootHash,
+    capsules_root: null,
+    proof_scope: "summary_window",
+    proof_truncated: true
+  }];
+  history.proof = {
+    scope: "summary_window",
+    truncated: true,
+    families: [],
+    capsules: []
+  };
+  return history;
 }
 
 async function readCircleProgramSummaryHistoryFromUrlV1(circleId: string, url: string): Promise<ProgramHistoryWindow> {
