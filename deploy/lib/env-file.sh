@@ -7,7 +7,7 @@ load_env_file_data() {
   local line key value line_number=0
   local seen_keys=$'\n'
 
-  if [ ! -r "${file}" ]; then
+  if [ "${file}" != "/dev/stdin" ] && [ ! -r "${file}" ]; then
     if [ "${required}" = "optional" ]; then
       return 0
     fi
