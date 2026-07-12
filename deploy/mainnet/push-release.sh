@@ -3,6 +3,7 @@ set -euo pipefail
 
 HOST="${1:?usage: deploy/mainnet/push-release.sh <host>}"
 APP_ROOT="${APP_ROOT:-/opt/octra-vitals}"
+DEPLOY_ENVIRONMENT="${DEPLOY_ENVIRONMENT:-mainnet}"
 RELEASE_ID="${RELEASE_ID:-$(date -u +%Y%m%dT%H%M%SZ)}"
 REMOTE_TMP="/tmp/octra-vitals-release-${RELEASE_ID}"
 REMOTE_RELEASE="${APP_ROOT}/releases/${RELEASE_ID}"
@@ -49,7 +50,7 @@ if [ -s "${PREVIOUS_COMPILE_ARTIFACT}" ]; then
   rsync -az "${PREVIOUS_COMPILE_ARTIFACT}" "${HOST}:${REMOTE_TMP}/build/${PROGRAM_ARTIFACT_DIR}/previous-approved-compile.json"
 fi
 
-ssh "${HOST}" "REMOTE_TMP=$(quote "${REMOTE_TMP}") REMOTE_RELEASE=$(quote "${REMOTE_RELEASE}") APP_ROOT=$(quote "${APP_ROOT}") VITALS_RELEASE_GIT_COMMIT=$(quote "${RELEASE_GIT_COMMIT}") VITALS_RELEASE_GIT_DIRTY=$(quote "${RELEASE_GIT_DIRTY}") bash -se" <<'REMOTE'
+ssh "${HOST}" "REMOTE_TMP=$(quote "${REMOTE_TMP}") REMOTE_RELEASE=$(quote "${REMOTE_RELEASE}") APP_ROOT=$(quote "${APP_ROOT}") DEPLOY_ENVIRONMENT=$(quote "${DEPLOY_ENVIRONMENT}") VITALS_RELEASE_GIT_COMMIT=$(quote "${RELEASE_GIT_COMMIT}") VITALS_RELEASE_GIT_DIRTY=$(quote "${RELEASE_GIT_DIRTY}") bash -se" <<'REMOTE'
   set -euo pipefail
   cd "${REMOTE_TMP}"
   . deploy/lib/env-file.sh

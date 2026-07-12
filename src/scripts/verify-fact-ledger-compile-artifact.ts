@@ -7,6 +7,7 @@ import {
   validateAmlCompile,
   type AmlCompileResult
 } from "../lib/aml-artifacts.js";
+import { isExplicitDevelopmentRpcUrl } from "../lib/octra-rpc.js";
 
 const root = resolve(new URL("../..", import.meta.url).pathname);
 const artifactDir = process.env.VITALS_PROGRAMMED_CIRCLE_ARTIFACT_DIR || "program-fact-ledger";
@@ -38,8 +39,13 @@ if (raw.schema !== "octra-vitals-fact-ledger-program-compile-v2") {
 const urls = Array.isArray(raw.compiler_rpc_urls)
   ? raw.compiler_rpc_urls.filter((value): value is string => typeof value === "string" && value.length > 0)
   : [];
-const minimum = Number(process.env.VITALS_MIN_COMPILER_RPC_URLS || 2);
-if (!Number.isSafeInteger(minimum) || minimum < 2) throw new Error("promoted AML artifacts require at least two compiler RPCs");
+const deploymentEnvironment = String(process.env.DEPLOY_ENVIRONMENT || process.env.VITALS_DEPLOY_ENVIRONMENT || "mainnet").toLowerCase();
+const developmentPromotion = deploymentEnvironment !== "mainnet" && urls.length > 0 && urls.every(isExplicitDevelopmentRpcUrl);
+const defaultMinimum = developmentPromotion ? 1 : 2;
+const minimum = Number(process.env.VITALS_MIN_COMPILER_RPC_URLS || defaultMinimum);
+if (!Number.isSafeInteger(minimum) || minimum < defaultMinimum) {
+  throw new Error(`promoted AML artifacts require at least ${defaultMinimum} compiler RPC${defaultMinimum === 1 ? "" : "s"}`);
+}
 if (raw.compiler_rpc_agreement !== true || new Set(urls).size < minimum) {
   throw new Error(`promoted AML compile artifact does not prove ${minimum}-provider compiler agreement`);
 }

@@ -443,6 +443,17 @@
       ]
     },
     {
+      "name": "assert_core_row_shape",
+      "visibility": "private",
+      "direct_calls": [
+        "substr"
+      ],
+      "direct_writes": [],
+      "transitive_writes": [],
+      "value_writes": [],
+      "signed_params": []
+    },
+    {
       "name": "aux_fact_family_id",
       "visibility": "private",
       "direct_calls": [
@@ -608,7 +619,9 @@
         "assert_capsule_base_id",
         "capsule_id_for",
         "concat",
+        "family_capsule_key",
         "fold_family_root",
+        "is_empty_slot",
         "len",
         "seal_family_capsule"
       ],
@@ -656,7 +669,9 @@
         "assert_fact_row",
         "capsule_id_for",
         "concat",
+        "family_capsule_key",
         "fold_family_root",
+        "is_empty_slot",
         "require_family_registered",
         "schema_id_for_family",
         "seal_family_capsule"
@@ -1358,7 +1373,6 @@
         "latest_summary",
         "latest_summary_hash",
         "operator",
-        "owner",
         "paused",
         "predecessor_anchor_hash",
         "predecessor_final_index",
@@ -1407,7 +1421,6 @@
         "latest_summary",
         "latest_summary_hash",
         "operator",
-        "owner",
         "paused",
         "predecessor_anchor_hash",
         "predecessor_final_index",
@@ -1510,6 +1523,7 @@
         "append_core_fact_row",
         "assert_capsule_base_id",
         "assert_core_row_matches_summary",
+        "assert_core_row_shape",
         "assert_fact_row",
         "assert_observed_at",
         "capsule_base_id_for_observed_at",
@@ -1587,6 +1601,7 @@
         "append_fact_row",
         "assert_capsule_base_id",
         "assert_core_row_matches_summary",
+        "assert_core_row_shape",
         "assert_fact_row",
         "assert_observed_at",
         "aux_fact_family_id",
@@ -1684,6 +1699,7 @@
         "latest_source_refs_hash",
         "latest_summary",
         "latest_summary_hash",
+        "owner",
         "snapshot_count"
       ],
       "transitive_writes": [
@@ -1704,6 +1720,7 @@
         "latest_source_refs_hash",
         "latest_summary",
         "latest_summary_hash",
+        "owner",
         "snapshot_count"
       ],
       "value_writes": [],

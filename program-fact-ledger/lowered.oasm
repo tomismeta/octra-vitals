@@ -10,6 +10,8 @@ JDEST 10000
 LDI r2, "true"
 JDEST 10001
 SSTORE "initialized", r2
+CALLER r1
+SSTORE "owner", r1
 LDI r1, 0
 SSTORE "snapshot_count", r1
 LDI r1, 0
@@ -53,217 +55,217 @@ JDEST 100
 MLOAD r1, 1000
 LDI r2, "manifest"
 EQ r3, r1, r2
-JIF r3, 4100
+JIF r3, 4200
 LDI r2, "is_initialized"
 EQ r3, r1, r2
-JIF r3, 4200
+JIF r3, 4300
 LDI r2, "get_owner"
 EQ r3, r1, r2
-JIF r3, 4300
+JIF r3, 4400
 LDI r2, "get_operator"
 EQ r3, r1, r2
-JIF r3, 4400
+JIF r3, 4500
 LDI r2, "is_paused"
 EQ r3, r1, r2
-JIF r3, 4500
+JIF r3, 4600
 LDI r2, "get_successor_program"
 EQ r3, r1, r2
-JIF r3, 4600
+JIF r3, 4700
 LDI r2, "is_successor_set"
 EQ r3, r1, r2
-JIF r3, 4700
+JIF r3, 4800
 LDI r2, "get_era_program"
 EQ r3, r1, r2
-JIF r3, 4800
+JIF r3, 4900
 LDI r2, "get_era_network_id"
 EQ r3, r1, r2
-JIF r3, 4900
+JIF r3, 5000
 LDI r2, "get_predecessor_program"
 EQ r3, r1, r2
-JIF r3, 5000
+JIF r3, 5100
 LDI r2, "get_predecessor_final_root"
 EQ r3, r1, r2
-JIF r3, 5100
+JIF r3, 5200
 LDI r2, "get_predecessor_final_index"
 EQ r3, r1, r2
-JIF r3, 5200
+JIF r3, 5300
 LDI r2, "get_predecessor_anchor_hash"
 EQ r3, r1, r2
-JIF r3, 5300
+JIF r3, 5400
 LDI r2, "get_era_first_snapshot_index"
 EQ r3, r1, r2
-JIF r3, 5400
+JIF r3, 5500
 LDI r2, "get_snapshot_count"
 EQ r3, r1, r2
-JIF r3, 5500
+JIF r3, 5600
 LDI r2, "get_latest_snapshot_index"
 EQ r3, r1, r2
-JIF r3, 5600
+JIF r3, 5700
 LDI r2, "get_latest_snapshot_id"
 EQ r3, r1, r2
-JIF r3, 5700
+JIF r3, 5800
 LDI r2, "get_latest_observed_at"
 EQ r3, r1, r2
-JIF r3, 5800
+JIF r3, 5900
 LDI r2, "get_latest_epoch"
 EQ r3, r1, r2
-JIF r3, 5900
+JIF r3, 6000
 LDI r2, "get_latest_payload_hash"
 EQ r3, r1, r2
-JIF r3, 6000
+JIF r3, 6100
 LDI r2, "get_latest_evidence_manifest_hash"
 EQ r3, r1, r2
-JIF r3, 6100
+JIF r3, 6200
 LDI r2, "get_latest_source_refs_hash"
 EQ r3, r1, r2
-JIF r3, 6200
+JIF r3, 6300
 LDI r2, "get_latest_summary_hash"
 EQ r3, r1, r2
-JIF r3, 6300
+JIF r3, 6400
 LDI r2, "get_latest_history_row_hash"
 EQ r3, r1, r2
-JIF r3, 6400
+JIF r3, 6500
 LDI r2, "get_latest_snapshot"
 EQ r3, r1, r2
-JIF r3, 6500
+JIF r3, 6600
 LDI r2, "get_latest_evidence_manifest"
 EQ r3, r1, r2
-JIF r3, 6600
+JIF r3, 6700
 LDI r2, "get_latest_source_refs"
 EQ r3, r1, r2
-JIF r3, 6700
+JIF r3, 6800
 LDI r2, "get_latest_summary"
 EQ r3, r1, r2
-JIF r3, 6800
+JIF r3, 6900
 LDI r2, "get_latest_history_row"
 EQ r3, r1, r2
-JIF r3, 6900
+JIF r3, 7000
 LDI r2, "get_latest_submitter"
 EQ r3, r1, r2
-JIF r3, 7000
+JIF r3, 7100
 LDI r2, "get_summary_row_len"
 EQ r3, r1, r2
-JIF r3, 7100
+JIF r3, 7200
 LDI r2, "get_history_row_len"
 EQ r3, r1, r2
-JIF r3, 7200
+JIF r3, 7300
 LDI r2, "get_capsule_meta_len"
 EQ r3, r1, r2
-JIF r3, 7300
+JIF r3, 7400
 LDI r2, "get_capsule_row_limit"
 EQ r3, r1, r2
-JIF r3, 7400
+JIF r3, 7500
 LDI r2, "get_max_aux_fact_rows_per_snapshot"
 EQ r3, r1, r2
-JIF r3, 7500
+JIF r3, 7600
 LDI r2, "get_catalog_root"
 EQ r3, r1, r2
-JIF r3, 7600
+JIF r3, 7700
 LDI r2, "get_family_count"
 EQ r3, r1, r2
-JIF r3, 7700
+JIF r3, 7800
 LDI r2, "get_family_id_at"
 EQ r3, r1, r2
-JIF r3, 7800
+JIF r3, 7900
 LDI r2, "get_family_definition"
 EQ r3, r1, r2
-JIF r3, 7900
+JIF r3, 8000
 LDI r2, "get_family_root"
 EQ r3, r1, r2
-JIF r3, 8000
+JIF r3, 8100
 LDI r2, "get_family_capsules_root"
 EQ r3, r1, r2
-JIF r3, 8100
+JIF r3, 8200
 LDI r2, "get_family_latest_index"
 EQ r3, r1, r2
-JIF r3, 8200
+JIF r3, 8300
 LDI r2, "get_family_capsule_count"
 EQ r3, r1, r2
-JIF r3, 8300
+JIF r3, 8400
 LDI r2, "get_family_latest_capsule_id"
 EQ r3, r1, r2
-JIF r3, 8400
+JIF r3, 8500
 LDI r2, "get_family_capsule_id_at"
 EQ r3, r1, r2
-JIF r3, 8500
+JIF r3, 8600
 LDI r2, "get_family_open_capsule_id"
 EQ r3, r1, r2
-JIF r3, 8600
+JIF r3, 8700
 LDI r2, "get_family_open_capsule_body"
 EQ r3, r1, r2
-JIF r3, 8700
+JIF r3, 8800
 LDI r2, "get_family_open_capsule_row_count"
 EQ r3, r1, r2
-JIF r3, 8800
+JIF r3, 8900
 LDI r2, "get_family_open_capsule_start_root"
 EQ r3, r1, r2
-JIF r3, 8900
+JIF r3, 9000
 LDI r2, "get_family_open_capsule_end_root"
 EQ r3, r1, r2
-JIF r3, 9000
+JIF r3, 9100
 LDI r2, "get_family_capsule_body"
 EQ r3, r1, r2
-JIF r3, 9100
+JIF r3, 9200
 LDI r2, "get_family_capsule_meta"
 EQ r3, r1, r2
-JIF r3, 9200
+JIF r3, 9300
 LDI r2, "get_family_capsule_root_after"
 EQ r3, r1, r2
-JIF r3, 9300
+JIF r3, 9400
 LDI r2, "get_history_root"
 EQ r3, r1, r2
-JIF r3, 9400
+JIF r3, 9500
 LDI r2, "get_capsules_root"
 EQ r3, r1, r2
-JIF r3, 9500
+JIF r3, 9600
 LDI r2, "get_open_capsule_body"
 EQ r3, r1, r2
-JIF r3, 9600
+JIF r3, 9700
 LDI r2, "get_open_capsule_row_count"
 EQ r3, r1, r2
-JIF r3, 9700
+JIF r3, 9800
 LDI r2, "get_open_capsule_end_root"
 EQ r3, r1, r2
-JIF r3, 9800
+JIF r3, 9900
 LDI r2, "get_capsule_count"
 EQ r3, r1, r2
-JIF r3, 9900
+JIF r3, 10000
 LDI r2, "get_latest_capsule_id"
 EQ r3, r1, r2
-JIF r3, 10000
+JIF r3, 10100
 LDI r2, "get_latest_capsule_root_after"
 EQ r3, r1, r2
-JIF r3, 10100
+JIF r3, 10200
 LDI r2, "get_history_capsule_body"
 EQ r3, r1, r2
-JIF r3, 10200
+JIF r3, 10300
 LDI r2, "get_history_capsule_meta"
 EQ r3, r1, r2
-JIF r3, 10300
+JIF r3, 10400
 LDI r2, "get_latest_bundle"
 EQ r3, r1, r2
-JIF r3, 10400
+JIF r3, 10500
 LDI r2, "initialize_fact_ledger"
 EQ r3, r1, r2
-JIF r3, 10500
+JIF r3, 10600
 LDI r2, "register_fact_family"
 EQ r3, r1, r2
-JIF r3, 10600
+JIF r3, 10700
 LDI r2, "set_operator"
 EQ r3, r1, r2
-JIF r3, 10700
+JIF r3, 10800
 LDI r2, "set_paused"
 EQ r3, r1, r2
-JIF r3, 10800
+JIF r3, 10900
 LDI r2, "set_successor_program"
 EQ r3, r1, r2
-JIF r3, 10900
+JIF r3, 11000
 LDI r2, "record_snapshot_fact_v1"
 EQ r3, r1, r2
-JIF r3, 11000
+JIF r3, 11100
 LDI r2, "record_snapshot_fact_v2"
 EQ r3, r1, r2
-JIF r3, 11100
+JIF r3, 11200
 REVERT
 JDEST 200
 SLOAD r1, "initialized"
@@ -584,6 +586,185 @@ LDI r7, "observed_at UTC suffix"
 EMIT "Require", r7
 REVERT
 JDEST 10024
+LDI r2, 5
+LDI r3, 2
+SUBSTR r4, r1, r2, r3
+MOV r2, r4
+LDI r3, 8
+LDI r4, 2
+SUBSTR r5, r1, r3, r4
+MOV r3, r5
+LDI r4, 11
+LDI r5, 2
+SUBSTR r6, r1, r4, r5
+MOV r4, r6
+LDI r5, 14
+LDI r6, 2
+SUBSTR r7, r1, r5, r6
+MOV r5, r7
+LDI r6, 17
+LDI r7, 2
+SUBSTR r8, r1, r6, r7
+MOV r6, r8
+LDI r7, "01"
+LT r8, r2, r7
+LDI r9, true
+NEQ r8, r8, r9
+LDI r10, true
+NEQ r10, r8, r10
+JIF r10, 10025
+LDI r11, "12"
+GT r12, r2, r11
+LDI r13, true
+NEQ r12, r12, r13
+MOV r10, r12
+JMP 10026
+JDEST 10025
+LDI r10, false
+JDEST 10026
+JIF r10, 10027
+LDI r14, "observed_at month range"
+EMIT "Require", r14
+REVERT
+JDEST 10027
+LDI r7, "01"
+LT r8, r3, r7
+LDI r9, true
+NEQ r8, r8, r9
+LDI r10, true
+NEQ r10, r8, r10
+JIF r10, 10028
+LDI r11, "31"
+GT r12, r3, r11
+LDI r13, true
+NEQ r12, r12, r13
+MOV r10, r12
+JMP 10029
+JDEST 10028
+LDI r10, false
+JDEST 10029
+JIF r10, 10030
+LDI r14, "observed_at day range"
+EMIT "Require", r14
+REVERT
+JDEST 10030
+LDI r7, "02"
+EQ r8, r2, r7
+JIF r8, 10031
+JMP 10032
+JDEST 10031
+LDI r7, "29"
+GT r8, r3, r7
+LDI r9, true
+NEQ r8, r8, r9
+JIF r8, 10033
+LDI r10, "observed_at February day range"
+EMIT "Require", r10
+REVERT
+JDEST 10033
+JDEST 10032
+LDI r7, "04"
+EQ r8, r2, r7
+JIF r8, 10034
+LDI r10, "06"
+EQ r11, r2, r10
+MOV r9, r11
+JMP 10035
+JDEST 10034
+LDI r9, true
+JDEST 10035
+JIF r9, 10036
+LDI r13, "09"
+EQ r14, r2, r13
+MOV r12, r14
+JMP 10037
+JDEST 10036
+LDI r12, true
+JDEST 10037
+JIF r12, 10038
+LDI r16, "11"
+EQ r17, r2, r16
+MOV r15, r17
+JMP 10039
+JDEST 10038
+LDI r15, true
+JDEST 10039
+JIF r15, 10040
+JMP 10041
+JDEST 10040
+LDI r7, "30"
+GT r8, r3, r7
+LDI r9, true
+NEQ r8, r8, r9
+JIF r8, 10042
+LDI r10, "observed_at short month day range"
+EMIT "Require", r10
+REVERT
+JDEST 10042
+JDEST 10041
+LDI r7, "00"
+LT r8, r4, r7
+LDI r9, true
+NEQ r8, r8, r9
+LDI r10, true
+NEQ r10, r8, r10
+JIF r10, 10043
+LDI r11, "23"
+GT r12, r4, r11
+LDI r13, true
+NEQ r12, r12, r13
+MOV r10, r12
+JMP 10044
+JDEST 10043
+LDI r10, false
+JDEST 10044
+JIF r10, 10045
+LDI r14, "observed_at hour range"
+EMIT "Require", r14
+REVERT
+JDEST 10045
+LDI r7, "00"
+LT r8, r5, r7
+LDI r9, true
+NEQ r8, r8, r9
+LDI r10, true
+NEQ r10, r8, r10
+JIF r10, 10046
+LDI r11, "59"
+GT r12, r5, r11
+LDI r13, true
+NEQ r12, r12, r13
+MOV r10, r12
+JMP 10047
+JDEST 10046
+LDI r10, false
+JDEST 10047
+JIF r10, 10048
+LDI r14, "observed_at minute range"
+EMIT "Require", r14
+REVERT
+JDEST 10048
+LDI r7, "00"
+LT r8, r6, r7
+LDI r9, true
+NEQ r8, r8, r9
+LDI r10, true
+NEQ r10, r8, r10
+JIF r10, 10049
+LDI r11, "59"
+GT r12, r6, r11
+LDI r13, true
+NEQ r12, r12, r13
+MOV r10, r12
+JMP 10050
+JDEST 10049
+LDI r10, false
+JDEST 10050
+JIF r10, 10051
+LDI r14, "observed_at second range"
+EMIT "Require", r14
+REVERT
+JDEST 10051
 STOP
 JDEST 1200
 MLOAD r1, 1001
@@ -597,9 +778,9 @@ LDI r3, "12"
 LT r4, r2, r3
 LDI r5, true
 NEQ r4, r4, r5
-JIF r4, 10025
-JMP 10026
-JDEST 10025
+JIF r4, 10052
+JMP 10053
+JDEST 10052
 LDI r3, 0
 LDI r4, 11
 SUBSTR r5, r1, r3, r4
@@ -607,7 +788,7 @@ LDI r6, "12"
 CONCAT r7, r5, r6
 MOV r0, r7
 STOP
-JDEST 10026
+JDEST 10053
 LDI r3, 0
 LDI r4, 11
 SUBSTR r5, r1, r3, r4
@@ -621,11 +802,11 @@ MLOAD r1, 1001
 STRLEN r2, r1
 LDI r3, 13
 EQ r4, r2, r3
-JIF r4, 10027
+JIF r4, 10054
 LDI r5, "capsule base id length"
 EMIT "Require", r5
 REVERT
-JDEST 10027
+JDEST 10054
 LDI r2, 0
 LDI r3, 1
 SUBSTR r4, r1, r2, r3
@@ -651,11 +832,11 @@ LDI r3, 1
 SUBSTR r4, r1, r2, r3
 LDI r5, "-"
 EQ r6, r4, r5
-JIF r6, 10028
+JIF r6, 10055
 LDI r7, "capsule year separator"
 EMIT "Require", r7
 REVERT
-JDEST 10028
+JDEST 10055
 LDI r2, 5
 LDI r3, 1
 SUBSTR r4, r1, r2, r3
@@ -671,11 +852,11 @@ LDI r3, 1
 SUBSTR r4, r1, r2, r3
 LDI r5, "-"
 EQ r6, r4, r5
-JIF r6, 10029
+JIF r6, 10056
 LDI r7, "capsule month separator"
 EMIT "Require", r7
 REVERT
-JDEST 10029
+JDEST 10056
 LDI r2, 8
 LDI r3, 1
 SUBSTR r4, r1, r2, r3
@@ -691,43 +872,43 @@ LDI r3, 1
 SUBSTR r4, r1, r2, r3
 LDI r5, "T"
 EQ r6, r4, r5
-JIF r6, 10030
+JIF r6, 10057
 LDI r7, "capsule time separator"
 EMIT "Require", r7
 REVERT
-JDEST 10030
+JDEST 10057
 LDI r2, 11
 LDI r3, 2
 SUBSTR r4, r1, r2, r3
 LDI r5, "00"
 EQ r6, r4, r5
-JIF r6, 10031
+JIF r6, 10058
 LDI r8, 11
 LDI r9, 2
 SUBSTR r10, r1, r8, r9
 LDI r11, "12"
 EQ r12, r10, r11
 MOV r7, r12
-JMP 10032
-JDEST 10031
+JMP 10059
+JDEST 10058
 LDI r7, true
-JDEST 10032
-JIF r7, 10033
+JDEST 10059
+JIF r7, 10060
 LDI r13, "capsule hour boundary"
 EMIT "Require", r13
 REVERT
-JDEST 10033
+JDEST 10060
 STOP
 JDEST 1400
 MLOAD r1, 1001
 STRLEN r2, r1
 LDI r3, 18
 EQ r4, r2, r3
-JIF r4, 10034
+JIF r4, 10061
 LDI r5, "capsule id length"
 EMIT "Require", r5
 REVERT
-JDEST 10034
+JDEST 10061
 LDI r2, 0
 LDI r3, 13
 SUBSTR r4, r1, r2, r3
@@ -738,11 +919,11 @@ LDI r3, 1
 SUBSTR r4, r1, r2, r3
 LDI r5, "."
 EQ r6, r4, r5
-JIF r6, 10035
+JIF r6, 10062
 LDI r7, "capsule segment separator"
 EMIT "Require", r7
 REVERT
-JDEST 10035
+JDEST 10062
 LDI r2, 14
 LDI r3, 1
 SUBSTR r4, r1, r2, r3
@@ -770,52 +951,52 @@ LDI r2, 0
 LT r3, r1, r2
 LDI r4, true
 NEQ r3, r3, r4
-JIF r3, 10036
+JIF r3, 10063
 LDI r5, "decimal_4 negative"
 EMIT "Require", r5
 REVERT
-JDEST 10036
+JDEST 10063
 LDI r2, 9999
 GT r3, r1, r2
 LDI r4, true
 NEQ r3, r3, r4
-JIF r3, 10037
+JIF r3, 10064
 LDI r5, "decimal_4 too large"
 EMIT "Require", r5
 REVERT
-JDEST 10037
+JDEST 10064
 LDI r2, ""
 CONCAT r2, r2, r1
 LDI r3, 10
 LT r4, r1, r3
-JIF r4, 10038
-JMP 10039
-JDEST 10038
+JIF r4, 10065
+JMP 10066
+JDEST 10065
 LDI r3, "000"
 CONCAT r4, r3, r2
 MOV r0, r4
 STOP
-JDEST 10039
+JDEST 10066
 LDI r3, 100
 LT r4, r1, r3
-JIF r4, 10040
-JMP 10041
-JDEST 10040
+JIF r4, 10067
+JMP 10068
+JDEST 10067
 LDI r3, "00"
 CONCAT r4, r3, r2
 MOV r0, r4
 STOP
-JDEST 10041
+JDEST 10068
 LDI r3, 1000
 LT r4, r1, r3
-JIF r4, 10042
-JMP 10043
-JDEST 10042
+JIF r4, 10069
+JMP 10070
+JDEST 10069
 LDI r3, "0"
 CONCAT r4, r3, r2
 MOV r0, r4
 STOP
-JDEST 10043
+JDEST 10070
 MOV r0, r2
 STOP
 STOP
@@ -825,72 +1006,72 @@ LDI r2, 0
 LT r3, r1, r2
 LDI r4, true
 NEQ r3, r3, r4
-JIF r3, 10044
+JIF r3, 10071
 LDI r5, "decimal_6 negative"
 EMIT "Require", r5
 REVERT
-JDEST 10044
+JDEST 10071
 LDI r2, 999999
 GT r3, r1, r2
 LDI r4, true
 NEQ r3, r3, r4
-JIF r3, 10045
+JIF r3, 10072
 LDI r5, "decimal_6 too large"
 EMIT "Require", r5
 REVERT
-JDEST 10045
+JDEST 10072
 LDI r2, ""
 CONCAT r2, r2, r1
 LDI r3, 10
 LT r4, r1, r3
-JIF r4, 10046
-JMP 10047
-JDEST 10046
+JIF r4, 10073
+JMP 10074
+JDEST 10073
 LDI r3, "00000"
 CONCAT r4, r3, r2
 MOV r0, r4
 STOP
-JDEST 10047
+JDEST 10074
 LDI r3, 100
 LT r4, r1, r3
-JIF r4, 10048
-JMP 10049
-JDEST 10048
+JIF r4, 10075
+JMP 10076
+JDEST 10075
 LDI r3, "0000"
 CONCAT r4, r3, r2
 MOV r0, r4
 STOP
-JDEST 10049
+JDEST 10076
 LDI r3, 1000
 LT r4, r1, r3
-JIF r4, 10050
-JMP 10051
-JDEST 10050
+JIF r4, 10077
+JMP 10078
+JDEST 10077
 LDI r3, "000"
 CONCAT r4, r3, r2
 MOV r0, r4
 STOP
-JDEST 10051
+JDEST 10078
 LDI r3, 10000
 LT r4, r1, r3
-JIF r4, 10052
-JMP 10053
-JDEST 10052
+JIF r4, 10079
+JMP 10080
+JDEST 10079
 LDI r3, "00"
 CONCAT r4, r3, r2
 MOV r0, r4
 STOP
-JDEST 10053
+JDEST 10080
 LDI r3, 100000
 LT r4, r1, r3
-JIF r4, 10054
-JMP 10055
-JDEST 10054
+JIF r4, 10081
+JMP 10082
+JDEST 10081
 LDI r3, "0"
 CONCAT r4, r3, r2
 MOV r0, r4
 STOP
-JDEST 10055
+JDEST 10082
 MOV r0, r2
 STOP
 STOP
@@ -900,92 +1081,92 @@ LDI r2, 0
 LT r3, r1, r2
 LDI r4, true
 NEQ r3, r3, r4
-JIF r3, 10056
+JIF r3, 10083
 LDI r5, "decimal_8 negative"
 EMIT "Require", r5
 REVERT
-JDEST 10056
+JDEST 10083
 LDI r2, 99999999
 GT r3, r1, r2
 LDI r4, true
 NEQ r3, r3, r4
-JIF r3, 10057
+JIF r3, 10084
 LDI r5, "decimal_8 too large"
 EMIT "Require", r5
 REVERT
-JDEST 10057
+JDEST 10084
 LDI r2, ""
 CONCAT r2, r2, r1
 LDI r3, 10
 LT r4, r1, r3
-JIF r4, 10058
-JMP 10059
-JDEST 10058
+JIF r4, 10085
+JMP 10086
+JDEST 10085
 LDI r3, "0000000"
 CONCAT r4, r3, r2
 MOV r0, r4
 STOP
-JDEST 10059
+JDEST 10086
 LDI r3, 100
 LT r4, r1, r3
-JIF r4, 10060
-JMP 10061
-JDEST 10060
+JIF r4, 10087
+JMP 10088
+JDEST 10087
 LDI r3, "000000"
 CONCAT r4, r3, r2
 MOV r0, r4
 STOP
-JDEST 10061
+JDEST 10088
 LDI r3, 1000
 LT r4, r1, r3
-JIF r4, 10062
-JMP 10063
-JDEST 10062
+JIF r4, 10089
+JMP 10090
+JDEST 10089
 LDI r3, "00000"
 CONCAT r4, r3, r2
 MOV r0, r4
 STOP
-JDEST 10063
+JDEST 10090
 LDI r3, 10000
 LT r4, r1, r3
-JIF r4, 10064
-JMP 10065
-JDEST 10064
+JIF r4, 10091
+JMP 10092
+JDEST 10091
 LDI r3, "0000"
 CONCAT r4, r3, r2
 MOV r0, r4
 STOP
-JDEST 10065
+JDEST 10092
 LDI r3, 100000
 LT r4, r1, r3
-JIF r4, 10066
-JMP 10067
-JDEST 10066
+JIF r4, 10093
+JMP 10094
+JDEST 10093
 LDI r3, "000"
 CONCAT r4, r3, r2
 MOV r0, r4
 STOP
-JDEST 10067
+JDEST 10094
 LDI r3, 1000000
 LT r4, r1, r3
-JIF r4, 10068
-JMP 10069
-JDEST 10068
+JIF r4, 10095
+JMP 10096
+JDEST 10095
 LDI r3, "00"
 CONCAT r4, r3, r2
 MOV r0, r4
 STOP
-JDEST 10069
+JDEST 10096
 LDI r3, 10000000
 LT r4, r1, r3
-JIF r4, 10070
-JMP 10071
-JDEST 10070
+JIF r4, 10097
+JMP 10098
+JDEST 10097
 LDI r3, "0"
 CONCAT r4, r3, r2
 MOV r0, r4
 STOP
-JDEST 10071
+JDEST 10098
 MOV r0, r2
 STOP
 STOP
@@ -995,112 +1176,112 @@ LDI r2, 0
 LT r3, r1, r2
 LDI r4, true
 NEQ r3, r3, r4
-JIF r3, 10072
+JIF r3, 10099
 LDI r5, "decimal_10 negative"
 EMIT "Require", r5
 REVERT
-JDEST 10072
+JDEST 10099
 LDI r2, 9999999999
 GT r3, r1, r2
 LDI r4, true
 NEQ r3, r3, r4
-JIF r3, 10073
+JIF r3, 10100
 LDI r5, "decimal_10 too large"
 EMIT "Require", r5
 REVERT
-JDEST 10073
+JDEST 10100
 LDI r2, ""
 CONCAT r2, r2, r1
 LDI r3, 10
 LT r4, r1, r3
-JIF r4, 10074
-JMP 10075
-JDEST 10074
+JIF r4, 10101
+JMP 10102
+JDEST 10101
 LDI r3, "000000000"
 CONCAT r4, r3, r2
 MOV r0, r4
 STOP
-JDEST 10075
+JDEST 10102
 LDI r3, 100
 LT r4, r1, r3
-JIF r4, 10076
-JMP 10077
-JDEST 10076
+JIF r4, 10103
+JMP 10104
+JDEST 10103
 LDI r3, "00000000"
 CONCAT r4, r3, r2
 MOV r0, r4
 STOP
-JDEST 10077
+JDEST 10104
 LDI r3, 1000
 LT r4, r1, r3
-JIF r4, 10078
-JMP 10079
-JDEST 10078
+JIF r4, 10105
+JMP 10106
+JDEST 10105
 LDI r3, "0000000"
 CONCAT r4, r3, r2
 MOV r0, r4
 STOP
-JDEST 10079
+JDEST 10106
 LDI r3, 10000
 LT r4, r1, r3
-JIF r4, 10080
-JMP 10081
-JDEST 10080
+JIF r4, 10107
+JMP 10108
+JDEST 10107
 LDI r3, "000000"
 CONCAT r4, r3, r2
 MOV r0, r4
 STOP
-JDEST 10081
+JDEST 10108
 LDI r3, 100000
 LT r4, r1, r3
-JIF r4, 10082
-JMP 10083
-JDEST 10082
+JIF r4, 10109
+JMP 10110
+JDEST 10109
 LDI r3, "00000"
 CONCAT r4, r3, r2
 MOV r0, r4
 STOP
-JDEST 10083
+JDEST 10110
 LDI r3, 1000000
 LT r4, r1, r3
-JIF r4, 10084
-JMP 10085
-JDEST 10084
+JIF r4, 10111
+JMP 10112
+JDEST 10111
 LDI r3, "0000"
 CONCAT r4, r3, r2
 MOV r0, r4
 STOP
-JDEST 10085
+JDEST 10112
 LDI r3, 10000000
 LT r4, r1, r3
-JIF r4, 10086
-JMP 10087
-JDEST 10086
+JIF r4, 10113
+JMP 10114
+JDEST 10113
 LDI r3, "000"
 CONCAT r4, r3, r2
 MOV r0, r4
 STOP
-JDEST 10087
+JDEST 10114
 LDI r3, 100000000
 LT r4, r1, r3
-JIF r4, 10088
-JMP 10089
-JDEST 10088
+JIF r4, 10115
+JMP 10116
+JDEST 10115
 LDI r3, "00"
 CONCAT r4, r3, r2
 MOV r0, r4
 STOP
-JDEST 10089
+JDEST 10116
 LDI r3, 1000000000
 LT r4, r1, r3
-JIF r4, 10090
-JMP 10091
-JDEST 10090
+JIF r4, 10117
+JMP 10118
+JDEST 10117
 LDI r3, "0"
 CONCAT r4, r3, r2
 MOV r0, r4
 STOP
-JDEST 10091
+JDEST 10118
 MOV r0, r2
 STOP
 STOP
@@ -1119,14 +1300,14 @@ JDEST 2000
 MLOAD r1, 1001
 LDI r2, ""
 EQ r3, r1, r2
-JIF r3, 10092
+JIF r3, 10119
 LDI r5, "0"
 EQ r6, r1, r5
 MOV r4, r6
-JMP 10093
-JDEST 10092
+JMP 10120
+JDEST 10119
 LDI r4, true
-JDEST 10093
+JDEST 10120
 MOV r0, r4
 STOP
 STOP
@@ -1150,11 +1331,11 @@ LDI r3, 0
 LT r4, r2, r3
 LDI r5, true
 NEQ r4, r4, r5
-JIF r4, 10094
+JIF r4, 10121
 LDI r6, "ordinal negative"
 EMIT "Require", r6
 REVERT
-JDEST 10094
+JDEST 10121
 LDI r3, "|"
 CONCAT r4, r1, r3
 MSTORE 1001, r2
@@ -1181,11 +1362,11 @@ JDEST 2400
 MLOAD r1, 1001
 MSTORE 1001, r1
 CALL_INT r2, 2300
-JIF r2, 10095
+JIF r2, 10122
 LDI r3, "unknown family"
 EMIT "Require", r3
 REVERT
-JDEST 10095
+JDEST 10122
 STOP
 JDEST 2500
 MLOAD r1, 1001
@@ -1206,60 +1387,60 @@ MLOAD r2, 1002
 STRLEN r3, r1
 LDI r4, 702
 EQ r5, r3, r4
-JIF r5, 10096
+JIF r5, 10123
 LDI r6, "family definition length"
 EMIT "Require", r6
 REVERT
-JDEST 10096
+JDEST 10123
 LDI r3, 0
 LDI r4, 2
 SUBSTR r5, r1, r3, r4
 LDI r6, "00"
 EQ r7, r5, r6
-JIF r7, 10097
+JIF r7, 10124
 LDI r8, "family definition version"
 EMIT "Require", r8
 REVERT
-JDEST 10097
+JDEST 10124
 LDI r3, 2
 LDI r4, 1
 SUBSTR r5, r1, r3, r4
 LDI r6, "|"
 EQ r7, r5, r6
-JIF r7, 10098
+JIF r7, 10125
 LDI r8, "family definition separator"
 EMIT "Require", r8
 REVERT
-JDEST 10098
+JDEST 10125
 LDI r3, 3
 LDI r4, 4
 SUBSTR r5, r1, r3, r4
 EQ r6, r5, r2
-JIF r6, 10099
+JIF r6, 10126
 LDI r7, "family definition id"
 EMIT "Require", r7
 REVERT
-JDEST 10099
+JDEST 10126
 LDI r3, 44
 LDI r4, 2
 SUBSTR r5, r1, r3, r4
 LDI r6, "00"
 EQ r7, r5, r6
-JIF r7, 10100
+JIF r7, 10127
 LDI r8, "only one_per_snapshot"
 EMIT "Require", r8
 REVERT
-JDEST 10100
+JDEST 10127
 LDI r3, 85
 LDI r4, 4
 SUBSTR r5, r1, r3, r4
 LDI r6, "0295"
 EQ r7, r5, r6
-JIF r7, 10101
+JIF r7, 10128
 LDI r8, "row len"
 EMIT "Require", r8
 REVERT
-JDEST 10101
+JDEST 10128
 STRLEN r3, r1
 LDI r4, 2
 SUB r5, r3, r4
@@ -1267,11 +1448,11 @@ LDI r6, 2
 SUBSTR r7, r1, r5, r6
 LDI r8, "00"
 EQ r9, r7, r8
-JIF r9, 10102
+JIF r9, 10129
 LDI r10, "family active"
 EMIT "Require", r10
 REVERT
-JDEST 10102
+JDEST 10129
 STOP
 JDEST 2700
 MLOAD r1, 1001
@@ -1458,32 +1639,72 @@ MLOAD r5, 1005
 STRLEN r6, r5
 LDI r7, 295
 EQ r8, r6, r7
-JIF r8, 10103
+JIF r8, 10130
 LDI r9, "row length"
 EMIT "Require", r9
 REVERT
-JDEST 10103
+JDEST 10130
 LDI r6, 0
 LDI r7, 2
 SUBSTR r8, r5, r6, r7
 LDI r9, "00"
 EQ r10, r8, r9
-JIF r10, 10104
+JIF r10, 10131
 LDI r11, "row version"
 EMIT "Require", r11
 REVERT
-JDEST 10104
+JDEST 10131
+LDI r6, 2
+LDI r7, 1
+SUBSTR r8, r5, r6, r7
+LDI r9, "|"
+EQ r10, r8, r9
+JIF r10, 10132
+LDI r11, "row version separator"
+EMIT "Require", r11
+REVERT
+JDEST 10132
 LDI r6, 3
 LDI r7, 10
 SUBSTR r8, r5, r6, r7
 MSTORE 1001, r3
 CALL_INT r9, 1800
 EQ r10, r8, r9
-JIF r10, 10105
+JIF r10, 10133
 LDI r11, "row snapshot index"
 EMIT "Require", r11
 REVERT
-JDEST 10105
+JDEST 10133
+LDI r6, 13
+LDI r7, 1
+SUBSTR r8, r5, r6, r7
+LDI r9, "|"
+EQ r10, r8, r9
+JIF r10, 10134
+LDI r11, "row snapshot separator"
+EMIT "Require", r11
+REVERT
+JDEST 10134
+LDI r6, 26
+LDI r7, 1
+SUBSTR r8, r5, r6, r7
+LDI r9, "|"
+EQ r10, r8, r9
+JIF r10, 10135
+LDI r11, "row observed separator"
+EMIT "Require", r11
+REVERT
+JDEST 10135
+LDI r6, 230
+LDI r7, 1
+SUBSTR r8, r5, r6, r7
+LDI r9, "|"
+EQ r10, r8, r9
+JIF r10, 10136
+LDI r11, "row payload separator"
+EMIT "Require", r11
+REVERT
+JDEST 10136
 LDI r6, 231
 LDI r7, 64
 SUBSTR r8, r5, r6, r7
@@ -1491,11 +1712,11 @@ LDI r9, 7
 LDI r10, 64
 SUBSTR r11, r4, r9, r10
 EQ r12, r8, r11
-JIF r12, 10106
+JIF r12, 10137
 LDI r13, "row payload hash"
 EMIT "Require", r13
 REVERT
-JDEST 10106
+JDEST 10137
 LDI r6, "family_definition_by_id:"
 CONCAT r6, r6, r1
 SLOADK r7, r6
@@ -1503,45 +1724,168 @@ LDI r8, 47
 LDI r9, 4
 SUBSTR r10, r7, r8, r9
 EQ r11, r2, r10
-JIF r11, 10107
+JIF r11, 10138
 LDI r12, "row schema"
 EMIT "Require", r12
 REVERT
-JDEST 10107
+JDEST 10138
 STOP
 JDEST 3300
+MLOAD r1, 1001
+LDI r2, 39
+LDI r3, 1
+SUBSTR r4, r1, r2, r3
+LDI r5, "|"
+EQ r6, r4, r5
+JIF r6, 10139
+LDI r7, "core epoch separator"
+EMIT "Require", r7
+REVERT
+JDEST 10139
+LDI r2, 52
+LDI r3, 1
+SUBSTR r4, r1, r2, r3
+LDI r5, "|"
+EQ r6, r4, r5
+JIF r6, 10140
+LDI r7, "core block separator"
+EMIT "Require", r7
+REVERT
+JDEST 10140
+LDI r2, 73
+LDI r3, 1
+SUBSTR r4, r1, r2, r3
+LDI r5, "|"
+EQ r6, r4, r5
+JIF r6, 10141
+LDI r7, "core max separator"
+EMIT "Require", r7
+REVERT
+JDEST 10141
+LDI r2, 94
+LDI r3, 1
+SUBSTR r4, r1, r2, r3
+LDI r5, "|"
+EQ r6, r4, r5
+JIF r6, 10142
+LDI r7, "core issued separator"
+EMIT "Require", r7
+REVERT
+JDEST 10142
+LDI r2, 115
+LDI r3, 1
+SUBSTR r4, r1, r2, r3
+LDI r5, "|"
+EQ r6, r4, r5
+JIF r6, 10143
+LDI r7, "core burned separator"
+EMIT "Require", r7
+REVERT
+JDEST 10143
+LDI r2, 136
+LDI r3, 1
+SUBSTR r4, r1, r2, r3
+LDI r5, "|"
+EQ r6, r4, r5
+JIF r6, 10144
+LDI r7, "core encrypted separator"
+EMIT "Require", r7
+REVERT
+JDEST 10144
+LDI r2, 157
+LDI r3, 1
+SUBSTR r4, r1, r2, r3
+LDI r5, "|"
+EQ r6, r4, r5
+JIF r6, 10145
+LDI r7, "core locked separator"
+EMIT "Require", r7
+REVERT
+JDEST 10145
+LDI r2, 178
+LDI r3, 1
+SUBSTR r4, r1, r2, r3
+LDI r5, "|"
+EQ r6, r4, r5
+JIF r6, 10146
+LDI r7, "core wrapped separator"
+EMIT "Require", r7
+REVERT
+JDEST 10146
+LDI r2, 199
+LDI r3, 1
+SUBSTR r4, r1, r2, r3
+LDI r5, "|"
+EQ r6, r4, r5
+JIF r6, 10147
+LDI r7, "core unclaimed separator"
+EMIT "Require", r7
+REVERT
+JDEST 10147
+LDI r2, 220
+LDI r3, 1
+SUBSTR r4, r1, r2, r3
+LDI r5, "|"
+EQ r6, r4, r5
+JIF r6, 10148
+LDI r7, "core vault separator"
+EMIT "Require", r7
+REVERT
+JDEST 10148
+LDI r2, 223
+LDI r3, 1
+SUBSTR r4, r1, r2, r3
+LDI r5, "|"
+EQ r6, r4, r5
+JIF r6, 10149
+LDI r7, "core unit separator"
+EMIT "Require", r7
+REVERT
+JDEST 10149
+LDI r2, 225
+LDI r3, 1
+SUBSTR r4, r1, r2, r3
+LDI r5, "|"
+EQ r6, r4, r5
+JIF r6, 10150
+LDI r7, "core status separator"
+EMIT "Require", r7
+REVERT
+JDEST 10150
+STOP
+JDEST 3400
 MLOAD r1, 1001
 MLOAD r2, 1002
 MLOAD r3, 1003
 STRLEN r4, r3
 LDI r5, 295
 EQ r6, r4, r5
-JIF r6, 10108
+JIF r6, 10151
 LDI r7, "aux row length"
 EMIT "Require", r7
 REVERT
-JDEST 10108
+JDEST 10151
 LDI r4, 0
 LDI r5, 2
 SUBSTR r6, r3, r4, r5
 LDI r7, "00"
 EQ r8, r6, r7
-JIF r8, 10109
+JIF r8, 10152
 LDI r9, "aux row version"
 EMIT "Require", r9
 REVERT
-JDEST 10109
+JDEST 10152
 LDI r4, 3
 LDI r5, 10
 SUBSTR r6, r3, r4, r5
 MSTORE 1001, r1
 CALL_INT r7, 1800
 EQ r8, r6, r7
-JIF r8, 10110
+JIF r8, 10153
 LDI r9, "aux row snapshot index"
 EMIT "Require", r9
 REVERT
-JDEST 10110
+JDEST 10153
 LDI r4, 231
 LDI r5, 64
 SUBSTR r6, r3, r4, r5
@@ -1549,11 +1893,91 @@ LDI r7, 7
 LDI r8, 64
 SUBSTR r9, r2, r7, r8
 EQ r10, r6, r9
-JIF r10, 10111
+JIF r10, 10154
 LDI r11, "aux row payload hash"
 EMIT "Require", r11
 REVERT
-JDEST 10111
+JDEST 10154
+LDI r4, 2
+LDI r5, 1
+SUBSTR r6, r3, r4, r5
+LDI r7, "|"
+EQ r8, r6, r7
+JIF r8, 10155
+LDI r9, "aux row version separator"
+EMIT "Require", r9
+REVERT
+JDEST 10155
+LDI r4, 13
+LDI r5, 1
+SUBSTR r6, r3, r4, r5
+LDI r7, "|"
+EQ r8, r6, r7
+JIF r8, 10156
+LDI r9, "aux row snapshot separator"
+EMIT "Require", r9
+REVERT
+JDEST 10156
+LDI r4, 26
+LDI r5, 1
+SUBSTR r6, r3, r4, r5
+LDI r7, "|"
+EQ r8, r6, r7
+JIF r8, 10157
+LDI r9, "aux row observed separator"
+EMIT "Require", r9
+REVERT
+JDEST 10157
+LDI r4, 31
+LDI r5, 1
+SUBSTR r6, r3, r4, r5
+LDI r7, "|"
+EQ r8, r6, r7
+JIF r8, 10158
+LDI r9, "aux row family separator"
+EMIT "Require", r9
+REVERT
+JDEST 10158
+LDI r4, 36
+LDI r5, 1
+SUBSTR r6, r3, r4, r5
+LDI r7, "|"
+EQ r8, r6, r7
+JIF r8, 10159
+LDI r9, "aux row schema separator"
+EMIT "Require", r9
+REVERT
+JDEST 10159
+LDI r4, 39
+LDI r5, 1
+SUBSTR r6, r3, r4, r5
+LDI r7, "|"
+EQ r8, r6, r7
+JIF r8, 10160
+LDI r9, "aux row slot separator"
+EMIT "Require", r9
+REVERT
+JDEST 10160
+LDI r4, 208
+LDI r5, 1
+SUBSTR r6, r3, r4, r5
+LDI r7, "|"
+EQ r8, r6, r7
+JIF r8, 10161
+LDI r9, "aux row reserved separator"
+EMIT "Require", r9
+REVERT
+JDEST 10161
+LDI r4, 230
+LDI r5, 1
+SUBSTR r6, r3, r4, r5
+LDI r7, "|"
+EQ r8, r6, r7
+JIF r8, 10162
+LDI r9, "aux row payload separator"
+EMIT "Require", r9
+REVERT
+JDEST 10162
 LDI r4, 27
 LDI r5, 4
 SUBSTR r6, r3, r4, r5
@@ -1568,25 +1992,25 @@ MSTORE 1001, r5
 CALL_INT r6, 800
 LDI r6, "0000"
 NEQ r7, r4, r6
-JIF r7, 10112
+JIF r7, 10163
 LDI r8, "aux row core family"
 EMIT "Require", r8
 REVERT
-JDEST 10112
+JDEST 10163
 MSTORE 1001, r4
 CALL_INT r6, 2400
 MSTORE 1001, r4
 CALL_INT r6, 2500
 EQ r7, r5, r6
-JIF r7, 10113
+JIF r7, 10164
 LDI r8, "aux row schema"
 EMIT "Require", r8
 REVERT
-JDEST 10113
+JDEST 10164
 MOV r0, r4
 STOP
 STOP
-JDEST 3400
+JDEST 3500
 MLOAD r1, 1001
 MLOAD r2, 1002
 LDI r3, 0
@@ -1596,11 +2020,11 @@ LDI r6, 0
 LDI r7, 2
 SUBSTR r8, r1, r6, r7
 EQ r9, r5, r8
-JIF r9, 10114
+JIF r9, 10165
 LDI r10, "core summary version"
 EMIT "Require", r10
 REVERT
-JDEST 10114
+JDEST 10165
 LDI r3, 3
 LDI r4, 10
 SUBSTR r5, r2, r3, r4
@@ -1608,11 +2032,11 @@ LDI r6, 3
 LDI r7, 10
 SUBSTR r8, r1, r6, r7
 EQ r9, r5, r8
-JIF r9, 10115
+JIF r9, 10166
 LDI r10, "core summary index"
 EMIT "Require", r10
 REVERT
-JDEST 10115
+JDEST 10166
 LDI r3, 14
 LDI r4, 12
 SUBSTR r5, r2, r3, r4
@@ -1620,11 +2044,11 @@ LDI r6, 14
 LDI r7, 12
 SUBSTR r8, r1, r6, r7
 EQ r9, r5, r8
-JIF r9, 10116
+JIF r9, 10167
 LDI r10, "core summary observed"
 EMIT "Require", r10
 REVERT
-JDEST 10116
+JDEST 10167
 LDI r3, 27
 LDI r4, 12
 SUBSTR r5, r2, r3, r4
@@ -1632,11 +2056,11 @@ LDI r6, 27
 LDI r7, 12
 SUBSTR r8, r1, r6, r7
 EQ r9, r5, r8
-JIF r9, 10117
+JIF r9, 10168
 LDI r10, "core summary epoch"
 EMIT "Require", r10
 REVERT
-JDEST 10117
+JDEST 10168
 LDI r3, 40
 LDI r4, 12
 SUBSTR r5, r2, r3, r4
@@ -1644,11 +2068,11 @@ LDI r6, 40
 LDI r7, 12
 SUBSTR r8, r1, r6, r7
 EQ r9, r5, r8
-JIF r9, 10118
+JIF r9, 10169
 LDI r10, "core summary external block"
 EMIT "Require", r10
 REVERT
-JDEST 10118
+JDEST 10169
 LDI r3, 74
 LDI r4, 20
 SUBSTR r5, r2, r3, r4
@@ -1656,11 +2080,11 @@ LDI r6, 53
 LDI r7, 20
 SUBSTR r8, r1, r6, r7
 EQ r9, r5, r8
-JIF r9, 10119
+JIF r9, 10170
 LDI r10, "core summary issued"
 EMIT "Require", r10
 REVERT
-JDEST 10119
+JDEST 10170
 LDI r3, 95
 LDI r4, 20
 SUBSTR r5, r2, r3, r4
@@ -1668,11 +2092,11 @@ LDI r6, 74
 LDI r7, 20
 SUBSTR r8, r1, r6, r7
 EQ r9, r5, r8
-JIF r9, 10120
+JIF r9, 10171
 LDI r10, "core summary burned"
 EMIT "Require", r10
 REVERT
-JDEST 10120
+JDEST 10171
 LDI r3, 116
 LDI r4, 20
 SUBSTR r5, r2, r3, r4
@@ -1680,11 +2104,11 @@ LDI r6, 95
 LDI r7, 20
 SUBSTR r8, r1, r6, r7
 EQ r9, r5, r8
-JIF r9, 10121
+JIF r9, 10172
 LDI r10, "core summary encrypted"
 EMIT "Require", r10
 REVERT
-JDEST 10121
+JDEST 10172
 LDI r3, 137
 LDI r4, 20
 SUBSTR r5, r2, r3, r4
@@ -1692,11 +2116,11 @@ LDI r6, 116
 LDI r7, 20
 SUBSTR r8, r1, r6, r7
 EQ r9, r5, r8
-JIF r9, 10122
+JIF r9, 10173
 LDI r10, "core summary locked"
 EMIT "Require", r10
 REVERT
-JDEST 10122
+JDEST 10173
 LDI r3, 158
 LDI r4, 20
 SUBSTR r5, r2, r3, r4
@@ -1704,11 +2128,11 @@ LDI r6, 137
 LDI r7, 20
 SUBSTR r8, r1, r6, r7
 EQ r9, r5, r8
-JIF r9, 10123
+JIF r9, 10174
 LDI r10, "core summary wrapped"
 EMIT "Require", r10
 REVERT
-JDEST 10123
+JDEST 10174
 LDI r3, 179
 LDI r4, 20
 SUBSTR r5, r2, r3, r4
@@ -1716,11 +2140,11 @@ LDI r6, 158
 LDI r7, 20
 SUBSTR r8, r1, r6, r7
 EQ r9, r5, r8
-JIF r9, 10124
+JIF r9, 10175
 LDI r10, "core summary unclaimed"
 EMIT "Require", r10
 REVERT
-JDEST 10124
+JDEST 10175
 LDI r3, 226
 LDI r4, 4
 SUBSTR r5, r2, r3, r4
@@ -1728,11 +2152,11 @@ LDI r6, 179
 LDI r7, 4
 SUBSTR r8, r1, r6, r7
 EQ r9, r5, r8
-JIF r9, 10125
+JIF r9, 10176
 LDI r10, "core summary route count"
 EMIT "Require", r10
 REVERT
-JDEST 10125
+JDEST 10176
 LDI r3, 231
 LDI r4, 24
 SUBSTR r5, r2, r3, r4
@@ -1740,13 +2164,13 @@ LDI r6, 184
 LDI r7, 24
 SUBSTR r8, r1, r6, r7
 EQ r9, r5, r8
-JIF r9, 10126
+JIF r9, 10177
 LDI r10, "core summary payload prefix"
 EMIT "Require", r10
 REVERT
-JDEST 10126
+JDEST 10177
 STOP
-JDEST 3500
+JDEST 3600
 MLOAD r1, 1001
 MLOAD r2, 1002
 MLOAD r3, 1003
@@ -1761,21 +2185,21 @@ MSTORE 1001, r1
 CALL_INT r4, 2300
 LDI r5, true
 NEQ r5, r4, r5
-JIF r5, 10127
+JIF r5, 10178
 LDI r6, "family already registered"
 EMIT "Require", r6
 REVERT
-JDEST 10127
+JDEST 10178
 SLOAD r4, "family_count"
 LDI r5, 0
 ADD r4, r5, r4
 LDI r6, 9999
 LT r7, r4, r6
-JIF r7, 10128
+JIF r7, 10179
 LDI r8, "too many families"
 EMIT "Require", r8
 REVERT
-JDEST 10128
+JDEST 10179
 SLOAD r4, "family_count"
 LDI r5, 0
 ADD r4, r5, r4
@@ -1859,7 +2283,7 @@ CALL_INT r5, 2500
 LDI r6, 295
 EMIT "FamilyRegistered", r1, r5, r6
 STOP
-JDEST 3600
+JDEST 3700
 MLOAD r1, 1001
 MLOAD r2, 1002
 MLOAD r3, 1003
@@ -1889,7 +2313,7 @@ SHA256 r8, r7
 MOV r0, r8
 STOP
 STOP
-JDEST 3700
+JDEST 3800
 MLOAD r1, 1001
 LDI r2, "octra-vitals:fact-capsule-meta:v1"
 LDI r3, "
@@ -1900,7 +2324,7 @@ SHA256 r6, r5
 MOV r0, r6
 STOP
 STOP
-JDEST 3800
+JDEST 3900
 MLOAD r1, 1001
 MSTORE 1001, r1
 CALL_INT r2, 2400
@@ -1912,20 +2336,20 @@ ADD r3, r4, r3
 MOV r2, r3
 LDI r3, 0
 GT r4, r2, r3
-JIF r4, 10129
+JIF r4, 10180
 LDI r5, "capsule empty"
 EMIT "Require", r5
 REVERT
-JDEST 10129
+JDEST 10180
 LDI r3, 48
 GT r4, r2, r3
 LDI r5, true
 NEQ r4, r4, r5
-JIF r4, 10130
+JIF r4, 10181
 LDI r6, "capsule overfull"
 EMIT "Require", r6
 REVERT
-JDEST 10130
+JDEST 10181
 LDI r3, "family_open_capsule_id_by_id:"
 CONCAT r3, r3, r1
 SLOADK r4, r3
@@ -1938,31 +2362,31 @@ CONCAT r5, r5, r4
 SLOADK r6, r5
 MSTORE 1001, r6
 CALL_INT r7, 2000
-JIF r7, 10131
+JIF r7, 10182
 LDI r8, "capsule body already sealed"
 EMIT "Require", r8
 REVERT
-JDEST 10131
+JDEST 10182
 LDI r5, "family_capsule_meta_by_key:"
 CONCAT r5, r5, r4
 SLOADK r6, r5
 MSTORE 1001, r6
 CALL_INT r7, 2000
-JIF r7, 10132
+JIF r7, 10183
 LDI r8, "capsule meta already sealed"
 EMIT "Require", r8
 REVERT
-JDEST 10132
+JDEST 10183
 LDI r5, "family_capsule_root_after_by_key:"
 CONCAT r5, r5, r4
 SLOADK r6, r5
 MSTORE 1001, r6
 CALL_INT r7, 2000
-JIF r7, 10133
+JIF r7, 10184
 LDI r8, "capsule root already sealed"
 EMIT "Require", r8
 REVERT
-JDEST 10133
+JDEST 10184
 MSTORE 1001, r1
 CALL_INT r5, 2500
 LDI r6, "family_open_capsule_body_by_id:"
@@ -1972,7 +2396,7 @@ MOV r6, r7
 MSTORE 1001, r1
 MSTORE 1002, r5
 MSTORE 1003, r6
-CALL_INT r7, 3600
+CALL_INT r7, 3700
 LDI r8, "family_open_capsule_end_root_by_id:"
 CONCAT r8, r8, r1
 SLOADK r9, r8
@@ -1983,24 +2407,24 @@ SLOADK r10, r9
 MOV r9, r10
 LDI r10, ""
 EQ r11, r9, r10
-JIF r11, 10134
-JMP 10135
-JDEST 10134
+JIF r11, 10185
+JMP 10186
+JDEST 10185
 MSTORE 1001, r1
 MSTORE 1002, r5
 CALL_INT r10, 3000
 MOV r9, r10
-JDEST 10135
+JDEST 10186
 LDI r10, "0"
 EQ r11, r9, r10
-JIF r11, 10136
-JMP 10137
-JDEST 10136
+JIF r11, 10187
+JMP 10188
+JDEST 10187
 MSTORE 1001, r1
 MSTORE 1002, r5
 CALL_INT r10, 3000
 MOV r9, r10
-JDEST 10137
+JDEST 10188
 MSTORE 1001, r1
 MSTORE 1002, r5
 MSTORE 1003, r9
@@ -2109,13 +2533,13 @@ MOV r26, r29
 STRLEN r27, r26
 LDI r28, 577
 EQ r29, r27, r28
-JIF r29, 10138
+JIF r29, 10189
 LDI r30, "capsule meta length"
 EMIT "Require", r30
 REVERT
-JDEST 10138
+JDEST 10189
 MSTORE 1001, r26
-CALL_INT r27, 3700
+CALL_INT r27, 3800
 LDI r28, "family_capsule_body_by_key:"
 CONCAT r28, r28, r4
 SSTOREK r28, r6
@@ -2150,11 +2574,11 @@ LDI r30, 0
 ADD r29, r30, r29
 LDI r31, 9999
 LT r32, r29, r31
-JIF r32, 10139
+JIF r32, 10190
 LDI r33, "capsule segment overfull"
 EMIT "Require", r33
 REVERT
-JDEST 10139
+JDEST 10190
 LDI r28, "family_open_capsule_segment_by_id:"
 CONCAT r28, r28, r1
 LDI r29, "family_open_capsule_segment_by_id:"
@@ -2188,7 +2612,7 @@ LDI r28, "family_open_capsule_end_root_by_id:"
 CONCAT r28, r28, r1
 SSTOREK r28, r8
 STOP
-JDEST 3900
+JDEST 4000
 MLOAD r1, 1001
 MLOAD r2, 1002
 MLOAD r3, 1003
@@ -2200,11 +2624,11 @@ CALL_INT r7, 1300
 STRLEN r7, r4
 LDI r8, 295
 EQ r9, r7, r8
-JIF r9, 10140
+JIF r9, 10191
 LDI r10, "row length"
 EMIT "Require", r10
 REVERT
-JDEST 10140
+JDEST 10191
 LDI r7, "family_open_capsule_row_count_by_id:"
 CONCAT r7, r7, r5
 SLOADK r8, r7
@@ -2214,22 +2638,22 @@ LDI r10, 0
 GT r11, r8, r10
 LDI r12, true
 NEQ r12, r11, r12
-JIF r12, 10141
+JIF r12, 10192
 LDI r13, "family_open_capsule_base_id_by_id:"
 CONCAT r13, r13, r5
 SLOADK r14, r13
 NEQ r15, r14, r1
 MOV r12, r15
-JMP 10142
-JDEST 10141
+JMP 10193
+JDEST 10192
 LDI r12, false
-JDEST 10142
-JIF r12, 10143
-JMP 10144
-JDEST 10143
+JDEST 10193
+JIF r12, 10194
+JMP 10195
+JDEST 10194
 MSTORE 1001, r5
-CALL_INT r7, 3800
-JDEST 10144
+CALL_INT r7, 3900
+JDEST 10195
 LDI r7, "family_open_capsule_row_count_by_id:"
 CONCAT r7, r7, r5
 SLOADK r8, r7
@@ -2237,16 +2661,16 @@ LDI r9, 0
 ADD r8, r9, r8
 LDI r10, 0
 EQ r11, r8, r10
-JIF r11, 10145
-JMP 10146
-JDEST 10145
+JIF r11, 10196
+JMP 10197
+JDEST 10196
 LDI r7, "family_open_capsule_base_id_by_id:"
 CONCAT r7, r7, r5
 SLOADK r8, r7
 NEQ r9, r8, r1
-JIF r9, 10147
-JMP 10148
-JDEST 10147
+JIF r9, 10198
+JMP 10199
+JDEST 10198
 LDI r7, "family_open_capsule_base_id_by_id:"
 CONCAT r7, r7, r5
 SSTOREK r7, r1
@@ -2254,84 +2678,118 @@ LDI r7, "family_open_capsule_segment_by_id:"
 CONCAT r7, r7, r5
 LDI r8, 0
 SSTOREK r7, r8
-JDEST 10148
-LDI r7, "family_open_capsule_id_by_id:"
-CONCAT r7, r7, r5
-LDI r8, "family_open_capsule_segment_by_id:"
-CONCAT r8, r8, r5
-SLOADK r9, r8
-LDI r10, 0
-ADD r9, r10, r9
-MSTORE 1001, r1
-MSTORE 1002, r9
-CALL_INT r11, 1900
-SSTOREK r7, r11
-LDI r7, "family_open_capsule_first_index_by_id:"
-CONCAT r7, r7, r5
-SSTOREK r7, r2
-LDI r7, "family_open_capsule_start_root_by_id:"
-CONCAT r7, r7, r5
-LDI r8, "family_open_capsule_end_root_by_id:"
-CONCAT r8, r8, r5
-SLOADK r9, r8
-SSTOREK r7, r9
-JDEST 10146
-LDI r7, "family_open_capsule_id_by_id:"
+JDEST 10199
+LDI r7, "family_open_capsule_segment_by_id:"
 CONCAT r7, r7, r5
 SLOADK r8, r7
-MOV r7, r8
-LDI r8, "family_open_capsule_end_root_by_id:"
-CONCAT r8, r8, r5
-SLOADK r9, r8
+LDI r9, 0
+ADD r8, r9, r8
+MSTORE 1001, r1
+MSTORE 1002, r8
+CALL_INT r10, 1900
+MOV r7, r10
 MSTORE 1001, r5
-MSTORE 1002, r6
-MSTORE 1003, r9
-MSTORE 1004, r4
-CALL_INT r10, 2900
-MOV r8, r10
-LDI r9, "family_latest_index_by_id:"
+MSTORE 1002, r7
+CALL_INT r8, 2100
+LDI r9, "family_capsule_body_by_key:"
+CONCAT r9, r9, r8
+SLOADK r10, r9
+MSTORE 1001, r10
+CALL_INT r11, 2000
+JIF r11, 10200
+LDI r12, "capsule body slot occupied"
+EMIT "Require", r12
+REVERT
+JDEST 10200
+LDI r9, "family_capsule_meta_by_key:"
+CONCAT r9, r9, r8
+SLOADK r10, r9
+MSTORE 1001, r10
+CALL_INT r11, 2000
+JIF r11, 10201
+LDI r12, "capsule meta slot occupied"
+EMIT "Require", r12
+REVERT
+JDEST 10201
+LDI r9, "family_capsule_root_after_by_key:"
+CONCAT r9, r9, r8
+SLOADK r10, r9
+MSTORE 1001, r10
+CALL_INT r11, 2000
+JIF r11, 10202
+LDI r12, "capsule root slot occupied"
+EMIT "Require", r12
+REVERT
+JDEST 10202
+LDI r9, "family_open_capsule_id_by_id:"
+CONCAT r9, r9, r5
+SSTOREK r9, r7
+LDI r9, "family_open_capsule_first_index_by_id:"
 CONCAT r9, r9, r5
 SSTOREK r9, r2
-LDI r9, "family_root_by_id:"
+LDI r9, "family_open_capsule_start_root_by_id:"
 CONCAT r9, r9, r5
-SSTOREK r9, r8
-LDI r9, "family_open_capsule_body_by_id:"
-CONCAT r9, r9, r5
-LDI r10, "family_open_capsule_body_by_id:"
+LDI r10, "family_open_capsule_end_root_by_id:"
 CONCAT r10, r10, r5
 SLOADK r11, r10
-CONCAT r12, r11, r4
-SSTOREK r9, r12
-LDI r9, "family_open_capsule_row_count_by_id:"
-CONCAT r9, r9, r5
-LDI r10, "family_open_capsule_row_count_by_id:"
-CONCAT r10, r10, r5
-SLOADK r11, r10
-LDI r12, 0
-ADD r11, r12, r11
-LDI r13, 1
-ADD r14, r11, r13
-SSTOREK r9, r14
-LDI r9, "family_open_capsule_end_root_by_id:"
-CONCAT r9, r9, r5
-SSTOREK r9, r8
-LDI r9, "family_open_capsule_row_count_by_id:"
+SSTOREK r9, r11
+JDEST 10197
+LDI r9, "family_open_capsule_id_by_id:"
 CONCAT r9, r9, r5
 SLOADK r10, r9
-LDI r11, 0
-ADD r10, r11, r10
-LDI r12, 48
-EQ r13, r10, r12
-JIF r13, 10149
-JMP 10150
-JDEST 10149
+MOV r9, r10
+LDI r10, "family_open_capsule_end_root_by_id:"
+CONCAT r10, r10, r5
+SLOADK r11, r10
 MSTORE 1001, r5
-CALL_INT r9, 3800
-JDEST 10150
-MOV r0, r7
+MSTORE 1002, r6
+MSTORE 1003, r11
+MSTORE 1004, r4
+CALL_INT r12, 2900
+MOV r10, r12
+LDI r11, "family_latest_index_by_id:"
+CONCAT r11, r11, r5
+SSTOREK r11, r2
+LDI r11, "family_root_by_id:"
+CONCAT r11, r11, r5
+SSTOREK r11, r10
+LDI r11, "family_open_capsule_body_by_id:"
+CONCAT r11, r11, r5
+LDI r12, "family_open_capsule_body_by_id:"
+CONCAT r12, r12, r5
+SLOADK r13, r12
+CONCAT r14, r13, r4
+SSTOREK r11, r14
+LDI r11, "family_open_capsule_row_count_by_id:"
+CONCAT r11, r11, r5
+LDI r12, "family_open_capsule_row_count_by_id:"
+CONCAT r12, r12, r5
+SLOADK r13, r12
+LDI r14, 0
+ADD r13, r14, r13
+LDI r15, 1
+ADD r16, r13, r15
+SSTOREK r11, r16
+LDI r11, "family_open_capsule_end_root_by_id:"
+CONCAT r11, r11, r5
+SSTOREK r11, r10
+LDI r11, "family_open_capsule_row_count_by_id:"
+CONCAT r11, r11, r5
+SLOADK r12, r11
+LDI r13, 0
+ADD r12, r13, r12
+LDI r14, 48
+EQ r15, r12, r14
+JIF r15, 10203
+JMP 10204
+JDEST 10203
+MSTORE 1001, r5
+CALL_INT r11, 3900
+JDEST 10204
+MOV r0, r9
 STOP
 STOP
-JDEST 4000
+JDEST 4100
 MLOAD r1, 1001
 MLOAD r2, 1002
 MLOAD r3, 1003
@@ -2358,22 +2816,22 @@ LDI r10, 0
 GT r11, r8, r10
 LDI r12, true
 NEQ r12, r11, r12
-JIF r12, 10151
+JIF r12, 10205
 LDI r13, "family_open_capsule_base_id_by_id:"
 CONCAT r13, r13, r1
 SLOADK r14, r13
 NEQ r15, r14, r2
 MOV r12, r15
-JMP 10152
-JDEST 10151
+JMP 10206
+JDEST 10205
 LDI r12, false
-JDEST 10152
-JIF r12, 10153
-JMP 10154
-JDEST 10153
+JDEST 10206
+JIF r12, 10207
+JMP 10208
+JDEST 10207
 MSTORE 1001, r1
-CALL_INT r7, 3800
-JDEST 10154
+CALL_INT r7, 3900
+JDEST 10208
 LDI r7, "family_open_capsule_row_count_by_id:"
 CONCAT r7, r7, r1
 SLOADK r8, r7
@@ -2381,16 +2839,16 @@ LDI r9, 0
 ADD r8, r9, r8
 LDI r10, 0
 EQ r11, r8, r10
-JIF r11, 10155
-JMP 10156
-JDEST 10155
+JIF r11, 10209
+JMP 10210
+JDEST 10209
 LDI r7, "family_open_capsule_base_id_by_id:"
 CONCAT r7, r7, r1
 SLOADK r8, r7
 NEQ r9, r8, r2
-JIF r9, 10157
-JMP 10158
-JDEST 10157
+JIF r9, 10211
+JMP 10212
+JDEST 10211
 LDI r7, "family_open_capsule_base_id_by_id:"
 CONCAT r7, r7, r1
 SSTOREK r7, r2
@@ -2398,299 +2856,323 @@ LDI r7, "family_open_capsule_segment_by_id:"
 CONCAT r7, r7, r1
 LDI r8, 0
 SSTOREK r7, r8
-JDEST 10158
-LDI r7, "family_open_capsule_id_by_id:"
-CONCAT r7, r7, r1
-LDI r8, "family_open_capsule_segment_by_id:"
-CONCAT r8, r8, r1
-SLOADK r9, r8
-LDI r10, 0
-ADD r9, r10, r9
-MSTORE 1001, r2
-MSTORE 1002, r9
-CALL_INT r11, 1900
-SSTOREK r7, r11
-LDI r7, "family_open_capsule_first_index_by_id:"
-CONCAT r7, r7, r1
-SSTOREK r7, r3
-LDI r7, "family_open_capsule_start_root_by_id:"
-CONCAT r7, r7, r1
-LDI r8, "family_open_capsule_end_root_by_id:"
-CONCAT r8, r8, r1
-SLOADK r9, r8
-SSTOREK r7, r9
-JDEST 10156
-LDI r7, "family_open_capsule_id_by_id:"
+JDEST 10212
+LDI r7, "family_open_capsule_segment_by_id:"
 CONCAT r7, r7, r1
 SLOADK r8, r7
-MOV r7, r8
-LDI r8, "family_open_capsule_end_root_by_id:"
-CONCAT r8, r8, r1
-SLOADK r9, r8
+LDI r9, 0
+ADD r8, r9, r8
+MSTORE 1001, r2
+MSTORE 1002, r8
+CALL_INT r10, 1900
+MOV r7, r10
 MSTORE 1001, r1
-MSTORE 1002, r6
-MSTORE 1003, r9
-MSTORE 1004, r5
-CALL_INT r10, 2900
-MOV r8, r10
-LDI r9, "family_latest_index_by_id:"
+MSTORE 1002, r7
+CALL_INT r8, 2100
+LDI r9, "family_capsule_body_by_key:"
+CONCAT r9, r9, r8
+SLOADK r10, r9
+MSTORE 1001, r10
+CALL_INT r11, 2000
+JIF r11, 10213
+LDI r12, "capsule body slot occupied"
+EMIT "Require", r12
+REVERT
+JDEST 10213
+LDI r9, "family_capsule_meta_by_key:"
+CONCAT r9, r9, r8
+SLOADK r10, r9
+MSTORE 1001, r10
+CALL_INT r11, 2000
+JIF r11, 10214
+LDI r12, "capsule meta slot occupied"
+EMIT "Require", r12
+REVERT
+JDEST 10214
+LDI r9, "family_capsule_root_after_by_key:"
+CONCAT r9, r9, r8
+SLOADK r10, r9
+MSTORE 1001, r10
+CALL_INT r11, 2000
+JIF r11, 10215
+LDI r12, "capsule root slot occupied"
+EMIT "Require", r12
+REVERT
+JDEST 10215
+LDI r9, "family_open_capsule_id_by_id:"
+CONCAT r9, r9, r1
+SSTOREK r9, r7
+LDI r9, "family_open_capsule_first_index_by_id:"
 CONCAT r9, r9, r1
 SSTOREK r9, r3
-LDI r9, "family_root_by_id:"
+LDI r9, "family_open_capsule_start_root_by_id:"
 CONCAT r9, r9, r1
-SSTOREK r9, r8
-LDI r9, "family_open_capsule_body_by_id:"
-CONCAT r9, r9, r1
-LDI r10, "family_open_capsule_body_by_id:"
+LDI r10, "family_open_capsule_end_root_by_id:"
 CONCAT r10, r10, r1
 SLOADK r11, r10
-CONCAT r12, r11, r5
-SSTOREK r9, r12
-LDI r9, "family_open_capsule_row_count_by_id:"
-CONCAT r9, r9, r1
-LDI r10, "family_open_capsule_row_count_by_id:"
-CONCAT r10, r10, r1
-SLOADK r11, r10
-LDI r12, 0
-ADD r11, r12, r11
-LDI r13, 1
-ADD r14, r11, r13
-SSTOREK r9, r14
-LDI r9, "family_open_capsule_end_root_by_id:"
-CONCAT r9, r9, r1
-SSTOREK r9, r8
-LDI r9, "family_open_capsule_row_count_by_id:"
+SSTOREK r9, r11
+JDEST 10210
+LDI r9, "family_open_capsule_id_by_id:"
 CONCAT r9, r9, r1
 SLOADK r10, r9
-LDI r11, 0
-ADD r10, r11, r10
-LDI r12, 48
-EQ r13, r10, r12
-JIF r13, 10159
-JMP 10160
-JDEST 10159
+MOV r9, r10
+LDI r10, "family_open_capsule_end_root_by_id:"
+CONCAT r10, r10, r1
+SLOADK r11, r10
 MSTORE 1001, r1
-CALL_INT r9, 3800
-JDEST 10160
-MOV r0, r7
+MSTORE 1002, r6
+MSTORE 1003, r11
+MSTORE 1004, r5
+CALL_INT r12, 2900
+MOV r10, r12
+LDI r11, "family_latest_index_by_id:"
+CONCAT r11, r11, r1
+SSTOREK r11, r3
+LDI r11, "family_root_by_id:"
+CONCAT r11, r11, r1
+SSTOREK r11, r10
+LDI r11, "family_open_capsule_body_by_id:"
+CONCAT r11, r11, r1
+LDI r12, "family_open_capsule_body_by_id:"
+CONCAT r12, r12, r1
+SLOADK r13, r12
+CONCAT r14, r13, r5
+SSTOREK r11, r14
+LDI r11, "family_open_capsule_row_count_by_id:"
+CONCAT r11, r11, r1
+LDI r12, "family_open_capsule_row_count_by_id:"
+CONCAT r12, r12, r1
+SLOADK r13, r12
+LDI r14, 0
+ADD r13, r14, r13
+LDI r15, 1
+ADD r16, r13, r15
+SSTOREK r11, r16
+LDI r11, "family_open_capsule_end_root_by_id:"
+CONCAT r11, r11, r1
+SSTOREK r11, r10
+LDI r11, "family_open_capsule_row_count_by_id:"
+CONCAT r11, r11, r1
+SLOADK r12, r11
+LDI r13, 0
+ADD r12, r13, r12
+LDI r14, 48
+EQ r15, r12, r14
+JIF r15, 10216
+JMP 10217
+JDEST 10216
+MSTORE 1001, r1
+CALL_INT r11, 3900
+JDEST 10217
+MOV r0, r9
 STOP
 STOP
-JDEST 4100
+JDEST 4200
 LDI r1, "octra-vitals-fact-ledger.v2"
 MOV r0, r1
 STOP
 STOP
-JDEST 4200
+JDEST 4300
 SLOAD r1, "initialized"
 LDI r2, "true"
 EQ r1, r1, r2
 MOV r0, r1
 STOP
 STOP
-JDEST 4300
+JDEST 4400
 SLOAD r1, "owner"
 MOV r0, r1
 STOP
 STOP
-JDEST 4400
+JDEST 4500
 SLOAD r1, "operator"
 MOV r0, r1
 STOP
 STOP
-JDEST 4500
+JDEST 4600
 SLOAD r1, "paused"
 LDI r2, "true"
 EQ r1, r1, r2
 MOV r0, r1
 STOP
 STOP
-JDEST 4600
+JDEST 4700
 SLOAD r1, "successor_program"
 MOV r0, r1
 STOP
 STOP
-JDEST 4700
+JDEST 4800
 SLOAD r1, "successor_set"
 LDI r2, "true"
 EQ r1, r1, r2
 MOV r0, r1
 STOP
 STOP
-JDEST 4800
+JDEST 4900
 SLOAD r1, "era_program"
 MOV r0, r1
 STOP
 STOP
-JDEST 4900
+JDEST 5000
 SLOAD r1, "era_network_id"
 MOV r0, r1
 STOP
 STOP
-JDEST 5000
+JDEST 5100
 SLOAD r1, "predecessor_program"
 MOV r0, r1
 STOP
 STOP
-JDEST 5100
+JDEST 5200
 SLOAD r1, "predecessor_final_root"
 MOV r0, r1
 STOP
 STOP
-JDEST 5200
+JDEST 5300
 SLOAD r1, "predecessor_final_index"
 LDI r2, 0
 ADD r1, r2, r1
 MOV r0, r1
 STOP
 STOP
-JDEST 5300
+JDEST 5400
 SLOAD r1, "predecessor_anchor_hash"
 MOV r0, r1
 STOP
 STOP
-JDEST 5400
+JDEST 5500
 SLOAD r1, "era_first_snapshot_index"
 LDI r2, 0
 ADD r1, r2, r1
 MOV r0, r1
 STOP
 STOP
-JDEST 5500
+JDEST 5600
 SLOAD r1, "snapshot_count"
 LDI r2, 0
 ADD r1, r2, r1
 MOV r0, r1
 STOP
 STOP
-JDEST 5600
+JDEST 5700
 SLOAD r1, "latest_snapshot_index"
 LDI r2, 0
 ADD r1, r2, r1
 MOV r0, r1
 STOP
 STOP
-JDEST 5700
+JDEST 5800
 SLOAD r1, "latest_snapshot_id"
 MOV r0, r1
 STOP
 STOP
-JDEST 5800
+JDEST 5900
 SLOAD r1, "latest_observed_at"
 MOV r0, r1
 STOP
 STOP
-JDEST 5900
+JDEST 6000
 SLOAD r1, "latest_epoch"
 LDI r2, 0
 ADD r1, r2, r1
 MOV r0, r1
 STOP
 STOP
-JDEST 6000
+JDEST 6100
 SLOAD r1, "latest_payload_hash"
 MOV r0, r1
 STOP
 STOP
-JDEST 6100
+JDEST 6200
 SLOAD r1, "latest_evidence_manifest_hash"
 MOV r0, r1
 STOP
 STOP
-JDEST 6200
+JDEST 6300
 SLOAD r1, "latest_source_refs_hash"
 MOV r0, r1
 STOP
 STOP
-JDEST 6300
+JDEST 6400
 SLOAD r1, "latest_summary_hash"
 MOV r0, r1
 STOP
 STOP
-JDEST 6400
+JDEST 6500
 SLOAD r1, "latest_history_row_hash"
 MOV r0, r1
 STOP
 STOP
-JDEST 6500
+JDEST 6600
 SLOAD r1, "latest_payload"
 MOV r0, r1
 STOP
 STOP
-JDEST 6600
+JDEST 6700
 SLOAD r1, "latest_evidence_manifest"
 MOV r0, r1
 STOP
 STOP
-JDEST 6700
+JDEST 6800
 SLOAD r1, "latest_source_refs"
 MOV r0, r1
 STOP
 STOP
-JDEST 6800
+JDEST 6900
 SLOAD r1, "latest_summary"
 MOV r0, r1
 STOP
 STOP
-JDEST 6900
+JDEST 7000
 SLOAD r1, "latest_history_row"
 MOV r0, r1
 STOP
 STOP
-JDEST 7000
+JDEST 7100
 SLOAD r1, "latest_submitter"
 MOV r0, r1
 STOP
 STOP
-JDEST 7100
+JDEST 7200
 LDI r1, 208
 MOV r0, r1
 STOP
 STOP
-JDEST 7200
+JDEST 7300
 LDI r1, 295
 MOV r0, r1
 STOP
 STOP
-JDEST 7300
+JDEST 7400
 LDI r1, 577
 MOV r0, r1
 STOP
 STOP
-JDEST 7400
+JDEST 7500
 LDI r1, 48
 MOV r0, r1
 STOP
 STOP
-JDEST 7500
+JDEST 7600
 LDI r1, 4
 MOV r0, r1
 STOP
 STOP
-JDEST 7600
+JDEST 7700
 SLOAD r1, "catalog_root"
 MOV r0, r1
 STOP
 STOP
-JDEST 7700
+JDEST 7800
 SLOAD r1, "family_count"
 LDI r2, 0
 ADD r1, r2, r1
 MOV r0, r1
 STOP
 STOP
-JDEST 7800
-MLOAD r1, 1001
-LDI r2, "family_id_by_ordinal:"
-CONCAT r2, r2, r1
-SLOADK r3, r2
-MOV r0, r3
-STOP
-STOP
 JDEST 7900
 MLOAD r1, 1001
-MSTORE 1001, r1
-CALL_INT r2, 2400
-LDI r2, "family_definition_by_id:"
+LDI r2, "family_id_by_ordinal:"
 CONCAT r2, r2, r1
 SLOADK r3, r2
 MOV r0, r3
@@ -2700,7 +3182,7 @@ JDEST 8000
 MLOAD r1, 1001
 MSTORE 1001, r1
 CALL_INT r2, 2400
-LDI r2, "family_root_by_id:"
+LDI r2, "family_definition_by_id:"
 CONCAT r2, r2, r1
 SLOADK r3, r2
 MOV r0, r3
@@ -2710,15 +3192,25 @@ JDEST 8100
 MLOAD r1, 1001
 MSTORE 1001, r1
 CALL_INT r2, 2400
+LDI r2, "family_root_by_id:"
+CONCAT r2, r2, r1
+SLOADK r3, r2
+MOV r0, r3
+STOP
+STOP
+JDEST 8200
+MLOAD r1, 1001
+MSTORE 1001, r1
+CALL_INT r2, 2400
 LDI r2, "family_capsules_root_by_id:"
 CONCAT r2, r2, r1
 SLOADK r3, r2
 MOV r2, r3
 LDI r3, ""
 EQ r4, r2, r3
-JIF r4, 10161
-JMP 10162
-JDEST 10161
+JIF r4, 10218
+JMP 10219
+JDEST 10218
 MSTORE 1001, r1
 CALL_INT r3, 2500
 MSTORE 1001, r1
@@ -2726,12 +3218,12 @@ MSTORE 1002, r3
 CALL_INT r4, 3000
 MOV r0, r4
 STOP
-JDEST 10162
+JDEST 10219
 LDI r3, "0"
 EQ r4, r2, r3
-JIF r4, 10163
-JMP 10164
-JDEST 10163
+JIF r4, 10220
+JMP 10221
+JDEST 10220
 MSTORE 1001, r1
 CALL_INT r3, 2500
 MSTORE 1001, r1
@@ -2739,11 +3231,11 @@ MSTORE 1002, r3
 CALL_INT r4, 3000
 MOV r0, r4
 STOP
-JDEST 10164
+JDEST 10221
 MOV r0, r2
 STOP
 STOP
-JDEST 8200
+JDEST 8300
 MLOAD r1, 1001
 MSTORE 1001, r1
 CALL_INT r2, 2400
@@ -2755,7 +3247,7 @@ ADD r3, r4, r3
 MOV r0, r3
 STOP
 STOP
-JDEST 8300
+JDEST 8400
 MLOAD r1, 1001
 MSTORE 1001, r1
 CALL_INT r2, 2400
@@ -2767,7 +3259,7 @@ ADD r3, r4, r3
 MOV r0, r3
 STOP
 STOP
-JDEST 8400
+JDEST 8500
 MLOAD r1, 1001
 MSTORE 1001, r1
 CALL_INT r2, 2400
@@ -2777,7 +3269,7 @@ SLOADK r3, r2
 MOV r0, r3
 STOP
 STOP
-JDEST 8500
+JDEST 8600
 MLOAD r1, 1001
 MLOAD r2, 1002
 MSTORE 1001, r1
@@ -2791,7 +3283,7 @@ SLOADK r5, r4
 MOV r0, r5
 STOP
 STOP
-JDEST 8600
+JDEST 8700
 MLOAD r1, 1001
 MSTORE 1001, r1
 CALL_INT r2, 2400
@@ -2801,7 +3293,7 @@ SLOADK r3, r2
 MOV r0, r3
 STOP
 STOP
-JDEST 8700
+JDEST 8800
 MLOAD r1, 1001
 MSTORE 1001, r1
 CALL_INT r2, 2400
@@ -2811,7 +3303,7 @@ SLOADK r3, r2
 MOV r0, r3
 STOP
 STOP
-JDEST 8800
+JDEST 8900
 MLOAD r1, 1001
 MSTORE 1001, r1
 CALL_INT r2, 2400
@@ -2823,7 +3315,7 @@ ADD r3, r4, r3
 MOV r0, r3
 STOP
 STOP
-JDEST 8900
+JDEST 9000
 MLOAD r1, 1001
 MSTORE 1001, r1
 CALL_INT r2, 2400
@@ -2833,7 +3325,7 @@ SLOADK r3, r2
 MOV r0, r3
 STOP
 STOP
-JDEST 9000
+JDEST 9100
 MLOAD r1, 1001
 MSTORE 1001, r1
 CALL_INT r2, 2400
@@ -2841,20 +3333,6 @@ LDI r2, "family_open_capsule_end_root_by_id:"
 CONCAT r2, r2, r1
 SLOADK r3, r2
 MOV r0, r3
-STOP
-STOP
-JDEST 9100
-MLOAD r1, 1001
-MLOAD r2, 1002
-MSTORE 1001, r1
-CALL_INT r3, 2400
-MSTORE 1001, r1
-MSTORE 1002, r2
-CALL_INT r3, 2100
-LDI r4, "family_capsule_body_by_key:"
-CONCAT r4, r4, r3
-SLOADK r5, r4
-MOV r0, r5
 STOP
 STOP
 JDEST 9200
@@ -2865,7 +3343,7 @@ CALL_INT r3, 2400
 MSTORE 1001, r1
 MSTORE 1002, r2
 CALL_INT r3, 2100
-LDI r4, "family_capsule_meta_by_key:"
+LDI r4, "family_capsule_body_by_key:"
 CONCAT r4, r4, r3
 SLOADK r5, r4
 MOV r0, r5
@@ -2879,13 +3357,27 @@ CALL_INT r3, 2400
 MSTORE 1001, r1
 MSTORE 1002, r2
 CALL_INT r3, 2100
-LDI r4, "family_capsule_root_after_by_key:"
+LDI r4, "family_capsule_meta_by_key:"
 CONCAT r4, r4, r3
 SLOADK r5, r4
 MOV r0, r5
 STOP
 STOP
 JDEST 9400
+MLOAD r1, 1001
+MLOAD r2, 1002
+MSTORE 1001, r1
+CALL_INT r3, 2400
+MSTORE 1001, r1
+MSTORE 1002, r2
+CALL_INT r3, 2100
+LDI r4, "family_capsule_root_after_by_key:"
+CONCAT r4, r4, r3
+SLOADK r5, r4
+MOV r0, r5
+STOP
+STOP
+JDEST 9500
 LDI r1, "0000"
 LDI r2, "family_root_by_id:"
 CONCAT r2, r2, r1
@@ -2893,7 +3385,7 @@ SLOADK r3, r2
 MOV r0, r3
 STOP
 STOP
-JDEST 9500
+JDEST 9600
 LDI r1, "0000"
 LDI r2, "family_capsules_root_by_id:"
 CONCAT r2, r2, r1
@@ -2901,9 +3393,9 @@ SLOADK r3, r2
 MOV r1, r3
 LDI r2, ""
 EQ r3, r1, r2
-JIF r3, 10165
-JMP 10166
-JDEST 10165
+JIF r3, 10222
+JMP 10223
+JDEST 10222
 LDI r2, "0000"
 LDI r3, "0000"
 MSTORE 1001, r2
@@ -2911,12 +3403,12 @@ MSTORE 1002, r3
 CALL_INT r4, 3000
 MOV r0, r4
 STOP
-JDEST 10166
+JDEST 10223
 LDI r2, "0"
 EQ r3, r1, r2
-JIF r3, 10167
-JMP 10168
-JDEST 10167
+JIF r3, 10224
+JMP 10225
+JDEST 10224
 LDI r2, "0000"
 LDI r3, "0000"
 MSTORE 1001, r2
@@ -2924,11 +3416,11 @@ MSTORE 1002, r3
 CALL_INT r4, 3000
 MOV r0, r4
 STOP
-JDEST 10168
+JDEST 10225
 MOV r0, r1
 STOP
 STOP
-JDEST 9600
+JDEST 9700
 LDI r1, "0000"
 LDI r2, "family_open_capsule_body_by_id:"
 CONCAT r2, r2, r1
@@ -2936,7 +3428,7 @@ SLOADK r3, r2
 MOV r0, r3
 STOP
 STOP
-JDEST 9700
+JDEST 9800
 LDI r1, "0000"
 LDI r2, "family_open_capsule_row_count_by_id:"
 CONCAT r2, r2, r1
@@ -2946,7 +3438,7 @@ ADD r3, r4, r3
 MOV r0, r3
 STOP
 STOP
-JDEST 9800
+JDEST 9900
 LDI r1, "0000"
 LDI r2, "family_open_capsule_end_root_by_id:"
 CONCAT r2, r2, r1
@@ -2954,7 +3446,7 @@ SLOADK r3, r2
 MOV r0, r3
 STOP
 STOP
-JDEST 9900
+JDEST 10000
 LDI r1, "0000"
 LDI r2, "family_capsule_count_by_id:"
 CONCAT r2, r2, r1
@@ -2964,7 +3456,7 @@ ADD r3, r4, r3
 MOV r0, r3
 STOP
 STOP
-JDEST 10000
+JDEST 10100
 LDI r1, "0000"
 LDI r2, "family_latest_capsule_id_by_id:"
 CONCAT r2, r2, r1
@@ -2972,7 +3464,7 @@ SLOADK r3, r2
 MOV r0, r3
 STOP
 STOP
-JDEST 10100
+JDEST 10200
 LDI r1, "0000"
 LDI r2, "family_latest_capsule_id_by_id:"
 CONCAT r2, r2, r1
@@ -2980,30 +3472,18 @@ SLOADK r3, r2
 MOV r1, r3
 LDI r2, ""
 EQ r3, r1, r2
-JIF r3, 10169
-JMP 10170
-JDEST 10169
+JIF r3, 10226
+JMP 10227
+JDEST 10226
 LDI r2, ""
 MOV r0, r2
 STOP
-JDEST 10170
+JDEST 10227
 LDI r2, "0000"
 MSTORE 1001, r2
 MSTORE 1002, r1
 CALL_INT r3, 2100
 LDI r4, "family_capsule_root_after_by_key:"
-CONCAT r4, r4, r3
-SLOADK r5, r4
-MOV r0, r5
-STOP
-STOP
-JDEST 10200
-MLOAD r1, 1001
-LDI r2, "0000"
-MSTORE 1001, r2
-MSTORE 1002, r1
-CALL_INT r3, 2100
-LDI r4, "family_capsule_body_by_key:"
 CONCAT r4, r4, r3
 SLOADK r5, r4
 MOV r0, r5
@@ -3015,13 +3495,25 @@ LDI r2, "0000"
 MSTORE 1001, r2
 MSTORE 1002, r1
 CALL_INT r3, 2100
-LDI r4, "family_capsule_meta_by_key:"
+LDI r4, "family_capsule_body_by_key:"
 CONCAT r4, r4, r3
 SLOADK r5, r4
 MOV r0, r5
 STOP
 STOP
 JDEST 10400
+MLOAD r1, 1001
+LDI r2, "0000"
+MSTORE 1001, r2
+MSTORE 1002, r1
+CALL_INT r3, 2100
+LDI r4, "family_capsule_meta_by_key:"
+CONCAT r4, r4, r3
+SLOADK r5, r4
+MOV r0, r5
+STOP
+STOP
+JDEST 10500
 SLOAD r1, "latest_snapshot_index"
 LDI r2, 0
 ADD r1, r2, r1
@@ -3053,7 +3545,7 @@ CONCAT r25, r23, r24
 MOV r0, r25
 STOP
 STOP
-JDEST 10500
+JDEST 10600
 MLOAD r1, 1001
 MLOAD r2, 1002
 MLOAD r3, 1003
@@ -3067,11 +3559,19 @@ LDI r10, "true"
 EQ r9, r9, r10
 LDI r11, true
 NEQ r11, r9, r11
-JIF r11, 10171
+JIF r11, 10228
 LDI r12, "already initialized"
 EMIT "Require", r12
 REVERT
-JDEST 10171
+JDEST 10228
+CALLER r9
+SLOAD r10, "owner"
+EQ r11, r9, r10
+JIF r11, 10229
+LDI r12, "not deployment owner"
+EMIT "Require", r12
+REVERT
+JDEST 10229
 ASSERT_ADDR r1
 LDI r9, true
 ASSERT_ADDR r2
@@ -3086,53 +3586,51 @@ LDI r9, 0
 LT r10, r4, r9
 LDI r11, true
 NEQ r10, r10, r11
-JIF r10, 10172
+JIF r10, 10230
 LDI r12, "predecessor final index"
 EMIT "Require", r12
 REVERT
-JDEST 10172
+JDEST 10230
 LDI r9, 1
 ADD r10, r4, r9
 EQ r11, r5, r10
-JIF r11, 10173
+JIF r11, 10231
 LDI r12, "era first index"
 EMIT "Require", r12
 REVERT
-JDEST 10173
+JDEST 10231
 LDI r9, "0000"
 MSTORE 1001, r8
 MSTORE 1002, r9
 CALL_INT r10, 2600
 LDI r9, true
-JIF r9, 10174
+JIF r9, 10232
 LDI r10, "false"
-JMP 10175
-JDEST 10174
+JMP 10233
+JDEST 10232
 LDI r10, "true"
-JDEST 10175
+JDEST 10233
 SSTORE "initialized", r10
-CALLER r9
-SSTORE "owner", r9
 SSTORE "operator", r1
 SSTORE "successor_program", r7
 LDI r9, false
-JIF r9, 10176
+JIF r9, 10234
 LDI r10, "false"
-JMP 10177
-JDEST 10176
+JMP 10235
+JDEST 10234
 LDI r10, "true"
-JDEST 10177
+JDEST 10235
 SSTORE "successor_set", r10
 SSTORE "era_program", r7
 SSTORE "era_network_id", r6
 SSTORE "predecessor_program", r2
 LDI r9, true
-JIF r9, 10178
+JIF r9, 10236
 LDI r10, "false"
-JMP 10179
-JDEST 10178
+JMP 10237
+JDEST 10236
 LDI r10, "true"
-JDEST 10179
+JDEST 10237
 SSTORE "predecessor_set", r10
 SSTORE "predecessor_final_root", r3
 SSTORE "predecessor_final_index", r4
@@ -3185,12 +3683,12 @@ SHA256 r16, r15
 SSTORE "predecessor_anchor_hash", r16
 SSTORE "era_first_snapshot_index", r5
 LDI r16, false
-JIF r16, 10180
+JIF r16, 10238
 LDI r17, "false"
-JMP 10181
-JDEST 10180
+JMP 10239
+JDEST 10238
 LDI r17, "true"
-JDEST 10181
+JDEST 10239
 SSTORE "paused", r17
 SSTORE "snapshot_count", r4
 SSTORE "latest_snapshot_index", r4
@@ -3235,34 +3733,34 @@ LDI r17, "008f25bcfca4b6697b53109e77f176f25d0475cc32097bf5925086ba0ffebdb3"
 MSTORE 1001, r16
 MSTORE 1002, r8
 MSTORE 1003, r17
-CALL_INT r18, 3500
+CALL_INT r18, 3600
 EMIT "Initialized", r1
 EMIT "PredecessorProgramSet", r2
 LDI r16, true
 MOV r0, r16
 STOP
 STOP
-JDEST 10600
+JDEST 10700
 MLOAD r1, 1001
 MLOAD r2, 1002
 MLOAD r3, 1003
 CALL_INT r4, 300
 LDI r4, "0000"
 NEQ r5, r1, r4
-JIF r5, 10182
+JIF r5, 10240
 LDI r6, "core already registered"
 EMIT "Require", r6
 REVERT
-JDEST 10182
+JDEST 10240
 MSTORE 1001, r1
 MSTORE 1002, r2
 MSTORE 1003, r3
-CALL_INT r4, 3500
+CALL_INT r4, 3600
 LDI r4, true
 MOV r0, r4
 STOP
 STOP
-JDEST 10700
+JDEST 10800
 MLOAD r1, 1001
 CALL_INT r2, 300
 ASSERT_ADDR r1
@@ -3273,22 +3771,22 @@ LDI r2, true
 MOV r0, r2
 STOP
 STOP
-JDEST 10800
+JDEST 10900
 MLOAD r1, 1001
 CALL_INT r2, 300
-JIF r1, 10183
+JIF r1, 10241
 LDI r2, "false"
-JMP 10184
-JDEST 10183
+JMP 10242
+JDEST 10241
 LDI r2, "true"
-JDEST 10184
+JDEST 10242
 SSTORE "paused", r2
 EMIT "Paused", r1
 LDI r2, true
 MOV r0, r2
 STOP
 STOP
-JDEST 10900
+JDEST 11000
 MLOAD r1, 1001
 CALL_INT r2, 300
 ASSERT_ADDR r1
@@ -3298,26 +3796,26 @@ LDI r3, "true"
 EQ r2, r2, r3
 LDI r4, true
 NEQ r4, r2, r4
-JIF r4, 10185
+JIF r4, 10243
 LDI r5, "successor already set"
 EMIT "Require", r5
 REVERT
-JDEST 10185
+JDEST 10243
 SSTORE "successor_program", r1
 LDI r2, true
-JIF r2, 10186
+JIF r2, 10244
 LDI r3, "false"
-JMP 10187
-JDEST 10186
+JMP 10245
+JDEST 10244
 LDI r3, "true"
-JDEST 10187
+JDEST 10245
 SSTORE "successor_set", r3
 EMIT "SuccessorProgramSet", r1
 LDI r2, true
 MOV r0, r2
 STOP
 STOP
-JDEST 11000
+JDEST 11100
 MLOAD r1, 1001
 MLOAD r2, 1002
 MLOAD r3, 1003
@@ -3333,11 +3831,11 @@ LDI r11, "true"
 EQ r10, r10, r11
 LDI r12, true
 NEQ r12, r10, r12
-JIF r12, 10188
+JIF r12, 10246
 LDI r13, "paused"
 EMIT "Require", r13
 REVERT
-JDEST 10188
+JDEST 10246
 MSTORE 1001, r6
 CALL_INT r10, 1100
 MSTORE 1001, r7
@@ -3345,117 +3843,133 @@ CALL_INT r10, 1300
 MSTORE 1001, r6
 CALL_INT r10, 1200
 EQ r11, r7, r10
-JIF r11, 10189
+JIF r11, 10247
 LDI r12, "capsule observed_at mismatch"
 EMIT "Require", r12
 REVERT
-JDEST 10189
+JDEST 10247
+SLOAD r10, "latest_observed_at"
+LDI r11, ""
+EQ r12, r10, r11
+JIF r12, 10248
+SLOAD r14, "latest_observed_at"
+GT r15, r6, r14
+MOV r13, r15
+JMP 10249
+JDEST 10248
+LDI r13, true
+JDEST 10249
+JIF r13, 10250
+LDI r16, "observed_at not increasing"
+EMIT "Require", r16
+REVERT
+JDEST 10250
 SLOAD r10, "snapshot_count"
 LDI r11, 0
 ADD r10, r11, r10
 LDI r12, 1
 ADD r13, r10, r12
 EQ r14, r9, r13
-JIF r14, 10190
+JIF r14, 10251
 LDI r15, "snapshot index"
 EMIT "Require", r15
 REVERT
-JDEST 10190
+JDEST 10251
 SLOAD r10, "era_first_snapshot_index"
 LDI r11, 0
 ADD r10, r11, r10
 LT r12, r9, r10
 LDI r13, true
 NEQ r12, r12, r13
-JIF r12, 10191
+JIF r12, 10252
 LDI r14, "snapshot before era"
 EMIT "Require", r14
 REVERT
-JDEST 10191
+JDEST 10252
 SLOAD r10, "latest_epoch"
 LDI r11, 0
 ADD r10, r11, r10
 LT r12, r8, r10
 LDI r13, true
 NEQ r12, r12, r13
-JIF r12, 10192
+JIF r12, 10253
 SLOAD r15, "latest_epoch"
 LDI r16, 0
 ADD r15, r16, r15
 LDI r17, 0
 EQ r18, r15, r17
 MOV r14, r18
-JMP 10193
-JDEST 10192
+JMP 10254
+JDEST 10253
 LDI r14, true
-JDEST 10193
-JIF r14, 10194
+JDEST 10254
+JIF r14, 10255
 LDI r19, "snapshot epoch moved backward"
 EMIT "Require", r19
 REVERT
-JDEST 10194
+JDEST 10255
 STRLEN r10, r1
 LDI r11, 0
 GT r12, r10, r11
-JIF r12, 10195
+JIF r12, 10256
 LDI r13, "payload required"
 EMIT "Require", r13
 REVERT
-JDEST 10195
+JDEST 10256
 STRLEN r10, r2
 LDI r11, 0
 GT r12, r10, r11
-JIF r12, 10196
+JIF r12, 10257
 LDI r13, "evidence required"
 EMIT "Require", r13
 REVERT
-JDEST 10196
+JDEST 10257
 STRLEN r10, r3
 LDI r11, 0
 GT r12, r10, r11
-JIF r12, 10197
+JIF r12, 10258
 LDI r13, "source refs required"
 EMIT "Require", r13
 REVERT
-JDEST 10197
+JDEST 10258
 STRLEN r10, r4
 LDI r11, 208
 EQ r12, r10, r11
-JIF r12, 10198
+JIF r12, 10259
 LDI r13, "summary row length"
 EMIT "Require", r13
 REVERT
-JDEST 10198
+JDEST 10259
 STRLEN r10, r1
 LDI r11, 12000
 GT r12, r10, r11
 LDI r13, true
 NEQ r12, r12, r13
-JIF r12, 10199
+JIF r12, 10260
 LDI r14, "payload too large"
 EMIT "Require", r14
 REVERT
-JDEST 10199
+JDEST 10260
 STRLEN r10, r2
 LDI r11, 8000
 GT r12, r10, r11
 LDI r13, true
 NEQ r12, r12, r13
-JIF r12, 10200
+JIF r12, 10261
 LDI r14, "evidence too large"
 EMIT "Require", r14
 REVERT
-JDEST 10200
+JDEST 10261
 STRLEN r10, r3
 LDI r11, 4096
 GT r12, r10, r11
 LDI r13, true
 NEQ r12, r12, r13
-JIF r12, 10201
+JIF r12, 10262
 LDI r14, "source refs too large"
 EMIT "Require", r14
 REVERT
-JDEST 10201
+JDEST 10262
 LDI r10, "sha256:"
 LDI r11, "octra-vitals:snapshot:v0"
 LDI r12, "
@@ -3494,7 +4008,7 @@ CONCAT r19, r13, r18
 MOV r13, r19
 MSTORE 1001, r4
 MSTORE 1002, r5
-CALL_INT r14, 3400
+CALL_INT r14, 3500
 LDI r14, "0000"
 LDI r15, "0000"
 MSTORE 1001, r14
@@ -3503,11 +4017,13 @@ MSTORE 1003, r9
 MSTORE 1004, r10
 MSTORE 1005, r5
 CALL_INT r16, 3200
+MSTORE 1001, r5
+CALL_INT r14, 3300
 MSTORE 1001, r7
 MSTORE 1002, r9
 MSTORE 1003, r10
 MSTORE 1004, r5
-CALL_INT r14, 3900
+CALL_INT r14, 4000
 LDI r15, "0000"
 LDI r16, "0000"
 MSTORE 1001, r15
@@ -3543,7 +4059,7 @@ LDI r18, true
 MOV r0, r18
 STOP
 STOP
-JDEST 11100
+JDEST 11200
 MLOAD r1, 1001
 MLOAD r2, 1002
 MLOAD r3, 1003
@@ -3564,11 +4080,11 @@ LDI r16, "true"
 EQ r15, r15, r16
 LDI r17, true
 NEQ r17, r15, r17
-JIF r17, 10202
+JIF r17, 10263
 LDI r18, "paused"
 EMIT "Require", r18
 REVERT
-JDEST 10202
+JDEST 10263
 MSTORE 1001, r6
 CALL_INT r15, 1100
 MSTORE 1001, r7
@@ -3576,135 +4092,151 @@ CALL_INT r15, 1300
 MSTORE 1001, r6
 CALL_INT r15, 1200
 EQ r16, r7, r15
-JIF r16, 10203
+JIF r16, 10264
 LDI r17, "capsule observed_at mismatch"
 EMIT "Require", r17
 REVERT
-JDEST 10203
+JDEST 10264
+SLOAD r15, "latest_observed_at"
+LDI r16, ""
+EQ r17, r15, r16
+JIF r17, 10265
+SLOAD r19, "latest_observed_at"
+GT r20, r6, r19
+MOV r18, r20
+JMP 10266
+JDEST 10265
+LDI r18, true
+JDEST 10266
+JIF r18, 10267
+LDI r21, "observed_at not increasing"
+EMIT "Require", r21
+REVERT
+JDEST 10267
 SLOAD r15, "snapshot_count"
 LDI r16, 0
 ADD r15, r16, r15
 LDI r17, 1
 ADD r18, r15, r17
 EQ r19, r9, r18
-JIF r19, 10204
+JIF r19, 10268
 LDI r20, "snapshot index"
 EMIT "Require", r20
 REVERT
-JDEST 10204
+JDEST 10268
 SLOAD r15, "era_first_snapshot_index"
 LDI r16, 0
 ADD r15, r16, r15
 LT r17, r9, r15
 LDI r18, true
 NEQ r17, r17, r18
-JIF r17, 10205
+JIF r17, 10269
 LDI r19, "snapshot before era"
 EMIT "Require", r19
 REVERT
-JDEST 10205
+JDEST 10269
 SLOAD r15, "latest_epoch"
 LDI r16, 0
 ADD r15, r16, r15
 LT r17, r8, r15
 LDI r18, true
 NEQ r17, r17, r18
-JIF r17, 10206
+JIF r17, 10270
 SLOAD r20, "latest_epoch"
 LDI r21, 0
 ADD r20, r21, r20
 LDI r22, 0
 EQ r23, r20, r22
 MOV r19, r23
-JMP 10207
-JDEST 10206
+JMP 10271
+JDEST 10270
 LDI r19, true
-JDEST 10207
-JIF r19, 10208
+JDEST 10271
+JIF r19, 10272
 LDI r24, "snapshot epoch moved backward"
 EMIT "Require", r24
 REVERT
-JDEST 10208
+JDEST 10272
 LDI r15, 0
 LT r16, r10, r15
 LDI r17, true
 NEQ r16, r16, r17
-JIF r16, 10209
+JIF r16, 10273
 LDI r18, "aux count negative"
 EMIT "Require", r18
 REVERT
-JDEST 10209
+JDEST 10273
 LDI r15, 4
 GT r16, r10, r15
 LDI r17, true
 NEQ r16, r16, r17
-JIF r16, 10210
+JIF r16, 10274
 LDI r18, "aux count too large"
 EMIT "Require", r18
 REVERT
-JDEST 10210
+JDEST 10274
 STRLEN r15, r1
 LDI r16, 0
 GT r17, r15, r16
-JIF r17, 10211
+JIF r17, 10275
 LDI r18, "payload required"
 EMIT "Require", r18
 REVERT
-JDEST 10211
+JDEST 10275
 STRLEN r15, r2
 LDI r16, 0
 GT r17, r15, r16
-JIF r17, 10212
+JIF r17, 10276
 LDI r18, "evidence required"
 EMIT "Require", r18
 REVERT
-JDEST 10212
+JDEST 10276
 STRLEN r15, r3
 LDI r16, 0
 GT r17, r15, r16
-JIF r17, 10213
+JIF r17, 10277
 LDI r18, "source refs required"
 EMIT "Require", r18
 REVERT
-JDEST 10213
+JDEST 10277
 STRLEN r15, r4
 LDI r16, 208
 EQ r17, r15, r16
-JIF r17, 10214
+JIF r17, 10278
 LDI r18, "summary row length"
 EMIT "Require", r18
 REVERT
-JDEST 10214
+JDEST 10278
 STRLEN r15, r1
 LDI r16, 12000
 GT r17, r15, r16
 LDI r18, true
 NEQ r17, r17, r18
-JIF r17, 10215
+JIF r17, 10279
 LDI r19, "payload too large"
 EMIT "Require", r19
 REVERT
-JDEST 10215
+JDEST 10279
 STRLEN r15, r2
 LDI r16, 8000
 GT r17, r15, r16
 LDI r18, true
 NEQ r17, r17, r18
-JIF r17, 10216
+JIF r17, 10280
 LDI r19, "evidence too large"
 EMIT "Require", r19
 REVERT
-JDEST 10216
+JDEST 10280
 STRLEN r15, r3
 LDI r16, 4096
 GT r17, r15, r16
 LDI r18, true
 NEQ r17, r17, r18
-JIF r17, 10217
+JIF r17, 10281
 LDI r19, "source refs too large"
 EMIT "Require", r19
 REVERT
-JDEST 10217
+JDEST 10281
 LDI r15, "sha256:"
 LDI r16, "octra-vitals:snapshot:v0"
 LDI r17, "
@@ -3743,7 +4275,7 @@ CONCAT r24, r18, r23
 MOV r18, r24
 MSTORE 1001, r4
 MSTORE 1002, r5
-CALL_INT r19, 3400
+CALL_INT r19, 3500
 LDI r19, "0000"
 LDI r20, "0000"
 MSTORE 1001, r19
@@ -3752,139 +4284,141 @@ MSTORE 1003, r9
 MSTORE 1004, r15
 MSTORE 1005, r5
 CALL_INT r21, 3200
+MSTORE 1001, r5
+CALL_INT r19, 3300
 MSTORE 1001, r7
 MSTORE 1002, r9
 MSTORE 1003, r15
 MSTORE 1004, r5
-CALL_INT r19, 3900
+CALL_INT r19, 4000
 LDI r20, "0000"
 LDI r21, 1
 LT r22, r10, r21
 LDI r23, true
 NEQ r22, r22, r23
-JIF r22, 10218
+JIF r22, 10282
 MSTORE 1001, r11
 CALL_INT r21, 2000
-JIF r21, 10220
+JIF r21, 10284
 LDI r22, "aux row 0 empty"
 EMIT "Require", r22
 REVERT
-JDEST 10220
-JMP 10219
-JDEST 10218
+JDEST 10284
+JMP 10283
+JDEST 10282
 MSTORE 1001, r9
 MSTORE 1002, r15
 MSTORE 1003, r11
-CALL_INT r21, 3300
+CALL_INT r21, 3400
 GT r22, r21, r20
-JIF r22, 10221
+JIF r22, 10285
 LDI r23, "aux family order 0"
 EMIT "Require", r23
 REVERT
-JDEST 10221
+JDEST 10285
 MSTORE 1001, r21
 MSTORE 1002, r7
 MSTORE 1003, r9
 MSTORE 1004, r15
 MSTORE 1005, r11
-CALL_INT r22, 4000
+CALL_INT r22, 4100
 MOV r20, r21
-JDEST 10219
+JDEST 10283
 LDI r22, 2
 LT r23, r10, r22
 LDI r24, true
 NEQ r23, r23, r24
-JIF r23, 10222
+JIF r23, 10286
 MSTORE 1001, r12
 CALL_INT r22, 2000
-JIF r22, 10224
+JIF r22, 10288
 LDI r23, "aux row 1 empty"
 EMIT "Require", r23
 REVERT
-JDEST 10224
-JMP 10223
-JDEST 10222
+JDEST 10288
+JMP 10287
+JDEST 10286
 MSTORE 1001, r9
 MSTORE 1002, r15
 MSTORE 1003, r12
-CALL_INT r22, 3300
+CALL_INT r22, 3400
 GT r23, r22, r20
-JIF r23, 10225
+JIF r23, 10289
 LDI r24, "aux family order 1"
 EMIT "Require", r24
 REVERT
-JDEST 10225
+JDEST 10289
 MSTORE 1001, r22
 MSTORE 1002, r7
 MSTORE 1003, r9
 MSTORE 1004, r15
 MSTORE 1005, r12
-CALL_INT r23, 4000
+CALL_INT r23, 4100
 MOV r20, r22
-JDEST 10223
+JDEST 10287
 LDI r23, 3
 LT r24, r10, r23
 LDI r25, true
 NEQ r24, r24, r25
-JIF r24, 10226
+JIF r24, 10290
 MSTORE 1001, r13
 CALL_INT r23, 2000
-JIF r23, 10228
+JIF r23, 10292
 LDI r24, "aux row 2 empty"
 EMIT "Require", r24
 REVERT
-JDEST 10228
-JMP 10227
-JDEST 10226
+JDEST 10292
+JMP 10291
+JDEST 10290
 MSTORE 1001, r9
 MSTORE 1002, r15
 MSTORE 1003, r13
-CALL_INT r23, 3300
+CALL_INT r23, 3400
 GT r24, r23, r20
-JIF r24, 10229
+JIF r24, 10293
 LDI r25, "aux family order 2"
 EMIT "Require", r25
 REVERT
-JDEST 10229
+JDEST 10293
 MSTORE 1001, r23
 MSTORE 1002, r7
 MSTORE 1003, r9
 MSTORE 1004, r15
 MSTORE 1005, r13
-CALL_INT r24, 4000
+CALL_INT r24, 4100
 MOV r20, r23
-JDEST 10227
+JDEST 10291
 LDI r24, 4
 LT r25, r10, r24
 LDI r26, true
 NEQ r25, r25, r26
-JIF r25, 10230
+JIF r25, 10294
 MSTORE 1001, r14
 CALL_INT r24, 2000
-JIF r24, 10232
+JIF r24, 10296
 LDI r25, "aux row 3 empty"
 EMIT "Require", r25
 REVERT
-JDEST 10232
-JMP 10231
-JDEST 10230
+JDEST 10296
+JMP 10295
+JDEST 10294
 MSTORE 1001, r9
 MSTORE 1002, r15
 MSTORE 1003, r14
-CALL_INT r24, 3300
+CALL_INT r24, 3400
 GT r25, r24, r20
-JIF r25, 10233
+JIF r25, 10297
 LDI r26, "aux family order 3"
 EMIT "Require", r26
 REVERT
-JDEST 10233
+JDEST 10297
 MSTORE 1001, r24
 MSTORE 1002, r7
 MSTORE 1003, r9
 MSTORE 1004, r15
 MSTORE 1005, r14
-CALL_INT r25, 4000
-JDEST 10231
+CALL_INT r25, 4100
+JDEST 10295
 LDI r25, "0000"
 LDI r26, "0000"
 MSTORE 1001, r25
