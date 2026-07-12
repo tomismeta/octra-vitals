@@ -97,6 +97,8 @@ write_selected_env_file "${SITE_DEPLOY_ENV}" \
   VITALS_FACT_LEDGER_PROGRAMMED_CIRCLE_SOURCE_HASH VITALS_FACT_LEDGER_PROGRAMMED_CIRCLE_BYTECODE_HASH \
   VITALS_FACT_LEDGER_PROGRAMMED_CIRCLE_VERIFICATION_HASH VITALS_PROGRAMMED_CIRCLE_SOURCE_HASH \
   VITALS_PROGRAMMED_CIRCLE_BYTECODE_HASH VITALS_PROGRAMMED_CIRCLE_VERIFICATION_HASH
+chown "${APP_OWNER_USER}:${APP_OWNER_USER}" "${SITE_DEPLOY_ENV}"
+chmod 600 "${SITE_DEPLOY_ENV}"
 
 sudo -u "${APP_OWNER_USER}" env -i \
   PATH="/usr/local/bin:/usr/bin:/bin" \
@@ -105,10 +107,10 @@ sudo -u "${APP_OWNER_USER}" env -i \
   set -euo pipefail
   cd "$1"
   . deploy/lib/env-file.sh
-  load_env_file_data /dev/stdin
+  load_env_file_data "$3"
   umask 077
   node dist/scripts/deploy-site-circle.js "$2"
-' bash "${CURRENT}" "${OWNER_DIR}/lab-site-circle-deploy.json" < "${SITE_DEPLOY_ENV}"
+' bash "${CURRENT}" "${OWNER_DIR}/lab-site-circle-deploy.json" "${SITE_DEPLOY_ENV}"
 
 LAB_CIRCLE_ID="$(node -e '
 const fs = require("fs");
