@@ -186,6 +186,18 @@
       "signed_params": []
     },
     {
+      "name": "observed_at_after",
+      "visibility": "private",
+      "direct_calls": [
+        "assert_observed_at",
+        "substr"
+      ],
+      "direct_writes": [],
+      "transitive_writes": [],
+      "value_writes": [],
+      "signed_params": []
+    },
+    {
       "name": "assert_capsule_base_id",
       "visibility": "private",
       "direct_calls": [
@@ -1529,6 +1541,7 @@
         "capsule_base_id_for_observed_at",
         "concat",
         "len",
+        "observed_at_after",
         "only_operator",
         "row_hash",
         "sha256",
@@ -1609,6 +1622,7 @@
         "concat",
         "is_empty_slot",
         "len",
+        "observed_at_after",
         "only_operator",
         "row_hash",
         "sha256",

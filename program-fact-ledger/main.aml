@@ -216,6 +216,54 @@ contract VitalsFactLedgerState {
     return concat(substr(observed_at, 0, 11), "00")
   }
 
+  private fn observed_at_after(observed_at: string, previous_observed_at: string): bool {
+    if previous_observed_at == "" {
+      return true
+    }
+    assert_observed_at(previous_observed_at)
+    let observed_year = substr(observed_at, 0, 4)
+    let previous_year = substr(previous_observed_at, 0, 4)
+    if observed_year > previous_year {
+      return true
+    }
+    if observed_year < previous_year {
+      return false
+    }
+    let observed_month = substr(observed_at, 5, 2)
+    let previous_month = substr(previous_observed_at, 5, 2)
+    if observed_month > previous_month {
+      return true
+    }
+    if observed_month < previous_month {
+      return false
+    }
+    let observed_day = substr(observed_at, 8, 2)
+    let previous_day = substr(previous_observed_at, 8, 2)
+    if observed_day > previous_day {
+      return true
+    }
+    if observed_day < previous_day {
+      return false
+    }
+    let observed_hour = substr(observed_at, 11, 2)
+    let previous_hour = substr(previous_observed_at, 11, 2)
+    if observed_hour > previous_hour {
+      return true
+    }
+    if observed_hour < previous_hour {
+      return false
+    }
+    let observed_minute = substr(observed_at, 14, 2)
+    let previous_minute = substr(previous_observed_at, 14, 2)
+    if observed_minute > previous_minute {
+      return true
+    }
+    if observed_minute < previous_minute {
+      return false
+    }
+    return substr(observed_at, 17, 2) > substr(previous_observed_at, 17, 2)
+  }
+
   private fn assert_capsule_base_id(capsule_base_id: string) {
     require(len(capsule_base_id) == 13, "capsule base id length")
     assert_digit(substr(capsule_base_id, 0, 1))
@@ -1047,7 +1095,7 @@ contract VitalsFactLedgerState {
     assert_observed_at(observed_at)
     assert_capsule_base_id(capsule_base_id)
     require(capsule_base_id == capsule_base_id_for_observed_at(observed_at), "capsule observed_at mismatch")
-    require(self.latest_observed_at == "" || observed_at > self.latest_observed_at, "observed_at not increasing")
+    require(observed_at_after(observed_at, self.latest_observed_at), "observed_at not increasing")
     require(snapshot_index == self.snapshot_count + 1, "snapshot index")
     require(snapshot_index >= self.era_first_snapshot_index, "snapshot before era")
     require(epoch_id >= self.latest_epoch || self.latest_epoch == 0, "snapshot epoch moved backward")
@@ -1097,7 +1145,7 @@ contract VitalsFactLedgerState {
     assert_observed_at(observed_at)
     assert_capsule_base_id(capsule_base_id)
     require(capsule_base_id == capsule_base_id_for_observed_at(observed_at), "capsule observed_at mismatch")
-    require(self.latest_observed_at == "" || observed_at > self.latest_observed_at, "observed_at not increasing")
+    require(observed_at_after(observed_at, self.latest_observed_at), "observed_at not increasing")
     require(snapshot_index == self.snapshot_count + 1, "snapshot index")
     require(snapshot_index >= self.era_first_snapshot_index, "snapshot before era")
     require(epoch_id >= self.latest_epoch || self.latest_epoch == 0, "snapshot epoch moved backward")

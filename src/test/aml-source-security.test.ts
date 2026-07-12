@@ -33,6 +33,8 @@ test("fact-ledger hardening preserves the established state layout", () => {
 
 test("fact-ledger rejects clock rollback and sealed capsule key reuse", () => {
   assert.equal((source.match(/observed_at not increasing/g) || []).length, 2);
+  assert.match(source, /private fn observed_at_after/);
+  assert.doesNotMatch(source, /observed_at > self\.latest_observed_at/);
   assert.match(source, /observed_at month range/);
   assert.match(source, /observed_at February day range/);
   assert.match(source, /observed_at short month day range/);
