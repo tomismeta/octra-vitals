@@ -170,14 +170,14 @@ function base58Encode(bytes: Buffer): string {
   return encoded || "1";
 }
 
-function canonicalCircleDeployPayload(): string {
+function canonicalCircleDeployPayload(codeB64: string | null): string {
   return [
     "{",
     "\"runtime\":\"octb\",",
     "\"privacy_class\":\"public\",",
     "\"browser_mode\":\"gateway_allowed\",",
     "\"resource_mode\":\"public_resources\",",
-    "\"code_b64\":null,",
+    `"code_b64":${codeB64 === null ? "null" : JSON.stringify(codeB64)},`,
     "\"policy_hash\":null,",
     "\"members_root\":null,",
     "\"export_policy\":null,",
@@ -202,6 +202,12 @@ function circleIdOfDeploy(deployer: string, nonce: number, canonicalPayload: str
     ? base58.slice(0, 44)
     : base58.repeat(Math.ceil(44 / base58.length)).slice(0, 44);
   return `oct${base58Part}`;
+}
+
+function reportDeployPayload(canonicalPayload: string, deployWithCode: boolean, codeB64: string): Record<string, unknown> {
+  const payload = JSON.parse(canonicalPayload) as Record<string, unknown>;
+  if (deployWithCode) payload.code_b64 = `[embedded:${bytecodeHash(codeB64)}]`;
+  return payload;
 }
 
 function isoNow(): string {
@@ -492,6 +498,7 @@ await assertAmlCompileApproved(
   await readApprovedAmlRelease(join(root, artifactDir, "approved-release.json"))
 );
 const codeB64 = validatedCompile.code_b64;
+const deployWithCode = process.env.VITALS_DEPLOY_CIRCLE_WITH_CODE !== "0";
 
 const wallet = loadWalletFromEnv({
   privateKeyEnv: ["VITALS_DEPLOYER_PRIVATE_KEY_B64"],
@@ -522,7 +529,7 @@ const missing = [
 ].filter((value): value is string => Boolean(value));
 if (deployEnabled && missing.length) throw new Error(`missing requirements: ${missing.join(", ")}`);
 
-const canonicalPayload = canonicalCircleDeployPayload();
+const canonicalPayload = canonicalCircleDeployPayload(deployWithCode ? codeB64 : null);
 const nonce = deployerAddress ? await nextNonce(deployerAddress) : 0;
 const circleId = deployerAddress ? circleIdOfDeploy(deployerAddress, nonce, canonicalPayload) : "pending";
 const factLedgerPredecessor = deployerAddress && circleId !== "pending"
@@ -549,6 +556,7 @@ const baseReport = {
   size: compile.size || null,
   verification: compile.verification || null,
   deploy_enabled: deployEnabled,
+  deploy_with_code: deployWithCode,
   deployer_address: deployerAddress || "pending",
   operator_address: operatorAddress || "pending",
   circle_id: circleId,
@@ -563,7 +571,7 @@ const baseReport = {
     predecessor_rpc_urls_checked: factLedgerPredecessor.rpcUrlsChecked
   } : null,
   missing_requirements: missing,
-  deploy_payload: JSON.parse(canonicalPayload),
+  deploy_payload: reportDeployPayload(canonicalPayload, deployWithCode, codeB64),
   ou: {
     deploy_circle: deployOu,
     circle_program_update: updateOu,
@@ -580,7 +588,9 @@ if (!deployEnabled) {
   await writeReport({
     ...baseReport,
     status: "dry_run",
-    next_step: "set VITALS_DEPLOY_PROGRAMMED_CIRCLE=1 and VITALS_DEPLOY_PROGRAMMED_CIRCLE_ACK=1 to deploy, program_update, and initialize a devnet/mainnet rehearsal Circle"
+    next_step: deployWithCode
+      ? "set VITALS_DEPLOY_PROGRAMMED_CIRCLE=1 and VITALS_DEPLOY_PROGRAMMED_CIRCLE_ACK=1 to deploy and initialize a devnet/mainnet rehearsal Circle"
+      : "set VITALS_DEPLOY_PROGRAMMED_CIRCLE=1 and VITALS_DEPLOY_PROGRAMMED_CIRCLE_ACK=1 to deploy, program_update, and initialize a devnet/mainnet rehearsal Circle"
   });
 } else {
   if (!wallet || !operatorAddress) throw new Error("wallet and operator are required when deploy is enabled");
@@ -603,25 +613,29 @@ if (!deployEnabled) {
   const deployConfirmation = await requireConfirmed(deploySubmission.tx_hash, "programmed Circle deploy");
   currentNonce += 1;
 
-  const updateTx: OctraTransaction = {
-    from: wallet.address,
-    to_: circleId,
-    amount: "0",
-    nonce: currentNonce,
-    ou: updateOu,
-    timestamp: Date.now() / 1000,
-    op_type: "circle_program_update",
-    message: JSON.stringify({ code_b64: codeB64 })
-  };
-  const updateSubmission = await submitTx(wallet, updateTx, (prepared) => writeReport({
-    ...baseReport,
-    status: "program_update_prepared",
-    deploy_tx_hash: deploySubmission.tx_hash,
-    deploy_tx: txSummary(deployConfirmation),
-    pending_transaction: { label: "circle_program_update", ...prepared }
-  }));
-  const updateConfirmation = await requireConfirmed(updateSubmission.tx_hash, "programmed Circle program_update");
-  currentNonce += 1;
+  let updateSubmission: Awaited<ReturnType<typeof submitTx>> | null = null;
+  let updateConfirmation: any = null;
+  if (!deployWithCode) {
+    const updateTx: OctraTransaction = {
+      from: wallet.address,
+      to_: circleId,
+      amount: "0",
+      nonce: currentNonce,
+      ou: updateOu,
+      timestamp: Date.now() / 1000,
+      op_type: "circle_program_update",
+      message: JSON.stringify({ code_b64: codeB64 })
+    };
+    updateSubmission = await submitTx(wallet, updateTx, (prepared) => writeReport({
+      ...baseReport,
+      status: "program_update_prepared",
+      deploy_tx_hash: deploySubmission.tx_hash,
+      deploy_tx: txSummary(deployConfirmation),
+      pending_transaction: { label: "circle_program_update", ...prepared }
+    }));
+    updateConfirmation = await requireConfirmed(updateSubmission.tx_hash, "programmed Circle program_update");
+    currentNonce += 1;
+  }
 
   const [preInitializeOwner, preInitializeState] = await Promise.all([
     circleView(circleId, "get_owner", wallet.address),
@@ -671,8 +685,8 @@ if (!deployEnabled) {
     status: "initialize_prepared",
     deploy_tx_hash: deploySubmission.tx_hash,
     deploy_tx: txSummary(deployConfirmation),
-    program_update_tx_hash: updateSubmission.tx_hash,
-    program_update_tx: txSummary(updateConfirmation),
+    program_update_tx_hash: updateSubmission?.tx_hash || null,
+    program_update_tx: updateConfirmation ? txSummary(updateConfirmation) : null,
     pending_transaction: { label: initMethod, ...prepared }
   }));
   const initConfirmation = await requireConfirmed(initSubmission.tx_hash, `programmed Circle ${initMethod}`);
@@ -759,9 +773,9 @@ if (!deployEnabled) {
     deploy_tx_hash: deploySubmission.tx_hash,
     deploy_submit_result: deploySubmission.submit_result,
     deploy_tx: txSummary(deployConfirmation),
-    program_update_tx_hash: updateSubmission.tx_hash,
-    program_update_submit_result: updateSubmission.submit_result,
-    program_update_tx: txSummary(updateConfirmation),
+    program_update_tx_hash: updateSubmission?.tx_hash || null,
+    program_update_submit_result: updateSubmission?.submit_result || null,
+    program_update_tx: updateConfirmation ? txSummary(updateConfirmation) : null,
     initialize_tx_hash: initSubmission.tx_hash,
     initialize_submit_result: initSubmission.submit_result,
     initialize_tx: txSummary(initConfirmation),
