@@ -8,9 +8,13 @@ import { sha256Hex } from "../lib/canonical-json.js";
 import { assertAmlCompileApproved, readApprovedAmlRelease, validateAmlCompile, type AmlCompileResult } from "../lib/aml-artifacts.js";
 import { assertDistinctProductionRoles, parseFactLedgerLatestBundle } from "../lib/fact-ledger-deployment.js";
 import {
+  FACT_LEDGER_CORE_FAMILY_ID,
+  FACT_LEDGER_CORE_SCHEMA_ID,
   FACT_LEDGER_MANIFEST,
   coreFactFamilyDefinition,
-  encodeFactFamilyDefinition
+  encodeFactFamilyDefinition,
+  factLedgerEmptyFamilyCapsulesRootHex,
+  factLedgerEmptyFamilyRootHex
 } from "../lib/aml-fact-ledger.js";
 
 const BASE58_ALPHABET = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz";
@@ -318,14 +322,14 @@ async function requireConfirmed(hash: string, label: string): Promise<any> {
   return tx;
 }
 
-async function circleView(circleId: string, method: string, caller: string): Promise<unknown> {
-  const result = await octraRpc<any>("octra_circleView", [circleId, method, [], caller, false]);
+async function circleView(circleId: string, method: string, caller: string, params: unknown[] = []): Promise<unknown> {
+  const result = await octraRpc<any>("octra_circleView", [circleId, method, params, caller, false]);
   if (result && typeof result === "object" && "result" in result) return result.result;
   return result;
 }
 
-async function circleViewAtUrl(url: string, circleId: string, method: string, caller: string): Promise<unknown> {
-  const result = await octraRpc<any>("octra_circleView", [circleId, method, [], caller, false], { url });
+async function circleViewAtUrl(url: string, circleId: string, method: string, caller: string, params: unknown[] = []): Promise<unknown> {
+  const result = await octraRpc<any>("octra_circleView", [circleId, method, params, caller, false], { url });
   if (result && typeof result === "object" && "result" in result) return result.result;
   return result;
 }
@@ -470,18 +474,17 @@ async function writeReport(report: unknown): Promise<void> {
   }));
 }
 
-const [source, recommendedDeployOu, recommendedUpdateOu, recommendedCallOu, deployFee, updateFee, callFee] = await Promise.all([
+const [source, recommendedDeployOu, recommendedUpdateOu, deployFee, updateFee, callFee] = await Promise.all([
   readFile(sourcePath, "utf8"),
   recommendedOu("deploy_circle", "200000"),
   recommendedOu("circle_program_update", "200000"),
-  recommendedOu("circle_call", "1000"),
   feeTelemetry("deploy_circle"),
   feeTelemetry("circle_program_update"),
   feeTelemetry("circle_call")
 ]);
 const deployOu = process.env.VITALS_DEPLOY_CIRCLE_OU || recommendedDeployOu;
 const updateOu = process.env.VITALS_PROGRAM_UPDATE_OU || process.env.VITALS_CIRCLE_PROGRAM_UPDATE_OU || recommendedUpdateOu;
-const callOu = process.env.VITALS_INITIALIZE_CALL_OU || process.env.VITALS_CALL_OU || recommendedCallOu;
+const callOu = process.env.VITALS_INITIALIZE_CALL_OU || process.env.VITALS_CALL_OU || "200000";
 const buildRoot = resolve(root, "build");
 const compilePath = resolve(root, process.env.VITALS_PROGRAMMED_CIRCLE_COMPILE_ARTIFACT || join("build", artifactDir, "compile.json"));
 if (compilePath !== buildRoot && !compilePath.startsWith(`${buildRoot}/`)) {
@@ -721,7 +724,15 @@ if (!deployEnabled) {
     predecessorProgram,
     predecessorRoot,
     predecessorIndex,
-    eraFirstIndex
+    eraFirstIndex,
+    familyCount,
+    coreFamilyDefinitionReadback,
+    coreFamilyRoot,
+    coreFamilyCapsulesRoot,
+    coreFamilyLatestIndex,
+    coreOpenCapsuleRowCount,
+    coreOpenCapsuleStartRoot,
+    coreOpenCapsuleEndRoot
   ] = await Promise.all([
     octraRpc<any>("octra_circleProgramInfo", [circleId]),
     circleView(circleId, "manifest", wallet.address),
@@ -734,11 +745,31 @@ if (!deployEnabled) {
     circleView(circleId, "get_predecessor_program", wallet.address),
     circleView(circleId, "get_predecessor_final_root", wallet.address),
     circleView(circleId, "get_predecessor_final_index", wallet.address),
-    circleView(circleId, "get_era_first_snapshot_index", wallet.address)
+    circleView(circleId, "get_era_first_snapshot_index", wallet.address),
+    circleView(circleId, "get_family_count", wallet.address),
+    circleView(circleId, "get_family_definition", wallet.address, [FACT_LEDGER_CORE_FAMILY_ID]),
+    circleView(circleId, "get_family_root", wallet.address, [FACT_LEDGER_CORE_FAMILY_ID]),
+    circleView(circleId, "get_family_capsules_root", wallet.address, [FACT_LEDGER_CORE_FAMILY_ID]),
+    circleView(circleId, "get_family_latest_index", wallet.address, [FACT_LEDGER_CORE_FAMILY_ID]),
+    circleView(circleId, "get_family_open_capsule_row_count", wallet.address, [FACT_LEDGER_CORE_FAMILY_ID]),
+    circleView(circleId, "get_family_open_capsule_start_root", wallet.address, [FACT_LEDGER_CORE_FAMILY_ID]),
+    circleView(circleId, "get_family_open_capsule_end_root", wallet.address, [FACT_LEDGER_CORE_FAMILY_ID])
   ]);
   const initializedOk = initialized === true || initialized === "true";
   const ownerOk = owner === wallet.address;
   const operatorOk = operator === operatorAddress;
+  const expectedCoreFamilyRoot = factLedgerEmptyFamilyRootHex(FACT_LEDGER_CORE_FAMILY_ID, FACT_LEDGER_CORE_SCHEMA_ID);
+  const expectedCoreCapsulesRoot = factLedgerEmptyFamilyCapsulesRootHex(FACT_LEDGER_CORE_FAMILY_ID, FACT_LEDGER_CORE_SCHEMA_ID);
+  const coreFamilyOk = (
+    Number(familyCount || 0) >= 1 &&
+    coreFamilyDefinitionReadback === factLedgerCoreDefinition &&
+    coreFamilyRoot === expectedCoreFamilyRoot &&
+    coreFamilyCapsulesRoot === expectedCoreCapsulesRoot &&
+    Number(coreFamilyLatestIndex || 0) === factLedgerPredecessor?.predecessorFinalIndex &&
+    Number(coreOpenCapsuleRowCount || 0) === 0 &&
+    coreOpenCapsuleStartRoot === expectedCoreFamilyRoot &&
+    coreOpenCapsuleEndRoot === expectedCoreFamilyRoot
+  );
   const factLedgerOk = (
     eraNetwork === factLedgerNetwork &&
     eraProgram === circleId &&
@@ -746,7 +777,8 @@ if (!deployEnabled) {
     predecessorRoot === factLedgerPredecessor?.predecessorFinalRoot &&
     Number(predecessorIndex || 0) === factLedgerPredecessor?.predecessorFinalIndex &&
     Number(eraFirstIndex || 0) === factLedgerPredecessor?.eraFirstSnapshotIndex &&
-    Number(count || 0) === factLedgerPredecessor?.predecessorFinalIndex
+    Number(count || 0) === factLedgerPredecessor?.predecessorFinalIndex &&
+    coreFamilyOk
   );
   if (manifest !== expectedAmlManifest || !initializedOk || !ownerOk || !operatorOk || !factLedgerOk) {
     throw new Error(`programmed Circle initialization verification failed: ${JSON.stringify({
@@ -769,7 +801,17 @@ if (!deployEnabled) {
       expected_predecessor_index: factLedgerPredecessor?.predecessorFinalIndex ?? null,
       era_first_index: eraFirstIndex,
       expected_era_first_index: factLedgerPredecessor?.eraFirstSnapshotIndex ?? null,
-      snapshot_count: count
+      snapshot_count: count,
+      family_count: familyCount,
+      core_family_definition_matches: coreFamilyDefinitionReadback === factLedgerCoreDefinition,
+      core_family_root: coreFamilyRoot,
+      expected_core_family_root: expectedCoreFamilyRoot,
+      core_family_capsules_root: coreFamilyCapsulesRoot,
+      expected_core_family_capsules_root: expectedCoreCapsulesRoot,
+      core_family_latest_index: coreFamilyLatestIndex,
+      core_open_capsule_row_count: coreOpenCapsuleRowCount,
+      core_open_capsule_start_root: coreOpenCapsuleStartRoot,
+      core_open_capsule_end_root: coreOpenCapsuleEndRoot
     })}`);
   }
 
@@ -801,7 +843,16 @@ if (!deployEnabled) {
       predecessor_program: predecessorProgram,
       predecessor_final_root: predecessorRoot,
       predecessor_final_index: predecessorIndex,
-      era_first_snapshot_index: eraFirstIndex
+      era_first_snapshot_index: eraFirstIndex,
+      family_count: familyCount,
+      core_family_definition: coreFamilyDefinitionReadback,
+      core_family_root: coreFamilyRoot,
+      core_family_capsules_root: coreFamilyCapsulesRoot,
+      core_family_latest_index: coreFamilyLatestIndex,
+      core_open_capsule_row_count: coreOpenCapsuleRowCount,
+      core_open_capsule_start_root: coreOpenCapsuleStartRoot,
+      core_open_capsule_end_root: coreOpenCapsuleEndRoot,
+      core_family_matches: coreFamilyOk
     },
     env_next: {
       VITALS_STATE_TARGET_MODE: "circle_program",
