@@ -1065,7 +1065,25 @@ contract VitalsFactLedgerState {
     require(self.predecessor_set, "predecessor required")
     require(self.family_count == 0, "core already registered")
     assert_family_definition(core_family_definition, CORE_FAMILY_ID)
-    register_family_internal(CORE_FAMILY_ID, core_family_definition, EMPTY_CORE_FAMILY_ROOT)
+    let ordinal_key = decimal_4(self.family_count)
+    self.family_id_by_ordinal[ordinal_key] = CORE_FAMILY_ID
+    self.family_definition_by_id[CORE_FAMILY_ID] = core_family_definition
+    self.family_root_by_id[CORE_FAMILY_ID] = EMPTY_CORE_FAMILY_ROOT
+    self.family_capsules_root_by_id[CORE_FAMILY_ID] = empty_family_capsules_root(CORE_FAMILY_ID, CORE_SCHEMA_ID)
+    self.family_latest_index_by_id[CORE_FAMILY_ID] = self.predecessor_final_index
+    self.family_capsule_count_by_id[CORE_FAMILY_ID] = 0
+    self.family_latest_capsule_id_by_id[CORE_FAMILY_ID] = ""
+    self.family_open_capsule_base_id_by_id[CORE_FAMILY_ID] = ""
+    self.family_open_capsule_segment_by_id[CORE_FAMILY_ID] = 0
+    self.family_open_capsule_id_by_id[CORE_FAMILY_ID] = ""
+    self.family_open_capsule_body_by_id[CORE_FAMILY_ID] = ""
+    self.family_open_capsule_row_count_by_id[CORE_FAMILY_ID] = 0
+    self.family_open_capsule_first_index_by_id[CORE_FAMILY_ID] = 0
+    self.family_open_capsule_start_root_by_id[CORE_FAMILY_ID] = EMPTY_CORE_FAMILY_ROOT
+    self.family_open_capsule_end_root_by_id[CORE_FAMILY_ID] = EMPTY_CORE_FAMILY_ROOT
+    self.catalog_root = fold_catalog_root(self.catalog_root, core_family_definition)
+    self.family_count = self.family_count + 1
+    emit FamilyRegistered(CORE_FAMILY_ID, CORE_SCHEMA_ID, FACT_ROW_BYTES)
     return true
   }
 

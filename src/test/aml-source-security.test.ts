@@ -23,7 +23,8 @@ test("core family split initializer stays owner-only and single-use", () => {
   const coreInitializer = source.match(/public fn initialize_core_family[^\{]+\{([\s\S]*?)\n  \}/)?.[1] || "";
   assert.match(coreInitializer, /only_owner\(\)/);
   assert.match(coreInitializer, /require\(self\.family_count == 0, "core already registered"\)/);
-  assert.match(coreInitializer, /register_family_internal\(CORE_FAMILY_ID, core_family_definition, EMPTY_CORE_FAMILY_ROOT\)/);
+  assert.match(coreInitializer, /self\.family_definition_by_id\[CORE_FAMILY_ID\] = core_family_definition/);
+  assert.match(coreInitializer, /emit FamilyRegistered\(CORE_FAMILY_ID, CORE_SCHEMA_ID, FACT_ROW_BYTES\)/);
 });
 
 test("fact-ledger hardening preserves the established state layout", () => {

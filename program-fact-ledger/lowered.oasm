@@ -3923,14 +3923,108 @@ LDI r2, "0000"
 MSTORE 1001, r1
 MSTORE 1002, r2
 CALL_INT r3, 2700
-LDI r2, "0000"
-LDI r3, "008f25bcfca4b6697b53109e77f176f25d0475cc32097bf5925086ba0ffebdb3"
+SLOAD r2, "family_count"
+LDI r3, 0
+ADD r2, r3, r2
 MSTORE 1001, r2
+CALL_INT r4, 1600
+MOV r2, r4
+LDI r3, "family_id_by_ordinal:"
+CONCAT r3, r3, r2
+LDI r4, "0000"
+SSTOREK r3, r4
+LDI r3, "0000"
+LDI r4, "family_definition_by_id:"
+CONCAT r4, r4, r3
+SSTOREK r4, r1
+LDI r3, "0000"
+LDI r4, "family_root_by_id:"
+CONCAT r4, r4, r3
+LDI r5, "008f25bcfca4b6697b53109e77f176f25d0475cc32097bf5925086ba0ffebdb3"
+SSTOREK r4, r5
+LDI r3, "0000"
+LDI r4, "family_capsules_root_by_id:"
+CONCAT r4, r4, r3
+LDI r5, "0000"
+LDI r6, "0000"
+MSTORE 1001, r5
+MSTORE 1002, r6
+CALL_INT r7, 3100
+SSTOREK r4, r7
+LDI r3, "0000"
+LDI r4, "family_latest_index_by_id:"
+CONCAT r4, r4, r3
+SLOAD r5, "predecessor_final_index"
+LDI r6, 0
+ADD r5, r6, r5
+SSTOREK r4, r5
+LDI r3, "0000"
+LDI r4, "family_capsule_count_by_id:"
+CONCAT r4, r4, r3
+LDI r5, 0
+SSTOREK r4, r5
+LDI r3, "0000"
+LDI r4, "family_latest_capsule_id_by_id:"
+CONCAT r4, r4, r3
+LDI r5, ""
+SSTOREK r4, r5
+LDI r3, "0000"
+LDI r4, "family_open_capsule_base_id_by_id:"
+CONCAT r4, r4, r3
+LDI r5, ""
+SSTOREK r4, r5
+LDI r3, "0000"
+LDI r4, "family_open_capsule_segment_by_id:"
+CONCAT r4, r4, r3
+LDI r5, 0
+SSTOREK r4, r5
+LDI r3, "0000"
+LDI r4, "family_open_capsule_id_by_id:"
+CONCAT r4, r4, r3
+LDI r5, ""
+SSTOREK r4, r5
+LDI r3, "0000"
+LDI r4, "family_open_capsule_body_by_id:"
+CONCAT r4, r4, r3
+LDI r5, ""
+SSTOREK r4, r5
+LDI r3, "0000"
+LDI r4, "family_open_capsule_row_count_by_id:"
+CONCAT r4, r4, r3
+LDI r5, 0
+SSTOREK r4, r5
+LDI r3, "0000"
+LDI r4, "family_open_capsule_first_index_by_id:"
+CONCAT r4, r4, r3
+LDI r5, 0
+SSTOREK r4, r5
+LDI r3, "0000"
+LDI r4, "family_open_capsule_start_root_by_id:"
+CONCAT r4, r4, r3
+LDI r5, "008f25bcfca4b6697b53109e77f176f25d0475cc32097bf5925086ba0ffebdb3"
+SSTOREK r4, r5
+LDI r3, "0000"
+LDI r4, "family_open_capsule_end_root_by_id:"
+CONCAT r4, r4, r3
+LDI r5, "008f25bcfca4b6697b53109e77f176f25d0475cc32097bf5925086ba0ffebdb3"
+SSTOREK r4, r5
+SLOAD r3, "catalog_root"
+MSTORE 1001, r3
 MSTORE 1002, r1
-MSTORE 1003, r3
-CALL_INT r4, 3700
-LDI r2, true
-MOV r0, r2
+CALL_INT r4, 2800
+SSTORE "catalog_root", r4
+SLOAD r3, "family_count"
+LDI r4, 0
+ADD r3, r4, r3
+LDI r5, 1
+ADD r6, r3, r5
+SSTORE "family_count", r6
+LDI r3, "0000"
+LDI r4, "0000"
+LDI r5, 295
+EMIT "FamilyRegistered", r3, r4, r5
+LDI r3, true
+MOV r0, r3
 STOP
 STOP
 JDEST 10900

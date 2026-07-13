@@ -1456,10 +1456,30 @@
       "visibility": "public",
       "direct_calls": [
         "assert_family_definition",
-        "only_owner",
-        "register_family_internal"
+        "decimal_4",
+        "empty_family_capsules_root",
+        "fold_catalog_root",
+        "only_owner"
       ],
-      "direct_writes": [],
+      "direct_writes": [
+        "catalog_root",
+        "family_capsule_count_by_id",
+        "family_capsules_root_by_id",
+        "family_count",
+        "family_definition_by_id",
+        "family_id_by_ordinal",
+        "family_latest_capsule_id_by_id",
+        "family_latest_index_by_id",
+        "family_open_capsule_base_id_by_id",
+        "family_open_capsule_body_by_id",
+        "family_open_capsule_end_root_by_id",
+        "family_open_capsule_first_index_by_id",
+        "family_open_capsule_id_by_id",
+        "family_open_capsule_row_count_by_id",
+        "family_open_capsule_segment_by_id",
+        "family_open_capsule_start_root_by_id",
+        "family_root_by_id"
+      ],
       "transitive_writes": [
         "catalog_root",
         "family_capsule_count_by_id",
