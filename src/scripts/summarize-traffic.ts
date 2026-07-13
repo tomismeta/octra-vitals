@@ -4,7 +4,7 @@ import { join, resolve } from "node:path";
 import { TRAFFIC_SCHEMA_VERSION, type TrafficHourFile, type TrafficMetric } from "../lib/traffic.js";
 
 const dataDir = resolve(process.env.VITALS_DATA_DIR || "data");
-const trafficDir = resolve(process.env.VITALS_TRAFFIC_DIR || join(dataDir, "traffic"));
+const trafficDir = resolve(process.env.VITALS_NOTIFY_TRAFFIC_DIR || process.env.VITALS_TRAFFIC_DIR || join(dataDir, "traffic"));
 const csv = process.argv.includes("--csv");
 const diagnosticPaths = process.argv.includes("--diagnostic-paths");
 

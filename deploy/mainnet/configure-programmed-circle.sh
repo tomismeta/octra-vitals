@@ -175,6 +175,12 @@ gateway_value() {
   fi
   printf '%s' "${value:-${fallback}}"
 }
+gateway_traffic_dir="${VITALS_TRAFFIC_DIR:-${GATEWAY_DATA_DIR}/traffic}"
+case "${gateway_traffic_dir}" in
+  "${DATA_DIR}"|"${DATA_DIR}"/*)
+    gateway_traffic_dir="${GATEWAY_DATA_DIR}/traffic"
+    ;;
+esac
 cat >> "${tmp_gateway}" <<EOF
 HOST=${GATEWAY_HOST}
 PORT=${GATEWAY_PORT}
@@ -192,7 +198,7 @@ VITALS_EXPOSE_ERRORS=0
 VITALS_EXPOSE_PROGRAM_ARTIFACTS=0
 VITALS_SUBMIT=0
 VITALS_TRAFFIC_AGGREGATES=$(gateway_value VITALS_TRAFFIC_AGGREGATES 1)
-VITALS_TRAFFIC_DIR=$(gateway_value VITALS_TRAFFIC_DIR "${GATEWAY_DATA_DIR}/traffic")
+VITALS_TRAFFIC_DIR=${gateway_traffic_dir}
 VITALS_TRAFFIC_CLIENT_MODE=$(gateway_value VITALS_TRAFFIC_CLIENT_MODE daily_hash)
 VITALS_TRAFFIC_TRUST_PROXY_HEADERS=$(gateway_value VITALS_TRAFFIC_TRUST_PROXY_HEADERS 1)
 VITALS_TRAFFIC_FLUSH_MS=$(gateway_value VITALS_TRAFFIC_FLUSH_MS 2000)
