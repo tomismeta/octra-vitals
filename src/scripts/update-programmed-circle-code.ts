@@ -9,6 +9,7 @@ import {
   type AmlCompileResult
 } from "../lib/aml-artifacts.js";
 import { circleProgramViewAtUrl } from "../lib/circle-program.js";
+import { assertProgramRpcQuorumPolicy } from "../lib/fact-ledger-deployment.js";
 import { circleProgramInfoAtUrl, isExplicitDevelopmentRpcUrl, octraProgramRpcUrls, octraRpc, recommendedOu, rpcUrlLabel } from "../lib/octra-rpc.js";
 import { loadWalletFromEnv, publicTransactionJson, signTransaction, submittedTransactionHash, transactionHash, type OctraTransaction, type OperatorWallet } from "../lib/octra-transaction.js";
 import { writeJsonAtomic } from "./submit-snapshot.js";
@@ -58,13 +59,15 @@ function assertNetworkIntent(urls: string[]): void {
   }
 }
 
-function assertRpcQuorum(urls: string[]): void {
+function assertRpcQuorum(urls: string[]) {
   const productionRpc = urls.some((url) => !isExplicitDevelopmentRpcUrl(url));
-  const configured = Number(process.env.VITALS_MIN_PROGRAM_RPC_URLS || (productionRpc ? 2 : 1));
-  if (!Number.isSafeInteger(configured) || configured < (productionRpc ? 2 : 1)) {
-    throw new Error(`VITALS_MIN_PROGRAM_RPC_URLS must be at least ${productionRpc ? 2 : 1}`);
-  }
-  if (urls.length < configured) throw new Error(`program update requires ${configured} RPC URLs; got ${urls.length}`);
+  return assertProgramRpcQuorumPolicy({
+    productionRpc,
+    urlCount: urls.length,
+    configuredMinimum: process.env.VITALS_MIN_PROGRAM_RPC_URLS,
+    singleProgramRpcMainnetAck: process.env.VITALS_SINGLE_PROGRAM_RPC_MAINNET_ACK,
+    label: "program update"
+  });
 }
 
 async function nextNonce(address: string): Promise<number> {
@@ -242,7 +245,7 @@ async function readProgramState(urls: string[], circleId: string): Promise<{
 const urls = octraProgramRpcUrls();
 if (!urls.length) throw new Error("no Octra program RPC URL configured");
 assertNetworkIntent(urls);
-assertRpcQuorum(urls);
+const rpcQuorum = assertRpcQuorum(urls);
 const circleId = process.env.VITALS_PROGRAMMED_CIRCLE_ID;
 if (!circleId || circleId === "pending") throw new Error("VITALS_PROGRAMMED_CIRCLE_ID is required");
 
@@ -359,6 +362,7 @@ const report = {
   status,
   rpc_urls: urls.map(rpcUrlLabel),
   rpc_agreement: true,
+  rpc_quorum: rpcQuorum,
   artifact_dir: artifactDir,
   compile_path: compilePath.replace(`${root}/`, ""),
   previous_compile_path: previousCompilePath,

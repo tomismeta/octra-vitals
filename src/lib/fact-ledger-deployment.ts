@@ -53,3 +53,40 @@ export function assertDistinctProductionRoles(deployer: string, operator: string
     throw new Error(`production deployer and operator must be distinct; break glass requires VITALS_BREAK_GLASS_ROLE_COLLAPSE_ACK=${expected}`);
   }
 }
+
+export const SINGLE_MAINNET_PROGRAM_RPC_ACK = "I ACCEPT SINGLE OCTRA PROGRAM RPC FOR MAINNET";
+
+export interface ProgramRpcQuorumPolicy {
+  default_minimum: number;
+  configured_minimum: number;
+  effective_minimum: number;
+  single_program_rpc_mainnet_acknowledged: boolean;
+}
+
+export function assertProgramRpcQuorumPolicy(options: {
+  productionRpc: boolean;
+  urlCount: number;
+  configuredMinimum?: string | undefined;
+  singleProgramRpcMainnetAck?: string | undefined;
+  label?: string | undefined;
+}): ProgramRpcQuorumPolicy {
+  const defaultMinimum = options.productionRpc ? 2 : 1;
+  const singleProgramRpcMainnetAcknowledged =
+    options.productionRpc &&
+    options.urlCount === 1 &&
+    options.singleProgramRpcMainnetAck === SINGLE_MAINNET_PROGRAM_RPC_ACK;
+  const configuredMinimum = Number(options.configuredMinimum || defaultMinimum);
+  if (!Number.isSafeInteger(configuredMinimum) || (!singleProgramRpcMainnetAcknowledged && configuredMinimum < defaultMinimum)) {
+    throw new Error(`VITALS_MIN_PROGRAM_RPC_URLS must be at least ${defaultMinimum}`);
+  }
+  const effectiveMinimum = singleProgramRpcMainnetAcknowledged ? 1 : configuredMinimum;
+  if (options.urlCount < effectiveMinimum) {
+    throw new Error(`${options.label || "program operation"} requires ${effectiveMinimum} RPC URLs; got ${options.urlCount}`);
+  }
+  return {
+    default_minimum: defaultMinimum,
+    configured_minimum: configuredMinimum,
+    effective_minimum: effectiveMinimum,
+    single_program_rpc_mainnet_acknowledged: singleProgramRpcMainnetAcknowledged
+  };
+}
