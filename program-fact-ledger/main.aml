@@ -1003,6 +1003,9 @@ contract VitalsFactLedgerState {
 
   public fn initialize_fact_ledger(operator_addr: address, predecessor_addr: address, predecessor_final_root: string, predecessor_final_index: int, era_first_snapshot_index: int, network_id: string, era_program_addr: address, core_family_definition: string): bool {
     require(!self.initialized, "already initialized")
+    if to_string(self.owner) == "0" {
+      self.owner = caller
+    }
     require(caller == self.owner, "not deployment owner")
     assert_address(operator_addr)
     assert_address(predecessor_addr)

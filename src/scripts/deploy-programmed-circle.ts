@@ -637,14 +637,20 @@ if (!deployEnabled) {
     currentNonce += 1;
   }
 
-  const [preInitializeOwner, preInitializeState] = await Promise.all([
+  const [preInitializeProgramInfo, preInitializeOwner, preInitializeState] = await Promise.all([
+    octraRpc<any>("octra_circleProgramInfo", [circleId]),
     circleView(circleId, "get_owner", wallet.address),
     circleView(circleId, "is_initialized", wallet.address)
   ]);
-  if (preInitializeOwner !== wallet.address || preInitializeState === true || preInitializeState === "true") {
+  const preInitializeMetadataOwner = String(preInitializeProgramInfo?.owner || "");
+  const preInitializeOwnerUnset = preInitializeOwner === "0" || preInitializeOwner === 0 || preInitializeOwner === null;
+  const preInitializeOwnerAcceptable = preInitializeOwner === wallet.address ||
+    (preInitializeOwnerUnset && preInitializeMetadataOwner === wallet.address);
+  if (!preInitializeOwnerAcceptable || preInitializeState === true || preInitializeState === "true") {
     throw new Error(`program constructor ownership check failed before initialization: ${JSON.stringify({
       owner: preInitializeOwner,
       expected_owner: wallet.address,
+      circle_metadata_owner: preInitializeMetadataOwner || null,
       initialized: preInitializeState
     })}`);
   }

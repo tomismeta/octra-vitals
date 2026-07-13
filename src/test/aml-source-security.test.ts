@@ -4,13 +4,19 @@ import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
 
 const source = await readFile(resolve(new URL("../..", import.meta.url).pathname, "program-fact-ledger/main.aml"), "utf8");
+const deployScript = await readFile(resolve(new URL("../..", import.meta.url).pathname, "src/scripts/deploy-programmed-circle.ts"), "utf8");
 
 test("fact-ledger deployment owner is captured before permissionless initialization", () => {
   const constructor = source.match(/constructor\(\) \{([\s\S]*?)\n  \}/)?.[1] || "";
   const initialize = source.match(/public fn initialize_fact_ledger[^\{]+\{([\s\S]*?)\n  \}/)?.[1] || "";
   assert.match(constructor, /self\.owner = caller/);
+  assert.match(initialize, /if to_string\(self\.owner\) == "0" \{\n      self\.owner = caller\n    \}/);
   assert.match(initialize, /require\(caller == self\.owner, "not deployment owner"\)/);
-  assert.doesNotMatch(initialize, /self\.owner = caller/);
+});
+
+test("programmed Circle deployer proves Circle metadata owner before zero-owner adoption", () => {
+  assert.match(deployScript, /octraRpc<any>\("octra_circleProgramInfo", \[circleId\]\)/);
+  assert.match(deployScript, /preInitializeOwnerUnset && preInitializeMetadataOwner === wallet\.address/);
 });
 
 test("fact-ledger hardening preserves the established state layout", () => {
