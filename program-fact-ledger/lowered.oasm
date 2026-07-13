@@ -3887,7 +3887,7 @@ SSTORE "catalog_root", r19
 LDI r16, 0
 SSTORE "family_count", r16
 LDI r16, "0000"
-LDI r17, "008f25bcfca4b6697b53109e77f176f25d0475cc32097bf5925086ba0ffebdb3"
+LDI r17, "cac30530ed2b03f95858398c078cd87183ed01d33c739d31a38bdd833186d048"
 MSTORE 1001, r16
 MSTORE 1002, r8
 MSTORE 1003, r17
@@ -3940,7 +3940,7 @@ SSTOREK r4, r1
 LDI r3, "0000"
 LDI r4, "family_root_by_id:"
 CONCAT r4, r4, r3
-LDI r5, "008f25bcfca4b6697b53109e77f176f25d0475cc32097bf5925086ba0ffebdb3"
+LDI r5, "cac30530ed2b03f95858398c078cd87183ed01d33c739d31a38bdd833186d048"
 SSTOREK r4, r5
 LDI r3, "0000"
 LDI r4, "family_capsules_root_by_id:"
@@ -4001,12 +4001,12 @@ SSTOREK r4, r5
 LDI r3, "0000"
 LDI r4, "family_open_capsule_start_root_by_id:"
 CONCAT r4, r4, r3
-LDI r5, "008f25bcfca4b6697b53109e77f176f25d0475cc32097bf5925086ba0ffebdb3"
+LDI r5, "cac30530ed2b03f95858398c078cd87183ed01d33c739d31a38bdd833186d048"
 SSTOREK r4, r5
 LDI r3, "0000"
 LDI r4, "family_open_capsule_end_root_by_id:"
 CONCAT r4, r4, r3
-LDI r5, "008f25bcfca4b6697b53109e77f176f25d0475cc32097bf5925086ba0ffebdb3"
+LDI r5, "cac30530ed2b03f95858398c078cd87183ed01d33c739d31a38bdd833186d048"
 SSTOREK r4, r5
 SLOAD r3, "catalog_root"
 MSTORE 1001, r3

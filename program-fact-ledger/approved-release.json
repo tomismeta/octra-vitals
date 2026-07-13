@@ -1,10 +1,10 @@
 {
   "schema": "octra-vitals-approved-aml-release-v1",
-  "source_hash": "sha256:ff5cff71bc158b8775af161f36f61b9bf60fb5135dc694787946e72c33187af1",
-  "bytecode_hash": "sha256:e7b0bae5f64ebf47365b437f0cabbbfbe60d7689e26f32e483bbbae47dfb136b",
+  "source_hash": "sha256:86c29868d8c8e45ce361fd92b949126b8279439c516bcbbbb86ecfd1a7dd9dc1",
+  "bytecode_hash": "sha256:04cbd718885c4b67e9dcc96b6359b414d93d5e2337877d8c0132567cf11f4121",
   "verification_hash": "sha256:951ddeda72644cb0c75976c14975002e0b3959a3c4630a9bd6266cf3c4dd45c0",
   "abi_hash": "sha256:09b778dbc53df5d106924ce48c3eed5f5d6bf99d2ccad77636e027a8ac5161a4",
-  "disasm_hash": "sha256:13e03b1297c0451ff448dca1c20f284a6c07eff8c03522fcb1d428740c65fb65",
+  "disasm_hash": "sha256:86747630df1a94d9173b482b782243ed84d8b8179c608486e3dcaac5b16ad657",
   "state_layout_hash": "sha256:644e55df8682c8bb228d5ccb15fb9839f281a14e2c9026926121f9047b8e3f02",
   "compiler": "octra_aml",
   "compiler_version": "1.0 Rehovot"
