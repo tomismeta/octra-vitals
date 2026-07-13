@@ -4,8 +4,8 @@ import { realpathSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { circleProgramViewAtUrl, configuredProgrammedCircleId, stateTargetMode, type StateTargetMode } from "../lib/circle-program.js";
-import { contractCall, contractCallAtUrl, contractReceipt, feeTelemetry, octraProgramRpcUrls, octraRpc, recommendedOu } from "../lib/octra-rpc.js";
-import { loadOperatorWalletFromEnv, publicTransactionJson, signTransaction, transactionHash, type OctraTransaction } from "../lib/octra-transaction.js";
+import { contractCall, contractCallAtUrl, contractReceipt, feeTelemetry, octraProgramRpcUrls, octraRpc, recommendedOu, rpcUrlLabel } from "../lib/octra-rpc.js";
+import { loadOperatorWalletFromEnv, publicTransactionJson, signTransaction, submittedTransactionHash, transactionHash, type OctraTransaction } from "../lib/octra-transaction.js";
 import {
   decodeHistoryV1CapsuleMeta,
   historyV1CapsuleBodyHashHex,
@@ -26,6 +26,7 @@ import {
   FACT_LEDGER_CORE_SCHEMA_ID,
   FACT_LEDGER_MANIFEST
 } from "../lib/aml-fact-ledger.js";
+import { assertObservationTimeSafe, configuredObservationFutureSkewMs } from "../lib/observation-time.js";
 import { parseSummaryWindow } from "../lib/summary-window.js";
 import type { RecordSnapshotCall, RecordSnapshotCallFact, RecordSnapshotCallV1 } from "./build-record-snapshot-call.js";
 
@@ -62,7 +63,7 @@ function isDirectCli(metaUrl: string, argvPath: string | undefined): boolean {
 function minProgramRpcUrls(forceMultiRpc: boolean): number {
   const configured = process.env.VITALS_MIN_PROGRAM_RPC_URLS;
   const parsed = configured ? Number(configured) : forceMultiRpc ? 2 : 1;
-  if (!Number.isInteger(parsed) || parsed <= 0) {
+  if (!Number.isSafeInteger(parsed) || parsed <= 0) {
     throw new Error("VITALS_MIN_PROGRAM_RPC_URLS must be a positive integer");
   }
   return Math.max(forceMultiRpc ? 2 : 1, parsed);
@@ -81,7 +82,9 @@ export function configuredProgramAddress(call: RecordSnapshotCall): string | nul
 async function nextNonce(address: string): Promise<number> {
   const balance = await octraRpc<any>("octra_balance", [address]);
   const nonce = Number(balance?.pending_nonce ?? balance?.nonce ?? 0);
-  if (!Number.isInteger(nonce) || nonce < 0) throw new Error(`invalid nonce response for ${address}`);
+  if (!Number.isSafeInteger(nonce) || nonce < 0 || nonce >= Number.MAX_SAFE_INTEGER) {
+    throw new Error(`invalid nonce response for ${address}`);
+  }
   return nonce + 1;
 }
 
@@ -1098,7 +1101,7 @@ function assertSameCircleReadback(primary: Record<string, unknown>, candidate: R
   for (const key of ["payload_hash", "evidence_manifest_hash", "source_refs_hash", "summary_hash", "latest_summary_row", "latest_snapshot_index", "summary_window_hash", "summary_window_rows", "history_row_hash", "history_root", "capsules_root", "catalog_root", "family_root", "open_capsule_rows", "capsule_count", "latest_capsule_id", "latest_capsule_root_after", "latest_capsule_verified", "fact_family_verified"]) {
     if (!(key in primary) && !(key in candidate)) continue;
     if (candidate[key] !== primary[key]) {
-      throw new Error(`programmed Circle readback RPC mismatch for ${key} from ${candidate.rpc_url}`);
+      throw new Error(`programmed Circle readback RPC mismatch for ${key} from ${rpcUrlLabel(String(candidate.rpc_url || ""))}`);
     }
   }
 }
@@ -1147,7 +1150,18 @@ async function readSnapshotCountAtUrl(targetKind: StateTargetMode, targetId: str
   const value = targetKind === "circle_program"
     ? await circleProgramViewAtUrl<number>(url, targetId, "get_snapshot_count")
     : await contractCallAtUrl<number>(url, targetId, "get_snapshot_count");
-  return Number(value || 0);
+  const parsed = Number(value);
+  if (!Number.isSafeInteger(parsed) || parsed < 0) {
+    throw new Error(`invalid snapshot_count from ${rpcUrlLabel(url)}`);
+  }
+  return parsed;
+}
+
+async function readLatestObservedAtAtUrl(targetKind: StateTargetMode, targetId: string, url: string): Promise<string> {
+  const value = targetKind === "circle_program"
+    ? await circleProgramViewAtUrl<string>(url, targetId, "get_latest_observed_at")
+    : await contractCallAtUrl<string>(url, targetId, "get_latest_observed_at");
+  return String(value || "");
 }
 
 async function assertFactLedgerSubmitPreflight(targetKind: StateTargetMode, targetId: string, call: RecordSnapshotCall): Promise<Record<string, unknown> | null> {
@@ -1167,7 +1181,7 @@ async function assertFactLedgerSubmitPreflight(targetKind: StateTargetMode, targ
   }));
   for (const read of reads) {
     if (read.manifest !== FACT_LEDGER_MANIFEST) {
-      throw new Error(`${call.commit_mode} target manifest mismatch from ${read.url}: expected ${FACT_LEDGER_MANIFEST}, got ${read.manifest}`);
+      throw new Error(`${call.commit_mode} target manifest mismatch from ${rpcUrlLabel(read.url)}: expected ${FACT_LEDGER_MANIFEST}, got ${read.manifest}`);
     }
   }
   return {
@@ -1184,20 +1198,31 @@ async function assertPreSubmitState(targetKind: StateTargetMode, targetId: strin
   if (urls.length < minUrls) {
     throw new Error(`at least ${minUrls} Octra program RPC URL(s) are required before snapshot submit; got ${urls.length}`);
   }
+  const factCall = isFactLedgerCall(call);
   const counts = await Promise.all(urls.map(async (url) => ({
     url,
-    count: await readSnapshotCountAtUrl(targetKind, targetId, url)
+    count: await readSnapshotCountAtUrl(targetKind, targetId, url),
+    latestObservedAt: factCall ? await readLatestObservedAtAtUrl(targetKind, targetId, url) : ""
   })));
   const [primary, ...rest] = counts;
   if (!primary) throw new Error("no Octra program RPC URL configured");
   for (const candidate of rest) {
     if (candidate.count !== primary.count) {
-      throw new Error(`program RPC mismatch from ${candidate.url}: get_snapshot_count`);
+      throw new Error(`program RPC mismatch from ${rpcUrlLabel(candidate.url)}: get_snapshot_count`);
+    }
+    if (candidate.latestObservedAt !== primary.latestObservedAt) {
+      throw new Error(`program RPC mismatch from ${rpcUrlLabel(candidate.url)}: get_latest_observed_at`);
     }
   }
   const expectedPrior = Number(call.snapshot_index || 0) - 1;
   if (primary.count !== expectedPrior) {
     throw new Error(`pre-submit state advanced or drifted: expected snapshot_count ${expectedPrior}, got ${primary.count}`);
+  }
+  if (factCall) {
+    assertObservationTimeSafe(call.observed_at, {
+      maxFutureSkewMs: configuredObservationFutureSkewMs(),
+      previousObservedAt: primary.latestObservedAt || null
+    });
   }
   let factLedger: Record<string, unknown> | null = null;
   if (isFactLedgerCall(call) && targetKind === "circle_program") {
@@ -1225,6 +1250,7 @@ async function assertPreSubmitState(targetKind: StateTargetMode, targetId: strin
   return {
     snapshot_count: primary.count,
     expected_prior_snapshot_count: expectedPrior,
+    latest_observed_at: primary.latestObservedAt || null,
     rpc_urls_checked: urls.length,
     rpc_agreement: true,
     ...(factLedger ? { fact_ledger: factLedger } : {})
@@ -1375,19 +1401,24 @@ export async function submitSnapshotCall(
         snapshot_index: call.snapshot_index || null,
         method: spec.method,
         nonce: tx.nonce,
+        prepared_tx_hash: precomputedTxHash,
         tx_hash: precomputedTxHash,
+        hash_source: "prepared_transaction",
         expected_hashes: call.expected_hashes
       });
     }
     const txJson = publicTransactionJson(signed);
     const submitResult = await octraRpc<any>("octra_submit", [txJson]);
-    const txHash = submitResult?.tx_hash || submitResult?.hash || precomputedTxHash;
+    const { txHash, returnedTxHash, hashSource } = submittedTransactionHash(submitResult, precomputedTxHash);
     submissions.push({
       label: spec.label,
       method: spec.method,
       nonce: tx.nonce,
       tx_hash: txHash,
+      prepared_tx_hash: precomputedTxHash,
       precomputed_tx_hash: precomputedTxHash,
+      returned_tx_hash: returnedTxHash,
+      hash_source: hashSource,
       submit_result: submitResult
     });
   }

@@ -505,6 +505,15 @@
       "payable": false
     },
     {
+      "name": "initialize_core_family",
+      "inputs": [
+        "string"
+      ],
+      "output": "bool",
+      "view": false,
+      "payable": false
+    },
+    {
       "name": "register_fact_family",
       "inputs": [
         "string",

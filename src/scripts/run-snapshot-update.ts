@@ -55,10 +55,13 @@ function ms(value: number): number {
   return Math.round(value);
 }
 
-function envInt(name: string, fallback: number): number {
-  const value = Number(process.env[name] || fallback);
-  if (!Number.isFinite(value)) return fallback;
-  return Math.max(0, Math.floor(value));
+function envInt(name: string, fallback: number, min = 0, max = Number.MAX_SAFE_INTEGER): number {
+  const configured = process.env[name];
+  const value = configured !== undefined && configured !== "" ? Number(configured) : fallback;
+  if (!Number.isSafeInteger(value) || value < min || value > max) {
+    throw new Error(`${name} must be an integer from ${min} to ${max}`);
+  }
+  return value;
 }
 
 function confirmedAmlWrite(report: Record<string, any>): boolean {
@@ -295,8 +298,8 @@ export async function acquireLock(lockPath: string, runId: string, staleMs: numb
 }
 
 async function collectLiveSnapshotWithRetries(attempts: Array<Record<string, unknown>>): Promise<{ snapshot: Awaited<ReturnType<typeof buildLiveSnapshot>>; attempts: Array<Record<string, unknown>> }> {
-  const maxAttempts = Math.max(1, Number(process.env.VITALS_COLLECT_ATTEMPTS || 2));
-  const retryDelayMs = Math.max(0, Number(process.env.VITALS_COLLECT_RETRY_DELAY_MS || 15_000));
+  const maxAttempts = envInt("VITALS_COLLECT_ATTEMPTS", 2, 1, 10);
+  const retryDelayMs = envInt("VITALS_COLLECT_RETRY_DELAY_MS", 15_000, 0, 300_000);
   for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
     const started = performance.now();
     try {
@@ -330,7 +333,7 @@ async function runSnapshotUpdate(): Promise<Record<string, any>> {
   const dataDir = resolve(process.env.VITALS_UPDATE_DATA_DIR || process.env.VITALS_DATA_DIR || join(root, "data"));
   const runDir = resolve(process.env.VITALS_UPDATE_RUN_DIR || join(dataDir, "runs", runId));
   const lockPath = resolve(process.env.VITALS_UPDATE_LOCK_PATH || join(dataDir, "snapshot-updater.lock"));
-  const lockStaleMs = Number(process.env.VITALS_UPDATE_LOCK_STALE_MS || 10 * 60_000);
+  const lockStaleMs = envInt("VITALS_UPDATE_LOCK_STALE_MS", 10 * 60_000, 1, 24 * 60 * 60_000);
   const evidenceDir = resolve(process.env.VITALS_UPDATE_EVIDENCE_DIR || join(dataDir, "evidence"));
   const snapshotPath = join(runDir, "latest_snapshot.json");
   const recordCallPath = join(runDir, "record_snapshot_call.json");

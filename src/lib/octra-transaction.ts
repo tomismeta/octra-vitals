@@ -54,6 +54,29 @@ export function transactionHash(tx: OctraTransaction): string {
   return createHash("sha256").update(canonicalTransactionJson(tx)).digest("hex");
 }
 
+export function normalizeTransactionHash(value: unknown): string | null {
+  if (!value) return null;
+  const text = String(value).replace(/^sha256:/, "").toLowerCase();
+  return /^[0-9a-f]{64}$/.test(text) ? text : null;
+}
+
+export function submittedTransactionHash(submitResult: any, preparedHash: string): {
+  txHash: string;
+  returnedTxHash: string | null;
+  hashSource: "rpc" | "prepared_transaction";
+} {
+  const rawReturnedHash = submitResult?.tx_hash || submitResult?.hash || submitResult?.transaction_hash;
+  const returnedTxHash = normalizeTransactionHash(rawReturnedHash);
+  if (rawReturnedHash && !returnedTxHash) {
+    throw new Error("Octra RPC returned a malformed transaction hash");
+  }
+  return {
+    txHash: returnedTxHash || preparedHash,
+    returnedTxHash,
+    hashSource: returnedTxHash ? "rpc" : "prepared_transaction"
+  };
+}
+
 function ed25519PrivateKeyFromSeed(seed: Buffer) {
   return createPrivateKey({
     key: Buffer.concat([ED25519_PKCS8_PREFIX, seed]),

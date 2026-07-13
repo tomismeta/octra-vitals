@@ -5,10 +5,12 @@ Wants=network-online.target
 
 [Service]
 Type=oneshot
-User=octra-vitals
-Group=octra-vitals
+User=octra-vitals-notify
+Group=octra-vitals-notify
 WorkingDirectory=/opt/octra-vitals/current
 Environment=VITALS_NOTIFY_DATA_DIR=/var/lib/octra-vitals
+Environment=VITALS_NOTIFY_TRAFFIC_DIR=/var/lib/octra-vitals-gateway/traffic
+Environment=VITALS_NOTIFY_ALERT_STATE_PATH=/var/lib/octra-vitals-notify/alert-state.json
 Environment=VITALS_NOTIFY_GATEWAY_URL=http://127.0.0.1:4173
 Environment=VITALS_NOTIFY_ALERT_MAX_SNAPSHOT_AGE_MS=2700000
 Environment=VITALS_NOTIFY_ALERT_DISK_PCT=75
@@ -21,7 +23,9 @@ PrivateTmp=yes
 PrivateDevices=yes
 ProtectSystem=strict
 ProtectHome=read-only
-ReadWritePaths=/var/lib/octra-vitals
+ReadOnlyPaths=/var/lib/octra-vitals
+ReadOnlyPaths=/var/lib/octra-vitals-gateway/traffic
+ReadWritePaths=/var/lib/octra-vitals-notify
 RestrictSUIDSGID=yes
 LockPersonality=yes
 RemoveIPC=yes
@@ -39,4 +43,4 @@ RestrictRealtime=yes
 CapabilityBoundingSet=
 AmbientCapabilities=
 SystemCallArchitectures=native
-UMask=0007
+UMask=0077

@@ -1,14 +1,14 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-APP_USER="${APP_USER:-octra-vitals}"
+APP_NOTIFY_USER="${APP_NOTIFY_USER:-octra-vitals-notify}"
 APP_ROOT="${APP_ROOT:-/opt/octra-vitals}"
 DATA_DIR="${VITALS_DATA_DIR:-/var/lib/octra-vitals}"
 ENV_DIR="${ENV_DIR:-/etc/octra-vitals}"
 NOTIFY_ENV="${NOTIFY_ENV:-${ENV_DIR}/notify.env}"
 
-if ! id "${APP_USER}" >/dev/null 2>&1; then
-  echo "missing app user: ${APP_USER}" >&2
+if ! id "${APP_NOTIFY_USER}" >/dev/null 2>&1; then
+  echo "missing notify user: ${APP_NOTIFY_USER}" >&2
   exit 1
 fi
 if [ ! -d "${APP_ROOT}/current" ]; then
@@ -63,13 +63,13 @@ VITALS_NOTIFY_ALERT_DISK_PCT=75
 VITALS_NOTIFY_ALERT_DIAGNOSTIC_REQUESTS_PER_HOUR=300
 EOF
 sudo install -d -m 755 -o root -g root "${ENV_DIR}"
-sudo install -m 640 -o root -g "${APP_USER}" "${tmp}" "${NOTIFY_ENV}"
+sudo install -m 640 -o root -g "${APP_NOTIFY_USER}" "${tmp}" "${NOTIFY_ENV}"
 unset telegram_token TELEGRAM_BOT_TOKEN
 sudo systemctl daemon-reload
 
 read -r -p "Send a Telegram test message now? [Y/n] " send_test
 if [[ ! "${send_test}" =~ ^[Nn]$ ]]; then
-  sudo -u "${APP_USER}" bash -lc "set -a; . '${NOTIFY_ENV}'; set +a; cd '${APP_ROOT}/current'; node dist/scripts/notify-operator.js --test"
+  sudo -u "${APP_NOTIFY_USER}" bash --noprofile --norc -c ". '${APP_ROOT}/current/deploy/lib/env-file.sh'; load_env_file_data '${NOTIFY_ENV}'; cd '${APP_ROOT}/current'; node dist/scripts/notify-operator.js --test"
 fi
 
 read -r -p "Enable alert and daily digest timers now? [Y/n] " enable_timers

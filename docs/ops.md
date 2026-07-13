@@ -6,20 +6,29 @@ This runbook is environment-neutral. Hostnames, wallets, Circle ids, and private
 
 ```text
 /opt/octra-vitals/current        release checkout or symlink
-/var/lib/octra-vitals            runtime data, receipts, evidence, updater runs
+/var/lib/octra-vitals            producer-owned, gateway-read-only canonical artifacts
+/var/lib/octra-vitals-gateway    gateway-owned traffic aggregates only
+/var/lib/octra-vitals-operator   hot-operator run state and reports
+/var/lib/octra-vitals-owner      cold-owner deployment reports
+/var/lib/octra-vitals-notify     notifier state
+/var/lib/octra-vitals-watchdog   watchdog state
 /etc/octra-vitals/gateway.env    non-secret gateway config
-/etc/octra-vitals/updater.env    signer/updater config, root-only
+/etc/octra-vitals/updater.env    hot operator signer config, root-only
+/etc/octra-vitals/owner.env      cold Circle owner signer config, root-only
 /etc/octra-vitals/notify.env     optional Telegram notification config
 ```
 
-Create a dedicated runtime user:
+Use `deploy/mainnet/bootstrap-host.sh` to create the gateway, hot operator, cold owner, notifier, and watchdog users and their separate writable directories. Owner actions run only as the service-free `octra-vitals-owner` identity; the always-on updater cannot inspect the owner process or rewrite its reports. The gateway cannot write canonical snapshot/evidence files, and notifier/watchdog credentials are not readable by the public gateway process.
+
+The watchdog unit is intentionally unprivileged and ships with recovery disabled. Any future restart capability must be a separate narrowly authorized helper, not a root watchdog process.
+
+At minimum, the secret files are root-owned:
 
 ```bash
-sudo useradd --system --no-create-home --shell /usr/sbin/nologin octra-vitals || true
-sudo install -d -m 750 -o octra-vitals -g octra-vitals /var/lib/octra-vitals
 sudo install -d -m 755 -o root -g root /etc/octra-vitals
 sudo install -m 640 -o root -g octra-vitals /dev/null /etc/octra-vitals/gateway.env
 sudo install -m 600 -o root -g root /dev/null /etc/octra-vitals/updater.env
+sudo install -m 600 -o root -g root /dev/null /etc/octra-vitals/owner.env
 ```
 
 ## Local Gate
@@ -86,6 +95,10 @@ For AML changes, first decide compatibility:
 
 - compatible layout/getter/row/authorization changes use `npm run circle:programmed:update-code` against the existing programmed Circle;
 - incompatible storage, row, cardinality, or authorization changes require a fresh era and predecessor-anchor rehearsal.
+
+For an in-place update, pause the updater timer and call the ledger owner's `set_paused(true)` first. Keep confirmation waiting enabled, leave the ledger paused through post-update invariant verification, and unpause it only after the candidate code hash and preserved state are confirmed.
+
+Use `sudo bash deploy/mainnet/update-programmed-circle-code.sh` for the host-side dry run or update. The wrapper reads root-only signer files, passes only the owner operation's allowlisted variables over stdin, runs as `octra-vitals-owner`, and writes the report under `/var/lib/octra-vitals-owner`.
 
 ## Health Checks
 
@@ -248,6 +261,6 @@ Alerts run every five minutes and de-duplicate repeated failures. Digests run ho
 
 - Keep signer material only in root-owned env files or protected deployment secrets.
 - Keep gateway env public/non-secret.
-- Use a dedicated low-balance production wallet at launch; the architecture allows later owner/operator separation.
-- Treat `program_update`, Circle asset publication, and manual snapshot writes as explicit operator actions.
+- Use distinct production owner and hot-operator wallets; role collapse requires the exact break-glass acknowledgement.
+- Treat `program_update` and Circle asset publication as cold-owner actions, and manual snapshot writes as explicit hot-operator actions.
 - Do not enable fallback/sample rendering in production.

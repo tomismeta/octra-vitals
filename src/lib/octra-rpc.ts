@@ -7,6 +7,121 @@ interface OctraRpcOptions {
   retry?: boolean;
 }
 
+type RpcQueueEntry = {
+  resolve: () => void;
+  reject: (error: Error) => void;
+  timer: NodeJS.Timeout;
+  settled: boolean;
+};
+
+export type RpcAdmissionMetrics = {
+  active: number;
+  queued: number;
+  rejected: number;
+  timed_out: number;
+  throttled_starts: number;
+  max_concurrent_observed: number;
+};
+
+export class RpcAdmissionController {
+  private active = 0;
+  private nextStartAt = 0;
+  private readonly queue: RpcQueueEntry[] = [];
+  private rejected = 0;
+  private timedOut = 0;
+  private throttledStarts = 0;
+  private maxConcurrentObserved = 0;
+
+  constructor(
+    private readonly maxConcurrent: number,
+    private readonly minStartGapMs: number,
+    private readonly maxQueue: number,
+    private readonly queueWaitMs: number
+  ) {
+    if (!Number.isSafeInteger(maxConcurrent) || maxConcurrent < 1) throw new Error("RPC max concurrency must be positive");
+    if (!Number.isSafeInteger(minStartGapMs) || minStartGapMs < 0) throw new Error("RPC start gap must be non-negative");
+    if (!Number.isSafeInteger(maxQueue) || maxQueue < 0) throw new Error("RPC max queue must be non-negative");
+    if (!Number.isSafeInteger(queueWaitMs) || queueWaitMs < 1) throw new Error("RPC queue wait must be positive");
+  }
+
+  private async waitForReservedStart(): Promise<void> {
+    const now = Date.now();
+    const reservedStart = Math.max(now, this.nextStartAt);
+    this.nextStartAt = reservedStart + this.minStartGapMs;
+    const waitMs = reservedStart - now;
+    if (waitMs > 0) {
+      this.throttledStarts += 1;
+      await sleep(waitMs);
+    }
+  }
+
+  async acquire(): Promise<void> {
+    if (this.active < this.maxConcurrent) {
+      this.active += 1;
+      this.maxConcurrentObserved = Math.max(this.maxConcurrentObserved, this.active);
+      await this.waitForReservedStart();
+      return;
+    }
+
+    if (this.queue.length >= this.maxQueue) {
+      this.rejected += 1;
+      throw new Error("Octra RPC queue is full");
+    }
+
+    this.throttledStarts += 1;
+    await new Promise<void>((resolve, reject) => {
+      const entry: RpcQueueEntry = {
+        resolve,
+        reject,
+        settled: false,
+        timer: setTimeout(() => {
+          if (entry.settled) return;
+          entry.settled = true;
+          const index = this.queue.indexOf(entry);
+          if (index >= 0) this.queue.splice(index, 1);
+          this.timedOut += 1;
+          reject(new Error("Timed out waiting for an Octra RPC slot"));
+        }, this.queueWaitMs)
+      };
+      this.queue.push(entry);
+    });
+    await this.waitForReservedStart();
+  }
+
+  release(): void {
+    while (this.queue.length > 0) {
+      const next = this.queue.shift();
+      if (!next || next.settled) continue;
+      next.settled = true;
+      clearTimeout(next.timer);
+      // The active permit is transferred directly to the queued caller.
+      next.resolve();
+      return;
+    }
+    this.active = Math.max(0, this.active - 1);
+  }
+
+  async run<T>(fn: () => Promise<T>): Promise<T> {
+    await this.acquire();
+    try {
+      return await fn();
+    } finally {
+      this.release();
+    }
+  }
+
+  snapshot(): RpcAdmissionMetrics {
+    return {
+      active: this.active,
+      queued: this.queue.length,
+      rejected: this.rejected,
+      timed_out: this.timedOut,
+      throttled_starts: this.throttledStarts,
+      max_concurrent_observed: this.maxConcurrentObserved
+    };
+  }
+}
+
 type RpcMethodMetrics = {
   calls: number;
   attempts: number;
@@ -15,19 +130,41 @@ type RpcMethodMetrics = {
   retries: number;
 };
 
-const rpcMaxConcurrent = Math.max(1, Number(process.env.OCTRA_RPC_MAX_CONCURRENT || 6));
-const rpcMinStartGapMs = Math.max(0, Number(process.env.OCTRA_RPC_MIN_START_GAP_MS || 50));
-let rpcActive = 0;
-let rpcLastStartAt = 0;
-const rpcQueue: Array<() => void> = [];
+export function parseRpcIntegerSetting(
+  configured: string | undefined,
+  fallback: number,
+  name: string,
+  min: number,
+  max: number
+): number {
+  const parsed = configured !== undefined && configured !== "" ? Number(configured) : fallback;
+  if (!Number.isSafeInteger(parsed) || parsed < min || parsed > max) {
+    throw new Error(`${name} must be an integer from ${min} to ${max}`);
+  }
+  return parsed;
+}
+
+const rpcMaxConcurrent = parseRpcIntegerSetting(process.env.OCTRA_RPC_MAX_CONCURRENT, 6, "OCTRA_RPC_MAX_CONCURRENT", 1, 256);
+const rpcMinStartGapMs = parseRpcIntegerSetting(process.env.OCTRA_RPC_MIN_START_GAP_MS, 50, "OCTRA_RPC_MIN_START_GAP_MS", 0, 60_000);
+const rpcMaxQueue = parseRpcIntegerSetting(process.env.OCTRA_RPC_MAX_QUEUE, 128, "OCTRA_RPC_MAX_QUEUE", 0, 100_000);
+const rpcQueueWaitMs = parseRpcIntegerSetting(process.env.OCTRA_RPC_QUEUE_WAIT_MS, 15_000, "OCTRA_RPC_QUEUE_WAIT_MS", 1, 300_000);
+const rpcMaxResponseBytes = parseRpcIntegerSetting(
+  process.env.OCTRA_RPC_MAX_RESPONSE_BYTES,
+  8 * 1024 * 1024,
+  "OCTRA_RPC_MAX_RESPONSE_BYTES",
+  1,
+  64 * 1024 * 1024
+);
+const rpcTimeoutMs = parseRpcIntegerSetting(process.env.OCTRA_RPC_TIMEOUT_MS, 15_000, "OCTRA_RPC_TIMEOUT_MS", 1, 300_000);
+const rpcAttempts = parseRpcIntegerSetting(process.env.OCTRA_RPC_ATTEMPTS, 5, "OCTRA_RPC_ATTEMPTS", 1, 10);
+const rpcRetryDelayMs = parseRpcIntegerSetting(process.env.OCTRA_RPC_RETRY_DELAY_MS, 1_000, "OCTRA_RPC_RETRY_DELAY_MS", 0, 30_000);
+const rpcAdmission = new RpcAdmissionController(rpcMaxConcurrent, rpcMinStartGapMs, rpcMaxQueue, rpcQueueWaitMs);
 const rpcMetrics = {
   calls: 0,
   attempts: 0,
   successes: 0,
   failures: 0,
   retries: 0,
-  throttled_starts: 0,
-  max_concurrent_observed: 0,
   by_method: new Map<string, RpcMethodMetrics>()
 };
 
@@ -40,55 +177,60 @@ function methodMetrics(method: string): RpcMethodMetrics {
   return value;
 }
 
-function pumpRpcQueue(): void {
-  while (rpcActive < rpcMaxConcurrent && rpcQueue.length) {
-    const next = rpcQueue.shift();
-    if (next) next();
-  }
-}
-
-async function acquireRpcSlot(): Promise<void> {
-  if (rpcActive >= rpcMaxConcurrent) {
-    rpcMetrics.throttled_starts += 1;
-    await new Promise<void>((resolve) => rpcQueue.push(resolve));
-  }
-  rpcActive += 1;
-  rpcMetrics.max_concurrent_observed = Math.max(rpcMetrics.max_concurrent_observed, rpcActive);
-  const waitMs = Math.max(0, rpcMinStartGapMs - (Date.now() - rpcLastStartAt));
-  if (waitMs > 0) {
-    rpcMetrics.throttled_starts += 1;
-    await sleep(waitMs);
-  }
-  rpcLastStartAt = Date.now();
-}
-
-function releaseRpcSlot(): void {
-  rpcActive = Math.max(0, rpcActive - 1);
-  pumpRpcQueue();
-}
-
 async function withRpcSlot<T>(fn: () => Promise<T>): Promise<T> {
-  await acquireRpcSlot();
+  return rpcAdmission.run(fn);
+}
+
+export async function readResponseTextWithLimit(response: Response, maxBytes: number): Promise<string> {
+  if (!Number.isSafeInteger(maxBytes) || maxBytes < 1) throw new Error("Response byte limit must be positive");
+  const declaredLength = Number(response.headers.get("content-length"));
+  if (Number.isFinite(declaredLength) && declaredLength > maxBytes) {
+    await response.body?.cancel();
+    throw new Error(`Octra RPC response exceeds ${maxBytes} bytes`);
+  }
+  if (!response.body) return "";
+
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let total = 0;
+  let text = "";
   try {
-    return await fn();
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      total += value.byteLength;
+      if (total > maxBytes) {
+        await reader.cancel();
+        throw new Error(`Octra RPC response exceeds ${maxBytes} bytes`);
+      }
+      text += decoder.decode(value, { stream: true });
+    }
+    text += decoder.decode();
+    return text;
   } finally {
-    releaseRpcSlot();
+    reader.releaseLock();
   }
 }
 
 export function octraRpcMetricsSnapshot(): Record<string, unknown> {
+  const admission = rpcAdmission.snapshot();
   return {
     max_concurrent: rpcMaxConcurrent,
     min_start_gap_ms: rpcMinStartGapMs,
-    active: rpcActive,
-    queued: rpcQueue.length,
+    max_queue: rpcMaxQueue,
+    queue_wait_ms: rpcQueueWaitMs,
+    max_response_bytes: rpcMaxResponseBytes,
+    active: admission.active,
+    queued: admission.queued,
     calls: rpcMetrics.calls,
     attempts: rpcMetrics.attempts,
     successes: rpcMetrics.successes,
     failures: rpcMetrics.failures,
     retries: rpcMetrics.retries,
-    throttled_starts: rpcMetrics.throttled_starts,
-    max_concurrent_observed: rpcMetrics.max_concurrent_observed,
+    rejected: admission.rejected,
+    timed_out: admission.timed_out,
+    throttled_starts: admission.throttled_starts,
+    max_concurrent_observed: admission.max_concurrent_observed,
     by_method: Object.fromEntries([...rpcMetrics.by_method.entries()].map(([method, value]) => [method, { ...value }]))
   };
 }
@@ -118,6 +260,29 @@ export function octraObservationRpcUrl(): string {
     DEFAULT_OCTRA_RPC_URL;
 }
 
+export function isExplicitDevelopmentRpcUrl(value: string): boolean {
+  let parsed: URL;
+  try {
+    parsed = new URL(value);
+  } catch {
+    return false;
+  }
+  if (parsed.protocol !== "http:" && parsed.protocol !== "https:") return false;
+  const hostname = parsed.hostname.toLowerCase().replace(/^\[|\]$/g, "");
+  if (hostname === "localhost" || hostname.endsWith(".localhost") || hostname === "::1") return true;
+  if (/^127(?:\.\d{1,3}){3}$/.test(hostname)) return hostname.split(".").every((part) => Number(part) <= 255);
+  return /(?:^|[.-])devnet(?:[.-]|$)/.test(hostname);
+}
+
+export function rpcUrlLabel(value: string): string {
+  try {
+    const parsed = new URL(value);
+    return `${parsed.protocol}//${parsed.host}`;
+  } catch {
+    return "configured-rpc";
+  }
+}
+
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
@@ -140,9 +305,24 @@ function retryableHttpStatus(status: number): boolean {
   return [408, 425, 429, 500, 502, 503, 504].includes(status);
 }
 
+function safeRpcText(value: unknown): string {
+  return String(value ?? "").replace(/[\x00-\x1f\x7f]/g, " ").slice(0, 240);
+}
+
+function rpcErrorSummary(error: unknown): string {
+  if (error && typeof error === "object" && "message" in error) {
+    return safeRpcText((error as { message?: unknown }).message);
+  }
+  try {
+    return safeRpcText(JSON.stringify(error ?? ""));
+  } catch {
+    return "unprintable RPC error";
+  }
+}
+
 function retryableRpcError(error: any): boolean {
   const code = Number(error?.code);
-  const message = String(error?.message || JSON.stringify(error || "")).toLowerCase();
+  const message = rpcErrorSummary(error).toLowerCase();
   return code === 429 ||
     code === -32029 ||
     message.includes("too many requests") ||
@@ -161,22 +341,21 @@ function retryAfterMs(value: string | null): number | null {
 
 function retryDelay(attempt: number, retryAfter: number | null): number {
   if (retryAfter !== null) return retryAfter;
-  const baseMs = Math.max(0, Number(process.env.OCTRA_RPC_RETRY_DELAY_MS || 1_000));
+  const baseMs = rpcRetryDelayMs;
   const jitterMs = Math.floor(Math.random() * Math.max(1, baseMs / 3));
   return Math.min(10_000, baseMs * 2 ** Math.max(0, attempt - 1) + jitterMs);
 }
 
 export async function octraRpc<T = any>(method: string, params: unknown[] = [], options: OctraRpcOptions = {}): Promise<T> {
   const url = options.url || octraProgramRpcUrl();
-  const timeoutMs = Number(process.env.OCTRA_RPC_TIMEOUT_MS || 15_000);
   const request = {
     jsonrpc: "2.0",
-    id: options.id || 1,
+    id: options.id ?? 1,
     method,
     params
   };
   const shouldRetry = options.retry ?? retrySafeOctraMethod(method);
-  const maxAttempts = shouldRetry ? Math.max(1, Number(process.env.OCTRA_RPC_ATTEMPTS || 5)) : 1;
+  const maxAttempts = shouldRetry ? rpcAttempts : 1;
   let lastError: unknown = null;
   const perMethod = methodMetrics(method);
   rpcMetrics.calls += 1;
@@ -184,7 +363,7 @@ export async function octraRpc<T = any>(method: string, params: unknown[] = [], 
 
   for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
     const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), timeoutMs);
+    const timeout = setTimeout(() => controller.abort(), rpcTimeoutMs);
     try {
       rpcMetrics.attempts += 1;
       perMethod.attempts += 1;
@@ -192,19 +371,22 @@ export async function octraRpc<T = any>(method: string, params: unknown[] = [], 
         rpcMetrics.retries += 1;
         perMethod.retries += 1;
       }
-      const response = await withRpcSlot(() => fetch(url, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Accept: "application/json",
-          "User-Agent": "octra-vitals/v0"
-        },
-        body: JSON.stringify(request),
-        signal: controller.signal
-      }));
-      const text = await response.text();
+      const { response, text } = await withRpcSlot(async () => {
+        const response = await fetch(url, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Accept: "application/json",
+            "User-Agent": "octra-vitals/v0"
+          },
+          body: JSON.stringify(request),
+          signal: controller.signal
+        });
+        const text = await readResponseTextWithLimit(response, rpcMaxResponseBytes);
+        return { response, text };
+      });
       if (!response.ok) {
-        const error = new Error(`${url} returned ${response.status}: ${text.slice(0, 240)}`);
+        const error = new Error(`${rpcUrlLabel(url)} returned ${response.status}: ${safeRpcText(text)}`);
         lastError = error;
         if (attempt < maxAttempts && retryableHttpStatus(response.status)) {
           await sleep(retryDelay(attempt, retryAfterMs(response.headers.get("retry-after"))));
@@ -216,7 +398,7 @@ export async function octraRpc<T = any>(method: string, params: unknown[] = [], 
       try {
         body = JSON.parse(text);
       } catch (error) {
-        const wrapped = new Error(`${url} returned non-JSON ${method} response: ${text.slice(0, 240)}`);
+        const wrapped = new Error(`${rpcUrlLabel(url)} returned non-JSON ${method} response: ${safeRpcText(text)}`);
         lastError = wrapped;
         if (attempt < maxAttempts && retryableError(wrapped)) {
           await sleep(retryDelay(attempt, null));
@@ -225,7 +407,7 @@ export async function octraRpc<T = any>(method: string, params: unknown[] = [], 
         throw wrapped;
       }
       if (body.error) {
-        const error = new Error(`${method} failed: ${body.error.message || JSON.stringify(body.error)}`);
+        const error = new Error(`${method} failed: ${rpcErrorSummary(body.error)}`);
         lastError = error;
         if (attempt < maxAttempts && retryableRpcError(body.error)) {
           await sleep(retryDelay(attempt, null));

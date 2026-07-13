@@ -5,6 +5,7 @@
   "assets": [
     "/index.html",
     "/style.css",
+    "/verifier.js",
     "/app.js",
     "/manifest.json",
     "/vitals.manifest.json",

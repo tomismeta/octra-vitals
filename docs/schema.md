@@ -24,6 +24,8 @@ evidence_hash      = sha256("octra-vitals:evidence:v0\n" + canonical_evidence)
 source_refs_hash   = sha256("octra-vitals:source-refs:v0\n" + canonical_source_refs)
 ```
 
+Normal HTTPS clients can prove these fields are mutually self-consistent, including evidence/source-ref correspondence, the complete fixed summary row, and freshness calculation. Authenticity against a malicious HTTPS origin requires the Circle-native read path; API/UI authority fields distinguish `self_consistency_verified` from `authenticity_verified`.
+
 ## AML Write Path
 
 The producer performs one logical update:

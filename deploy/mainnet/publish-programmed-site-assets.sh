@@ -1,22 +1,27 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-APP_USER="${APP_USER:-octra-vitals}"
-APP_OPERATOR_USER="${APP_OPERATOR_USER:-octra-vitals-operator}"
+APP_OWNER_USER="${APP_OWNER_USER:-octra-vitals-owner}"
 APP_ROOT="${APP_ROOT:-/opt/octra-vitals}"
-DATA_DIR="${VITALS_DATA_DIR:-/var/lib/octra-vitals}"
+OWNER_DIR="${VITALS_OWNER_DATA_DIR:-/var/lib/octra-vitals-owner}"
 ENV_DIR="${ENV_DIR:-/etc/octra-vitals}"
 CURRENT="${APP_ROOT}/current"
 UPDATER_TIMER="${UPDATER_TIMER:-octra-vitals-updater.timer}"
 UPDATER_SERVICE="${UPDATER_SERVICE:-octra-vitals-updater.service}"
 RESTORE_UPDATER_TIMER=0
+SITE_DEPLOY_ENV=""
 
 if [ "$(id -u)" -ne 0 ]; then
   echo "publish-programmed-site-assets.sh must run as root so updater.env can stay root-only" >&2
   exit 1
 fi
+if ! id "${APP_OWNER_USER}" >/dev/null 2>&1; then
+  echo "missing cold-owner user: ${APP_OWNER_USER}; run bootstrap-host.sh first" >&2
+  exit 1
+fi
 
 restore_updater_timer() {
+  rm -f "${SITE_DEPLOY_ENV:-}"
   if [ "${RESTORE_UPDATER_TIMER}" = "1" ]; then
     systemctl start "${UPDATER_TIMER}" || true
   fi
@@ -24,10 +29,9 @@ restore_updater_timer() {
 trap restore_updater_timer EXIT
 
 cd "${CURRENT}"
+. deploy/lib/env-file.sh
 
-set -a
-. "${ENV_DIR}/gateway.env"
-set +a
+load_env_file_data "${ENV_DIR}/gateway.env"
 
 if [ -z "${VITALS_RELEASE_GIT_COMMIT:-}" ] && [ -r build/site-circle-release.json ]; then
   VITALS_RELEASE_GIT_COMMIT="$(node -e 'const fs=require("fs"); const r=JSON.parse(fs.readFileSync("build/site-circle-release.json","utf8")); process.stdout.write(r.release_git_commit || "")')"
@@ -41,9 +45,9 @@ fi
 npm run producer:audit:dist
 node dist/scripts/build-site-circle-release.js
 
-set -a
-. "${ENV_DIR}/updater.env"
-set +a
+load_env_file_data "${ENV_DIR}/updater.env"
+load_env_file_data "${ENV_DIR}/owner.env"
+unset VITALS_OPERATOR_PRIVATE_KEY_B64 OCTRA_PRIVATE_KEY_B64
 export VITALS_SITE_CIRCLE_ID="${VITALS_PROGRAMMED_CIRCLE_ID}"
 export VITALS_DEPLOY_SITE_CIRCLE=1
 
@@ -55,11 +59,38 @@ while systemctl is-active --quiet "${UPDATER_SERVICE}"; do
   sleep 2
 done
 
-sudo --preserve-env -u "${APP_OPERATOR_USER}" env HOME="${DATA_DIR}" bash --noprofile --norc -lc "
+SITE_DEPLOY_ENV="$(mktemp)"
+write_selected_env_file "${SITE_DEPLOY_ENV}" \
+  OCTRA_PROGRAM_RPC_URL OCTRA_PROGRAM_RPC_URLS OCTRA_TX_RPC_URL OCTRA_RPC_URL \
+  OCTRA_RPC_TIMEOUT_MS OCTRA_RPC_ATTEMPTS OCTRA_RPC_RETRY_DELAY_MS \
+  OCTRA_RPC_MAX_CONCURRENT OCTRA_RPC_MIN_START_GAP_MS OCTRA_RPC_MAX_QUEUE \
+  OCTRA_RPC_QUEUE_WAIT_MS OCTRA_RPC_MAX_RESPONSE_BYTES \
+  VITALS_GATEWAY_ROLE VITALS_DEPLOYER_ADDRESS VITALS_DEPLOYER_PRIVATE_KEY_B64 \
+  VITALS_DEPLOY_SITE_CIRCLE VITALS_DEPLOY_SITE_CIRCLE_ALLOW_MAINNET VITALS_DEPLOY_WAIT VITALS_PROGRAMMED_CIRCLE_ID \
+  VITALS_SITE_CIRCLE_ID VITALS_SITE_RELEASE_KIND VITALS_SITE_RELEASE_PATH \
+  VITALS_SITE_ASSET_DIFF_CONCURRENCY VITALS_SITE_ASSET_FORCE_PATHS \
+  VITALS_SITE_ASSET_OU VITALS_SITE_ASSET_SUBMIT_BATCH VITALS_SITE_ASSET_UPLOAD_MODE \
+  VITALS_SITE_CIRCLE_PASSPHRASE VITALS_STATE_TARGET_MODE VITALS_STATE_PROGRAM_ADDRESS \
+  VITALS_PROGRAMMED_CIRCLE_PROGRAM VITALS_PROGRAMMED_CIRCLE_ARTIFACT_DIR \
+  VITALS_RECORD_SNAPSHOT_VERSION VITALS_APP_VERSION VITALS_GATEWAY_ORIGIN \
+  VITALS_OCTRA_SCAN_ADDRESS_URL VITALS_OCTRA_SCAN_TX_URL OCTRA_SCAN_ADDRESS_URL OCTRA_SCAN_TX_URL \
+  VITALS_FACT_LEDGER_PROGRAMMED_CIRCLE_SOURCE_HASH VITALS_FACT_LEDGER_PROGRAMMED_CIRCLE_BYTECODE_HASH \
+  VITALS_FACT_LEDGER_PROGRAMMED_CIRCLE_VERIFICATION_HASH VITALS_PROGRAMMED_CIRCLE_SOURCE_HASH \
+  VITALS_PROGRAMMED_CIRCLE_BYTECODE_HASH VITALS_PROGRAMMED_CIRCLE_VERIFICATION_HASH
+chown "${APP_OWNER_USER}:${APP_OWNER_USER}" "${SITE_DEPLOY_ENV}"
+chmod 600 "${SITE_DEPLOY_ENV}"
+
+sudo -u "${APP_OWNER_USER}" env -i \
+  PATH="/usr/local/bin:/usr/bin:/bin" \
+  HOME="${OWNER_DIR}" \
+  bash --noprofile --norc -c '
   set -euo pipefail
-  cd '${CURRENT}'
-  node dist/scripts/deploy-site-circle.js '${DATA_DIR}/site-circle-deploy.json'
-"
+  cd "$1"
+  . deploy/lib/env-file.sh
+  load_env_file_data "$3"
+  umask 077
+  node dist/scripts/deploy-site-circle.js "$2"
+' bash "${CURRENT}" "${OWNER_DIR}/site-circle-deploy.json" "${SITE_DEPLOY_ENV}"
 
 sudo systemctl restart octra-vitals-gateway.service
 PORT="$(sudo grep -E '^PORT=' "${ENV_DIR}/gateway.env" | tail -n1 | cut -d= -f2- || true)"

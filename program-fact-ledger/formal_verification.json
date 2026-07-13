@@ -186,6 +186,18 @@
       "signed_params": []
     },
     {
+      "name": "observed_at_after",
+      "visibility": "private",
+      "direct_calls": [
+        "assert_observed_at",
+        "substr"
+      ],
+      "direct_writes": [],
+      "transitive_writes": [],
+      "value_writes": [],
+      "signed_params": []
+    },
+    {
       "name": "assert_capsule_base_id",
       "visibility": "private",
       "direct_calls": [
@@ -443,6 +455,17 @@
       ]
     },
     {
+      "name": "assert_core_row_shape",
+      "visibility": "private",
+      "direct_calls": [
+        "substr"
+      ],
+      "direct_writes": [],
+      "transitive_writes": [],
+      "value_writes": [],
+      "signed_params": []
+    },
+    {
       "name": "aux_fact_family_id",
       "visibility": "private",
       "direct_calls": [
@@ -608,7 +631,9 @@
         "assert_capsule_base_id",
         "capsule_id_for",
         "concat",
+        "family_capsule_key",
         "fold_family_root",
+        "is_empty_slot",
         "len",
         "seal_family_capsule"
       ],
@@ -656,7 +681,9 @@
         "assert_fact_row",
         "capsule_id_for",
         "concat",
+        "family_capsule_key",
         "fold_family_root",
+        "is_empty_slot",
         "require_family_registered",
         "schema_id_for_family",
         "seal_family_capsule"
@@ -1425,6 +1452,57 @@
       ]
     },
     {
+      "name": "initialize_core_family",
+      "visibility": "public",
+      "direct_calls": [
+        "assert_family_definition",
+        "decimal_4",
+        "empty_family_capsules_root",
+        "fold_catalog_root",
+        "only_owner"
+      ],
+      "direct_writes": [
+        "catalog_root",
+        "family_capsule_count_by_id",
+        "family_capsules_root_by_id",
+        "family_count",
+        "family_definition_by_id",
+        "family_id_by_ordinal",
+        "family_latest_capsule_id_by_id",
+        "family_latest_index_by_id",
+        "family_open_capsule_base_id_by_id",
+        "family_open_capsule_body_by_id",
+        "family_open_capsule_end_root_by_id",
+        "family_open_capsule_first_index_by_id",
+        "family_open_capsule_id_by_id",
+        "family_open_capsule_row_count_by_id",
+        "family_open_capsule_segment_by_id",
+        "family_open_capsule_start_root_by_id",
+        "family_root_by_id"
+      ],
+      "transitive_writes": [
+        "catalog_root",
+        "family_capsule_count_by_id",
+        "family_capsules_root_by_id",
+        "family_count",
+        "family_definition_by_id",
+        "family_id_by_ordinal",
+        "family_latest_capsule_id_by_id",
+        "family_latest_index_by_id",
+        "family_open_capsule_base_id_by_id",
+        "family_open_capsule_body_by_id",
+        "family_open_capsule_end_root_by_id",
+        "family_open_capsule_first_index_by_id",
+        "family_open_capsule_id_by_id",
+        "family_open_capsule_row_count_by_id",
+        "family_open_capsule_segment_by_id",
+        "family_open_capsule_start_root_by_id",
+        "family_root_by_id"
+      ],
+      "value_writes": [],
+      "signed_params": []
+    },
+    {
       "name": "register_fact_family",
       "visibility": "public",
       "direct_calls": [
@@ -1510,11 +1588,13 @@
         "append_core_fact_row",
         "assert_capsule_base_id",
         "assert_core_row_matches_summary",
+        "assert_core_row_shape",
         "assert_fact_row",
         "assert_observed_at",
         "capsule_base_id_for_observed_at",
         "concat",
         "len",
+        "observed_at_after",
         "only_operator",
         "row_hash",
         "sha256",
@@ -1587,6 +1667,7 @@
         "append_fact_row",
         "assert_capsule_base_id",
         "assert_core_row_matches_summary",
+        "assert_core_row_shape",
         "assert_fact_row",
         "assert_observed_at",
         "aux_fact_family_id",
@@ -1594,6 +1675,7 @@
         "concat",
         "is_empty_slot",
         "len",
+        "observed_at_after",
         "only_operator",
         "row_hash",
         "sha256",
@@ -1684,6 +1766,7 @@
         "latest_source_refs_hash",
         "latest_summary",
         "latest_summary_hash",
+        "owner",
         "snapshot_count"
       ],
       "transitive_writes": [
@@ -1704,6 +1787,7 @@
         "latest_source_refs_hash",
         "latest_summary",
         "latest_summary_hash",
+        "owner",
         "snapshot_count"
       ],
       "value_writes": [],

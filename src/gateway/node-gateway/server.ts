@@ -1,18 +1,18 @@
 #!/usr/bin/env node
 import http from "node:http";
 import { timingSafeEqual } from "node:crypto";
-import { mkdir, readFile, stat, writeFile } from "node:fs/promises";
+import { readFile, stat } from "node:fs/promises";
 import { extname, join, resolve } from "node:path";
-import { gunzipSync, gzipSync } from "node:zlib";
-import { buildLiveSnapshot, publicSnapshotArtifact, writeSnapshotArtifacts } from "../../lib/snapshot.js";
+import { gunzipSync, gzip } from "node:zlib";
+import { buildLiveSnapshot, publicSnapshotArtifact } from "../../lib/snapshot.js";
 import { FACT_LEDGER_MANIFEST } from "../../lib/aml-fact-ledger.js";
 import { canonicalJson, responseHash, sha256Hex, sha256Tagged } from "../../lib/canonical-json.js";
 import { HistoryTailAnchorError, assertHistoryTailWithinLag, configuredStateTarget, readCanonicalHistory as readCanonicalHistoryUncached, type HistoryReadOptions, type HistorySummaryAnchor, type HistoryTailAnchorVerification, type StateTarget } from "../../lib/canonical-history.js";
 import { verifyCircleAssetIntegrity } from "../../lib/circle-asset-integrity.js";
 import { circleProgramViewAtUrl, configuredProgrammedCircleId, stateTargetMode } from "../../lib/circle-program.js";
-import { hostAllowed as hostAllowedByPolicy, trustedClientKey } from "../../lib/gateway-policy.js";
+import { hostAllowed as hostAllowedByPolicy, normalizeIp, trustedClientIdentity, trustedClientKey } from "../../lib/gateway-policy.js";
 import { configuredProgramAddress, readLatestCircleProgramSnapshot, readLatestProgramSnapshot } from "../../lib/program-state.js";
-import { circleInfoAtUrl, circleProgramInfoAtUrl, contractCall, contractReceipt, contractSource, octraProgramRpcUrls, octraRpc, octraRpcMetricsSnapshot, vmContract } from "../../lib/octra-rpc.js";
+import { circleInfoAtUrl, circleProgramInfoAtUrl, contractCall, contractReceipt, contractSource, octraProgramRpcUrls, octraRpc, octraRpcMetricsSnapshot, rpcUrlLabel, vmContract } from "../../lib/octra-rpc.js";
 import { configuredTrafficRecorder } from "../../lib/traffic.js";
 import { runtimeVitalsManifest, stableJson } from "../../lib/vitals-manifest.js";
 import { HISTORY_API_SCHEMA, LEGACY_HISTORY_SCHEMA, emptyHistoryProof, filterHistorySnapshots, historyApiCoverage, historyApiRecommendedCapsuleLimit, parseHistoryApiRequest, verifiedHistoryProof, type HistoryApiRequest } from "../../lib/history-api.js";
@@ -20,8 +20,9 @@ import { labHistorySql, labSchema, labStatus, labTables, mirrorLabHistory } from
 import { verifyNativeSnapshotReceipt } from "../../lib/native-receipt.js";
 import { octraSqliteConfig, octraSqliteReadOnlyQuery, publicLabQueryError } from "../../lib/octra-sqlite-client.js";
 import { readSqliteHistoryReplica } from "../../lib/sqlite-history-replica.js";
-import { decodeSummaryRow, type ProgramHistoryWindow } from "../../lib/summary-window.js";
+import { decodeSummaryRow, encodeSummaryRow, type ProgramHistoryWindow } from "../../lib/summary-window.js";
 import type { ProgramArtifacts, SnapshotArtifact } from "../../lib/types.js";
+import { browserPostOriginAllowed, jsonContentType } from "../../lib/http-security.js";
 
 const root = resolve(new URL("../../..", import.meta.url).pathname);
 const appDir = join(root, "app");
@@ -30,11 +31,12 @@ const evidenceDir = join(dataDir, "evidence");
 const latestPath = join(dataDir, "latest_snapshot.json");
 const latestSubmitReceiptPath = join(dataDir, "latest_submit_receipt.json");
 const host = process.env.HOST || "127.0.0.1";
-const port = Number(process.env.PORT || 4173);
-const staleAfterMs = Number(process.env.VITALS_STALE_AFTER_MS || 20 * 60_000);
-const latestReadTtlMs = Number(process.env.VITALS_LATEST_READ_TTL_MS || 60_000);
-const historyReadTtlMs = Number(process.env.VITALS_HISTORY_READ_TTL_MS || 0);
-const historyStaleWhileRefreshMs = Number(process.env.VITALS_HISTORY_STALE_WHILE_REFRESH_MS || 0);
+const port = positiveIntegerEnv("PORT", 4173);
+const staleAfterMs = positiveIntegerEnv("VITALS_STALE_AFTER_MS", 20 * 60_000);
+const maxObservationFutureSkewMs = nonNegativeIntegerEnv("VITALS_MAX_OBSERVATION_FUTURE_SKEW_MS", 5 * 60_000);
+const latestReadTtlMs = nonNegativeIntegerEnv("VITALS_LATEST_READ_TTL_MS", 60_000);
+const historyReadTtlMs = nonNegativeIntegerEnv("VITALS_HISTORY_READ_TTL_MS", 60_000);
+const historyStaleWhileRefreshMs = nonNegativeIntegerEnv("VITALS_HISTORY_STALE_WHILE_REFRESH_MS", 0);
 const historyApiStaleWindows = new Set(
   (process.env.VITALS_HISTORY_API_STALE_WINDOWS || "")
     .split(",")
@@ -42,7 +44,7 @@ const historyApiStaleWindows = new Set(
     .filter(Boolean)
 );
 const historyPrewarmEnabled = process.env.VITALS_HISTORY_PREWARM_ENABLED === "1";
-const historyPrewarmMinIntervalMs = Number(process.env.VITALS_HISTORY_PREWARM_MIN_INTERVAL_MS || 15 * 60_000);
+const historyPrewarmMinIntervalMs = nonNegativeIntegerEnv("VITALS_HISTORY_PREWARM_MIN_INTERVAL_MS", 15 * 60_000);
 const historyPrewarmWindows = (process.env.VITALS_HISTORY_PREWARM_WINDOWS || "1h,1d,7d,30d")
   .split(",")
   .map((value) => value.trim())
@@ -57,15 +59,21 @@ const historyReadMode = ((): HistoryReadMode => {
   return "replica";
 })();
 const sqliteHistoryFallbackToAml = (process.env.VITALS_HISTORY_REPLICA_FALLBACK_TO_CANONICAL || process.env.VITALS_HISTORY_SQLITE_FALLBACK_TO_AML) !== "0";
-const responseGzipEnabled = process.env.VITALS_RESPONSE_GZIP_ENABLED !== "0";
-const responseGzipMinBytes = Number(process.env.VITALS_RESPONSE_GZIP_MIN_BYTES || 1024);
-const labQueryMaxConcurrent = Math.max(1, Number(process.env.VITALS_LAB_QUERY_MAX_CONCURRENT || 2));
-const labQueryRateWindowMs = Math.max(1_000, Number(process.env.VITALS_LAB_QUERY_RATE_WINDOW_MS || 60_000));
-const labQueryRateMax = Math.max(1, Number(process.env.VITALS_LAB_QUERY_RATE_MAX || 30));
-const labQueryTrustProxyHeaders = process.env.VITALS_LAB_QUERY_TRUST_PROXY_HEADERS === "1";
 const gatewayRole = process.env.VITALS_GATEWAY_ROLE || "dev";
+const productionGateway = gatewayRole === "production" || gatewayRole === "prod";
+const responseGzipEnabled = process.env.VITALS_RESPONSE_GZIP_ENABLED === "1";
+const responseGzipMinBytes = nonNegativeIntegerEnv("VITALS_RESPONSE_GZIP_MIN_BYTES", 1024);
+const labQueryMaxConcurrent = positiveIntegerEnv("VITALS_LAB_QUERY_MAX_CONCURRENT", 2);
+const labQueryRateWindowMs = Math.max(1_000, positiveIntegerEnv("VITALS_LAB_QUERY_RATE_WINDOW_MS", 60_000));
+const labQueryRateMax = positiveIntegerEnv("VITALS_LAB_QUERY_RATE_MAX", 30);
+const labQueryGlobalRateMax = positiveIntegerEnv("VITALS_LAB_QUERY_GLOBAL_RATE_MAX", 120);
+const labQueryRateClientLimit = positiveIntegerEnv("VITALS_LAB_QUERY_RATE_CLIENT_LIMIT", 10_000);
+const requestBodyTimeoutMs = Math.max(1_000, positiveIntegerEnv("VITALS_REQUEST_BODY_TIMEOUT_MS", 10_000));
+const trustedProxyAddresses = (process.env.VITALS_TRUSTED_PROXY_ADDRESSES || "127.0.0.1,::1")
+  .split(",").map((value) => value.trim()).filter(Boolean);
+const proxyClientIpHeader = process.env.VITALS_PROXY_CLIENT_IP_HEADER || "x-forwarded-for";
 const exposeErrors = process.env.VITALS_EXPOSE_ERRORS === "1";
-const corsAllowOrigin = process.env.VITALS_CORS_ALLOW_ORIGIN || "*";
+const corsAllowOrigin = process.env.VITALS_CORS_ALLOW_ORIGIN || (productionGateway ? process.env.VITALS_GATEWAY_ORIGIN || "" : "*");
 const allowedHostValues = (process.env.VITALS_ALLOWED_HOSTS || "")
   .split(",")
   .map((value) => value.trim().toLowerCase())
@@ -124,9 +132,12 @@ type HistoryApiRead = {
 };
 
 function clampedIntegerEnv(name: string, fallback: number, min: number, max: number): number {
-  const value = Number(process.env[name] ?? fallback);
-  if (!Number.isFinite(value)) return fallback;
-  return Math.max(min, Math.min(max, Math.trunc(value)));
+  const configured = process.env[name];
+  const value = configured !== undefined && configured !== "" ? Number(configured) : fallback;
+  if (!Number.isSafeInteger(value) || value < min || value > max) {
+    throw new Error(`${name} must be an integer from ${min} to ${max}`);
+  }
+  return value;
 }
 
 function stateSourceMode(): StateSourceMode {
@@ -170,6 +181,7 @@ let circleMetadataCache: { circle_id: string; checked_at: number; value: CircleM
 let circleMetadataReadInFlight: { circle_id: string; promise: Promise<CircleMetadata> } | null = null;
 let activeLabQueries = 0;
 const labQueryRates = new Map<string, { startedAt: number; count: number }>();
+let labQueryGlobalRate = { startedAt: 0, count: 0 };
 let siteIntegrityCache: { circle_id: string; checked_at: string; value: Record<string, any> } | null = null;
 let siteIntegrityReadInFlight: { circle_id: string; promise: Promise<Record<string, any> | null> } | null = null;
 let nativeReceiptProofCache = new Map<string, {
@@ -242,9 +254,10 @@ function shouldCompress(req: http.IncomingMessage | null, contentType: string, b
 
 function shouldPrettyJson(res: http.ServerResponse): boolean {
   const url = requestUrl(requestForResponse(res));
-  if (url?.searchParams.get("pretty") === "1") return true;
+  if (url?.searchParams.get("pretty") === "1") return !productionGateway || process.env.VITALS_JSON_ALLOW_PRETTY === "1";
   if (url?.searchParams.get("compact") === "1") return false;
-  return process.env.VITALS_JSON_PRETTY_DEFAULT !== "0";
+  if (process.env.VITALS_JSON_PRETTY_DEFAULT !== undefined) return process.env.VITALS_JSON_PRETTY_DEFAULT === "1";
+  return !productionGateway;
 }
 
 function writeBufferedResponse(
@@ -261,14 +274,28 @@ function writeBufferedResponse(
     "Content-Type": contentType,
     "Content-Length": output.length,
     "X-Content-Type-Options": "nosniff",
-    ...corsHeaders(),
+    "Content-Security-Policy": "default-src 'none'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'",
+    "Permissions-Policy": "camera=(), microphone=(), geolocation=(), payment=(), usb=()",
+    "Referrer-Policy": "no-referrer",
+    "X-Frame-Options": "DENY",
+    ...(productionGateway ? { "Strict-Transport-Security": "max-age=31536000; includeSubDomains" } : {}),
+    ...corsHeaders(req),
     ...extraHeaders
   };
   if (shouldCompress(req, contentType, output, headers)) {
-    output = gzipSync(output);
-    headers["Content-Encoding"] = "gzip";
-    headers["Content-Length"] = output.length;
-    headers.Vary = headers.Vary ? `${headers.Vary}, Accept-Encoding` : "Accept-Encoding";
+    gzip(output, (error, compressed) => {
+      if (error) {
+        res.writeHead(status, headers);
+        res.end(head ? undefined : output);
+        return;
+      }
+      headers["Content-Encoding"] = "gzip";
+      headers["Content-Length"] = compressed.length;
+      headers.Vary = headers.Vary ? `${headers.Vary}, Accept-Encoding` : "Accept-Encoding";
+      res.writeHead(status, headers);
+      res.end(head ? undefined : compressed);
+    });
+    return;
   }
   res.writeHead(status, headers);
   res.end(head ? undefined : output);
@@ -290,19 +317,29 @@ function methodNotAllowed(res: http.ServerResponse, head = false): void {
   json(res, 405, { error: "method_not_allowed" }, { Allow: "GET, HEAD, OPTIONS" }, head);
 }
 
-function corsHeaders(): Record<string, string> {
+function corsHeaders(req: http.IncomingMessage | null = null): Record<string, string> {
+  const requestOrigin = req ? labHeaderValue(req, "origin") : null;
+  const allowedOrigin = corsAllowOrigin === "*"
+    ? "*"
+    : requestOrigin && requestOrigin === corsAllowOrigin ? requestOrigin : corsAllowOrigin;
   return {
-    "Access-Control-Allow-Origin": corsAllowOrigin,
+    ...(allowedOrigin ? { "Access-Control-Allow-Origin": allowedOrigin } : {}),
     "Access-Control-Allow-Methods": "GET, HEAD, OPTIONS",
     "Access-Control-Allow-Headers": "Content-Type",
     "Access-Control-Max-Age": "86400"
   };
 }
 
-function options(res: http.ServerResponse): void {
+function options(req: http.IncomingMessage, res: http.ServerResponse, url: URL): void {
+  const labPost = url.pathname === "/api/lab/query" || url.pathname === "/api/lab/mirror/sync";
+  if (labPost && !labRequestOriginAllowed(req)) {
+    return json(res, 403, { error: "origin_not_allowed" });
+  }
+  const methods = labPost ? "GET, HEAD, POST, OPTIONS" : "GET, HEAD, OPTIONS";
   res.writeHead(204, {
-    ...corsHeaders(),
-    Allow: "GET, HEAD, OPTIONS",
+    ...corsHeaders(req),
+    "Access-Control-Allow-Methods": methods,
+    Allow: methods,
     "Content-Length": "0",
     "X-Content-Type-Options": "nosniff"
   });
@@ -310,17 +347,38 @@ function options(res: http.ServerResponse): void {
 }
 
 async function readRequestJson(req: http.IncomingMessage, maxBytes = 64_000): Promise<Record<string, any>> {
+  const contentLengthText = labHeaderValue(req, "content-length");
+  if (contentLengthText) {
+    const contentLength = Number(contentLengthText);
+    if (!Number.isSafeInteger(contentLength) || contentLength < 0) throw new Error("invalid_content_length");
+    if (contentLength > maxBytes) throw new Error("request_body_too_large");
+  }
+  if (labHeaderValue(req, "content-encoding")) throw new Error("request_content_encoding_not_supported");
   const chunks: Buffer[] = [];
   let total = 0;
-  for await (const chunk of req) {
-    const buffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
-    total += buffer.length;
-    if (total > maxBytes) throw new Error("request_body_too_large");
-    chunks.push(buffer);
+  const iterator = req[Symbol.asyncIterator]();
+  let timeout: NodeJS.Timeout | null = null;
+  const timedOut = new Promise<never>((_, reject) => {
+    timeout = setTimeout(() => reject(new Error("request_body_timeout")), requestBodyTimeoutMs);
+    timeout.unref?.();
+  });
+  try {
+    while (true) {
+      const next = await Promise.race([iterator.next(), timedOut]);
+      if (next.done) break;
+      const buffer = Buffer.isBuffer(next.value) ? next.value : Buffer.from(next.value);
+      total += buffer.length;
+      if (total > maxBytes) throw new Error("request_body_too_large");
+      chunks.push(buffer);
+    }
+  } finally {
+    if (timeout) clearTimeout(timeout);
   }
   if (!chunks.length) return {};
   const text = Buffer.concat(chunks).toString("utf8");
-  return JSON.parse(text) as Record<string, any>;
+  const parsed = JSON.parse(text);
+  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) throw new Error("invalid_json_object");
+  return parsed as Record<string, any>;
 }
 
 function gatewayOriginHost(): string | null {
@@ -347,7 +405,8 @@ function misdirectedRequest(res: http.ServerResponse, head = false): void {
 
 function isFresh(snapshot: SnapshotArtifact): boolean {
   const observed = Date.parse(snapshot.envelope.observed_at);
-  return Number.isFinite(observed) && Date.now() - observed <= staleAfterMs;
+  const age = Date.now() - observed;
+  return Number.isFinite(observed) && age >= -maxObservationFutureSkewMs && age <= staleAfterMs;
 }
 
 async function loadBaseManifest() {
@@ -457,8 +516,17 @@ function hashMatches(actual: unknown, expected: unknown): boolean {
 function positiveIntegerEnv(name: string, fallback: number): number {
   const configured = process.env[name];
   const parsed = configured ? Number(configured) : fallback;
-  if (!Number.isInteger(parsed) || parsed <= 0) {
+  if (!Number.isSafeInteger(parsed) || parsed <= 0) {
     throw new Error(`${name} must be a positive integer`);
+  }
+  return parsed;
+}
+
+function nonNegativeIntegerEnv(name: string, fallback: number): number {
+  const configured = process.env[name];
+  const parsed = configured !== undefined && configured !== "" ? Number(configured) : fallback;
+  if (!Number.isSafeInteger(parsed) || parsed < 0) {
+    throw new Error(`${name} must be a non-negative integer`);
   }
   return parsed;
 }
@@ -511,7 +579,7 @@ function extractFormalCertificate(value: any): Record<string, any> | null {
 async function loadLiveProgramVerification(manifest: Record<string, any>): Promise<Record<string, any> | null> {
   const address = configuredProgramAddress(manifest.state_program_address);
   if (!address) return null;
-  const cacheMs = Number(process.env.VITALS_PROGRAM_VERIFICATION_CACHE_MS || 5 * 60_000);
+  const cacheMs = nonNegativeIntegerEnv("VITALS_PROGRAM_VERIFICATION_CACHE_MS", 5 * 60_000);
   if (liveVerificationCache?.address === address && Date.now() - Date.parse(liveVerificationCache.checked_at) < cacheMs) {
     return liveVerificationCache.value;
   }
@@ -657,15 +725,14 @@ function stableCircleInfo(circleInfo: any): Record<string, unknown> | null {
 }
 
 async function loadProgrammedCircleDeployReport(): Promise<Record<string, any> | null> {
-  return await readJsonIfExists<Record<string, any>>(join(dataDir, "programmed-circle-deploy.json")) ||
-    await readJsonIfExists<Record<string, any>>(join(root, "build", "programmed-circle-deploy.json"));
+  return readJsonIfExists<Record<string, any>>(join(root, "build", "programmed-circle-deploy.json"));
 }
 
 async function loadCircleProgramVerification(manifest: Record<string, any>): Promise<Record<string, any> | null> {
   const target = configuredStateTarget(manifest);
   if (target.kind !== "circle_program" || !target.id) return null;
   const circleId = target.id;
-  const cacheMs = Number(process.env.VITALS_CIRCLE_PROGRAM_VERIFICATION_CACHE_MS || 5 * 60_000);
+  const cacheMs = nonNegativeIntegerEnv("VITALS_CIRCLE_PROGRAM_VERIFICATION_CACHE_MS", 5 * 60_000);
   if (circleProgramVerificationCache?.circle_id === circleId && Date.now() - Date.parse(circleProgramVerificationCache.checked_at) < cacheMs) {
     return circleProgramVerificationCache.value;
   }
@@ -743,7 +810,7 @@ async function loadCircleProgramVerification(manifest: Record<string, any>): Pro
       successor_program: read.successorResult.status === "fulfilled" ? String(read.successorResult.value) : "error"
     };
     for (const key of Object.keys(primaryCompare) as Array<keyof typeof primaryCompare>) {
-      if (compare[key] !== primaryCompare[key]) rpcMismatchReasons.push(`${read.url}:${key}`);
+      if (compare[key] !== primaryCompare[key]) rpcMismatchReasons.push(`${rpcUrlLabel(read.url)}:${key}`);
     }
   }
   const rpcAgreement = rpcMismatchReasons.length === 0;
@@ -870,7 +937,7 @@ function circleMetadataFromInfo(info: any, error: string | null = null): CircleM
 }
 
 async function loadCircleMetadata(circleId: string): Promise<CircleMetadata> {
-  const cacheMs = Number(process.env.VITALS_CIRCLE_METADATA_CACHE_MS || 60_000);
+  const cacheMs = nonNegativeIntegerEnv("VITALS_CIRCLE_METADATA_CACHE_MS", 60_000);
   if (circleMetadataCache?.circle_id === circleId && Date.now() - circleMetadataCache.checked_at < cacheMs) {
     return circleMetadataCache.value;
   }
@@ -895,7 +962,7 @@ async function loadCircleMetadata(circleId: string): Promise<CircleMetadata> {
 }
 
 async function loadCircleMetadataForStaticHeaders(circleId: string): Promise<CircleMetadata> {
-  const timeoutMs = Number(process.env.VITALS_CIRCLE_METADATA_HEADER_TIMEOUT_MS || 350);
+  const timeoutMs = nonNegativeIntegerEnv("VITALS_CIRCLE_METADATA_HEADER_TIMEOUT_MS", 350);
   const fallback = circleMetadataFromInfo(null, timeoutMs <= 0 ? "circle_info_deferred" : "circle_info_header_timeout");
   const read = loadCircleMetadata(circleId);
   if (timeoutMs <= 0) return fallback;
@@ -962,8 +1029,8 @@ function assetVerificationStatus(assetResults: Array<Record<string, any>>, relea
 async function loadSiteIntegrity(manifest: Record<string, any>): Promise<Record<string, any> | null> {
   const circleId = chooseValue(process.env.VITALS_SITE_CIRCLE_ID, manifest.site_circle_id);
   if (!circleId || circleId === "pending") return null;
-  const cacheMs = Number(process.env.VITALS_SITE_INTEGRITY_CACHE_MS || 60 * 60_000);
-  const failureCacheMs = Number(process.env.VITALS_SITE_INTEGRITY_FAILURE_CACHE_MS || 5 * 60_000);
+  const cacheMs = nonNegativeIntegerEnv("VITALS_SITE_INTEGRITY_CACHE_MS", 60 * 60_000);
+  const failureCacheMs = nonNegativeIntegerEnv("VITALS_SITE_INTEGRITY_FAILURE_CACHE_MS", 5 * 60_000);
   const cachedTtl = siteIntegrityCache?.value?.circle_assets_match === true ? cacheMs : failureCacheMs;
   if (siteIntegrityCache?.circle_id === circleId && Date.now() - Date.parse(siteIntegrityCache.checked_at) < cachedTtl) {
     return siteIntegrityCache.value;
@@ -992,7 +1059,7 @@ async function computeSiteIntegrity(circleId: string): Promise<Record<string, an
   const missingReleaseAssets = manifestPaths.filter((path) => !releaseByPath.has(path));
   const extraReleaseAssets = releasePaths.filter((path) => !siteManifest.assets.has(path));
   const releaseCoverageExact = Boolean(release) && missingReleaseAssets.length === 0 && extraReleaseAssets.length === 0;
-  const circleAssetConcurrency = Math.max(1, Math.min(8, Number(process.env.VITALS_SITE_INTEGRITY_CIRCLE_ASSET_CONCURRENCY || 3)));
+  const circleAssetConcurrency = Math.min(8, positiveIntegerEnv("VITALS_SITE_INTEGRITY_CIRCLE_ASSET_CONCURRENCY", 3));
   const assetResults = await mapWithConcurrency(manifestPaths, circleAssetConcurrency, async (path) => {
     const asset = releaseByPath.get(path);
     const expected = normalizeHash(asset?.sha256);
@@ -1218,7 +1285,7 @@ function verifyHistoryTailForSource(history: ProgramHistoryWindow, latest: Snaps
 async function cachedHistoryTailMatchesLatest(entry: HistoryCacheEntry | undefined): Promise<boolean> {
   if (!entry?.value) return false;
   const latestResult = await getLatestSnapshot();
-  if (latestResult.source !== "program" || !latestResult.snapshot) return true;
+  if (latestResult.source !== "program" || !latestResult.snapshot) return false;
   try {
     entry.tail_anchor = verifyHistoryTailForSource(entry.value, latestResult.snapshot, entry.source);
     return true;
@@ -1559,7 +1626,7 @@ async function loadHistoryIntegrity(manifest: Record<string, any>): Promise<Reco
   const target = configuredStateTarget(manifest);
   if (!target.id) return null;
   try {
-    const integrityCapsuleLimit = Math.max(1, Number(process.env.VITALS_HISTORY_INTEGRITY_CAPSULE_LIMIT || 3));
+    const integrityCapsuleLimit = positiveIntegerEnv("VITALS_HISTORY_INTEGRITY_CAPSULE_LIMIT", 3);
     const history = await readVerifiedCanonicalHistory(target, { maxSealedCapsules: integrityCapsuleLimit });
     return {
       checked_at: new Date().toISOString().replace(/\.\d{3}Z$/, "Z"),
@@ -1667,7 +1734,7 @@ async function readLocalStaticAsset(assetPath: string, releaseAsset: Record<stri
 }
 
 async function readCircleStaticAsset(assetPath: string, circleId: string, releaseAsset: Record<string, any> | undefined) {
-  const cacheMs = Number(process.env.VITALS_STATIC_ASSET_CACHE_MS || 60_000);
+  const cacheMs = nonNegativeIntegerEnv("VITALS_STATIC_ASSET_CACHE_MS", 60_000);
   const expected = normalizeHash(releaseAsset?.sha256);
   if (!expected) throw new Error(`release manifest missing pinned hash for ${assetPath}`);
   const cacheKey = `${circleId}:${assetPath}:${expected || "unverified"}`;
@@ -1791,7 +1858,7 @@ async function enrichSubmitReceiptWithNativeProof(
 
   const txHash = receipt.tx_hash || (Array.isArray(receipt.tx_hashes) ? receipt.tx_hashes[receipt.tx_hashes.length - 1] : null);
   if (!txHash) return receipt;
-  const cacheMs = Number(process.env.VITALS_NATIVE_RECEIPT_CACHE_MS || 5 * 60_000);
+  const cacheMs = nonNegativeIntegerEnv("VITALS_NATIVE_RECEIPT_CACHE_MS", 5 * 60_000);
   const cacheKey = String(txHash);
   const cached = nativeReceiptProofCache.get(cacheKey);
   if (cached && Date.now() - cached.cachedAt < cacheMs) {
@@ -1861,7 +1928,10 @@ function authority(source: SnapshotSource | "none", manifest: Record<string, any
     state_read_from: nativeState
       ? target.kind === "circle_program" ? "vitals-circle-program" : "vitals-state-program"
       : source === "bootstrap_live" ? "gateway-bootstrap-observer" : source === "sample_fallback" ? "sample-fallback" : "unavailable",
-    canonical_state_read: nativeState
+    canonical_state_read: nativeState,
+    response_self_consistency_verified: nativeState,
+    authenticity_verified: false,
+    trust_boundary: "https_origin"
   };
 }
 
@@ -1878,7 +1948,6 @@ async function readLatestSnapshotLive(): Promise<LatestSnapshotResult> {
       const snapshot = target.kind === "circle_program"
         ? await readLatestCircleProgramSnapshot(target.id)
         : await readLatestProgramSnapshot(target.id);
-      await writeSnapshotArtifacts(snapshot, latestPath, evidenceDir);
       latestCache = snapshot;
       latestCacheAt = Date.now();
       latestCacheSource = "program";
@@ -1899,7 +1968,6 @@ async function readLatestSnapshotLive(): Promise<LatestSnapshotResult> {
 
   try {
     const snapshot = await buildLiveSnapshot();
-    await writeSnapshotArtifacts(snapshot, latestPath, evidenceDir);
     latestCache = snapshot;
     latestCacheAt = Date.now();
     latestCacheSource = "bootstrap_live";
@@ -2240,6 +2308,7 @@ async function serveHistory(res: http.ServerResponse, url: URL, head = false): P
   try {
     const { history, cache } = await readHistoryForApi(target, historyRequest);
     const allSnapshots = history.rows.map((row) => ({
+      summary_row: encodeSummaryRow(row),
       snapshot_index: row.snapshot_index,
       snapshot_id: `vitals.${new Date(row.observed_at_unix * 1000).toISOString().replace(/\.\d{3}Z$/, "Z")}`,
       observed_at: new Date(row.observed_at_unix * 1000).toISOString().replace(/\.\d{3}Z$/, "Z"),
@@ -2260,6 +2329,7 @@ async function serveHistory(res: http.ServerResponse, url: URL, head = false): P
       }
     }));
     const snapshots = filterHistorySnapshots(allSnapshots, historyRequest);
+    const responseRows = snapshots.map((snapshot) => snapshot.summary_row).join("");
     const coverage = historyApiCoverage(allSnapshots, snapshots, historyRequest);
     const historyModel = history.history_discovery || "aml_summary_window";
     const proofHints: Parameters<typeof verifiedHistoryProof>[5] = {};
@@ -2282,6 +2352,7 @@ async function serveHistory(res: http.ServerResponse, url: URL, head = false): P
       available_row_count: history.row_count,
       row_len: history.row_len,
       window_hash: history.window_hash,
+      response_rows_hash: sha256Tagged("octra-vitals:summary-window:v0", responseRows),
       coverage,
       proof: verifiedHistoryProof(historyModel, true, history.eras || [], history.proof?.families || [], history.proof?.capsules || [], proofHints),
       snapshots,
@@ -2365,6 +2436,32 @@ function labHeaderValue(req: http.IncomingMessage, name: string): string | null 
   return value || null;
 }
 
+function labRequestOriginAllowed(req: http.IncomingMessage): boolean {
+  const origin = labHeaderValue(req, "origin");
+  return browserPostOriginAllowed({
+    origin,
+    requestHost: labHeaderValue(req, "host"),
+    allowedOrigins: (process.env.VITALS_LAB_QUERY_ALLOWED_ORIGINS || process.env.VITALS_GATEWAY_ORIGIN || "").split(","),
+    requireConfiguredOrigins: productionGateway
+  });
+}
+
+function labJsonContentType(req: http.IncomingMessage): boolean {
+  return jsonContentType(labHeaderValue(req, "content-type"));
+}
+
+function labPostRequestAllowed(req: http.IncomingMessage, res: http.ServerResponse, head: boolean): boolean {
+  if (!labRequestOriginAllowed(req)) {
+    json(res, 403, { error: "origin_not_allowed", message: "This Lab POST origin is not allowed." }, {}, head);
+    return false;
+  }
+  if (!labJsonContentType(req)) {
+    json(res, 415, { error: "json_content_type_required", message: "Content-Type must be application/json." }, {}, head);
+    return false;
+  }
+  return true;
+}
+
 function labWriteAuthorized(req: http.IncomingMessage): boolean {
   const token = labWriteToken();
   if (!token) return false;
@@ -2384,22 +2481,35 @@ function labWriteRequired(res: http.ServerResponse, head = false): void {
 }
 
 function labQueryClientKey(req: http.IncomingMessage): string {
-  return trustedClientKey(req, labQueryTrustProxyHeaders);
+  return trustedClientKey(req, {
+    trustedProxyAddresses,
+    clientIpHeader: proxyClientIpHeader
+  });
 }
 
 function labQueryRateAllowed(req: http.IncomingMessage): boolean {
   const now = Date.now();
+  if (now - labQueryGlobalRate.startedAt >= labQueryRateWindowMs) {
+    labQueryGlobalRate = { startedAt: now, count: 0 };
+  }
+  if (labQueryGlobalRate.count >= labQueryGlobalRateMax) return false;
   const key = labQueryClientKey(req);
   for (const [client, bucket] of labQueryRates.entries()) {
     if (now - bucket.startedAt > labQueryRateWindowMs * 2) labQueryRates.delete(client);
   }
   const bucket = labQueryRates.get(key);
   if (!bucket || now - bucket.startedAt >= labQueryRateWindowMs) {
+    if (!bucket && labQueryRates.size >= labQueryRateClientLimit) {
+      const oldest = labQueryRates.keys().next().value;
+      if (oldest) labQueryRates.delete(oldest);
+    }
     labQueryRates.set(key, { startedAt: now, count: 1 });
+    labQueryGlobalRate.count += 1;
     return true;
   }
   if (bucket.count >= labQueryRateMax) return false;
   bucket.count += 1;
+  labQueryGlobalRate.count += 1;
   return true;
 }
 
@@ -2481,26 +2591,28 @@ async function serveLabApi(req: http.IncomingMessage, res: http.ServerResponse, 
     }, {}, head));
   }
   if (url.pathname === "/api/lab/query" && req.method === "POST") {
+    if (!labPostRequestAllowed(req, res, head)) return;
     if (!labQueryRateAllowed(req)) {
       return json(res, 429, {
         error: "lab_query_rate_limited",
         message: "Too many Lab queries. Wait a moment and retry."
       }, { "Retry-After": String(Math.ceil(labQueryRateWindowMs / 1000)) }, head);
     }
+    let body: Record<string, any>;
+    try {
+      body = await readRequestJson(req);
+    } catch (error) {
+      const code = error instanceof Error ? error.message : "invalid_json_body";
+      const status = code === "request_body_too_large" ? 413 : code === "request_body_timeout" ? 408 : 400;
+      return json(res, status, {
+        error: code,
+        message: "Expected a bounded JSON body with sql and optional limit."
+      }, {}, head);
+    }
     if (!acquireLabQuerySlot()) {
       return json(res, 503, {
         error: "lab_query_busy",
         message: "Lab query capacity is busy. Retry shortly."
-      }, {}, head);
-    }
-    let body: Record<string, any>;
-    try {
-      body = await readRequestJson(req);
-    } catch {
-      releaseLabQuerySlot();
-      return json(res, 400, {
-        error: "invalid_json_body",
-        message: "Expected a JSON body with sql and optional limit."
       }, {}, head);
     }
     try {
@@ -2524,7 +2636,19 @@ async function serveLabApi(req: http.IncomingMessage, res: http.ServerResponse, 
     }
   }
   if (url.pathname === "/api/lab/mirror/sync" && req.method === "POST") {
+    if (process.env.VITALS_LAB_ADMIN_HTTP_ENABLED !== "1") return notFound(res, head);
+    if (!labPostRequestAllowed(req, res, head)) return;
+    const remote = normalizeIp(req.socket.remoteAddress);
+    if (remote !== "127.0.0.1" && remote !== "::1") return notFound(res, head);
+    const client = trustedClientIdentity(req, { trustedProxyAddresses, clientIpHeader: proxyClientIpHeader });
+    if (client.source === "proxy" && client.ip !== "127.0.0.1" && client.ip !== "::1") return notFound(res, head);
     if (!labWriteAuthorized(req)) return labWriteRequired(res, head);
+    try {
+      await readRequestJson(req);
+    } catch (error) {
+      const code = error instanceof Error ? error.message : "invalid_json_body";
+      return json(res, code === "request_body_too_large" ? 413 : code === "request_body_timeout" ? 408 : 400, { error: code }, {}, head);
+    }
     const manifest = await loadBaseManifest();
     const target = configuredStateTarget(manifest);
     if (!target.id) {
@@ -2566,7 +2690,11 @@ async function serveProgramArtifacts(res: http.ServerResponse, head = false): Pr
   json(res, 200, artifacts, {}, head);
 }
 
-async function readJsonEvidenceText(file: string, maxFileBytes?: number): Promise<{ text: string; compressed: boolean; stored_bytes: number }> {
+async function readJsonEvidenceText(
+  file: string,
+  maxFileBytes?: number,
+  maxDecompressedBytes = maxFileBytes
+): Promise<{ text: string; compressed: boolean; stored_bytes: number }> {
   try {
     const info = await stat(file);
     if (maxFileBytes !== undefined && info.size > maxFileBytes) {
@@ -2586,7 +2714,8 @@ async function readJsonEvidenceText(file: string, maxFileBytes?: number): Promis
     throw error;
   }
   const bytes = await readFile(gzFile);
-  return { text: gunzipSync(bytes).toString("utf8"), compressed: true, stored_bytes: info.size };
+  const output = gunzipSync(bytes, maxDecompressedBytes ? { maxOutputLength: maxDecompressedBytes } : undefined);
+  return { text: output.toString("utf8"), compressed: true, stored_bytes: info.size };
 }
 
 function rawEvidenceView(raw: any): Record<string, unknown> {
@@ -2618,7 +2747,8 @@ async function serveEvidence(res: http.ServerResponse, url: URL, head = false): 
     const file = join(evidenceDir, "raw", `${rawHash.toLowerCase()}.json`);
     try {
       const maxFileBytes = positiveIntegerEnv("VITALS_RAW_EVIDENCE_MAX_FILE_BYTES", 6_000_000);
-      const { text, compressed, stored_bytes } = await readJsonEvidenceText(file, maxFileBytes);
+      const maxDecompressedBytes = positiveIntegerEnv("VITALS_RAW_EVIDENCE_MAX_DECOMPRESSED_BYTES", 8_000_000);
+      const { text, compressed, stored_bytes } = await readJsonEvidenceText(file, maxFileBytes, maxDecompressedBytes);
       const parsed = JSON.parse(text);
       if (parsed.response_hash !== expected || typeof parsed.body !== "string" || responseHash(parsed.body) !== expected) {
         throw new Error("raw evidence hash mismatch");
@@ -2653,7 +2783,9 @@ async function serveEvidence(res: http.ServerResponse, url: URL, head = false): 
   const expected = `sha256:${evidenceHash.toLowerCase()}`;
   const file = join(evidenceDir, `${evidenceHash.toLowerCase()}.json`);
   try {
-    const { text } = await readJsonEvidenceText(file);
+    const maxFileBytes = positiveIntegerEnv("VITALS_EVIDENCE_MANIFEST_MAX_FILE_BYTES", 1_000_000);
+    const maxDecompressedBytes = positiveIntegerEnv("VITALS_EVIDENCE_MANIFEST_MAX_DECOMPRESSED_BYTES", 2_000_000);
+    const { text } = await readJsonEvidenceText(file, maxFileBytes, maxDecompressedBytes);
     const parsed = JSON.parse(text);
     if (sha256Tagged(EVIDENCE_HASH_DOMAIN, canonicalJson(parsed)) !== expected) {
       throw new Error("evidence manifest hash mismatch");
@@ -2675,7 +2807,7 @@ function writeStaticAssetResponse(
 ): void {
   const headers: Record<string, string | number> = {
     "Cache-Control": staticCacheControl(assetPath),
-    "Content-Security-Policy": "default-src 'self'; script-src 'self'; style-src 'self'; connect-src 'self'; img-src 'self' data:; object-src 'none'; base-uri 'none'",
+    "Content-Security-Policy": "default-src 'self'; script-src 'self'; style-src 'self'; connect-src 'self'; img-src 'self' data:; object-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'",
     "Referrer-Policy": "no-referrer",
     "X-Octra-Asset-Source": asset.source,
     "X-Octra-Asset-SHA256": asset.sha256
@@ -2769,11 +2901,11 @@ async function serveStatic(res: http.ServerResponse, pathname: string, head = fa
 }
 
 async function route(req: http.IncomingMessage, res: http.ServerResponse): Promise<void> {
-  if (req.method === "OPTIONS") return options(res);
   const head = req.method === "HEAD";
   const headerHost = Array.isArray(req.headers.host) ? req.headers.host[0] : req.headers.host;
   if (!hostAllowed(headerHost)) return misdirectedRequest(res, head);
   const url = new URL(req.url || "/", `http://${headerHost || `${host}:${port}`}`);
+  if (req.method === "OPTIONS") return options(req, res, url);
   if (url.pathname.startsWith("/api/lab/")) return serveLabApi(req, res, url, head);
   if (req.method !== "GET" && !head) return methodNotAllowed(res);
   if (url.pathname === "/api/latest") return serveLatest(res, head);
@@ -2792,8 +2924,6 @@ async function route(req: http.IncomingMessage, res: http.ServerResponse): Promi
   return serveStatic(res, url.pathname, head);
 }
 
-await mkdir(evidenceDir, { recursive: true });
-
 const server = http.createServer((req: http.IncomingMessage, res: http.ServerResponse) => {
   const startedAtNs = process.hrtime.bigint();
   (res as any).__octraRequest = req;
@@ -2809,6 +2939,10 @@ const server = http.createServer((req: http.IncomingMessage, res: http.ServerRes
     json(res, 500, { error: "internal_error", message: exposeErrors && error instanceof Error ? error.message : "request_failed" });
   });
 });
+server.requestTimeout = positiveIntegerEnv("VITALS_HTTP_REQUEST_TIMEOUT_MS", 30_000);
+server.headersTimeout = positiveIntegerEnv("VITALS_HTTP_HEADERS_TIMEOUT_MS", 10_000);
+server.keepAliveTimeout = positiveIntegerEnv("VITALS_HTTP_KEEP_ALIVE_TIMEOUT_MS", 5_000);
+server.maxRequestsPerSocket = positiveIntegerEnv("VITALS_HTTP_MAX_REQUESTS_PER_SOCKET", 1_000);
 
 if (trafficRecorder) {
   for (const signal of ["SIGINT", "SIGTERM"] as const) {

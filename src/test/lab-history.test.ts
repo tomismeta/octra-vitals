@@ -230,7 +230,7 @@ test("octra-sqlite output parser accepts query and write envelopes", () => {
 
 test("lab query proof describes Circle read without exposing auth material", async () => {
   const normalized = normalizeReadOnlySql("select snapshot_index from snapshots", 10);
-  const proof = await octraSqliteQueryProof(normalized, {
+  const config = {
     enabled: true,
     reason: null,
     bin: "/opt/octra-sqlite/bin/octra-sqlite",
@@ -238,11 +238,22 @@ test("lab query proof describes Circle read without exposing auth material", asy
     database: "oct://devnet/octExample",
     databaseUri: "oct://devnet/octExample",
     network: "devnet"
-  });
+  } as const;
+  const proof = await withEnv({
+    OCTRA_RPC_URL: "https://octra.network/rpc",
+    VITALS_LAB_HISTORY_RPC: undefined,
+    OCTRA_SQLITE_RPC_URL: undefined
+  }, () => octraSqliteQueryProof(normalized, config));
+  const explicitProof = await withEnv({
+    OCTRA_RPC_URL: "https://octra.network/rpc",
+    VITALS_LAB_HISTORY_RPC: "https://lab-devnet.example/rpc",
+    OCTRA_SQLITE_RPC_URL: undefined
+  }, () => octraSqliteQueryProof(normalized, config));
 
   assert.equal(proof.database_uri, "oct://devnet/octExample");
   assert.equal(proof.circle_id, "octExample");
   assert.equal(proof.rpc_url, "https://devnet.octrascan.io/rpc");
+  assert.equal(explicitProof.rpc_url, "https://lab-devnet.example/rpc");
   assert.equal(proof.jsonrpc_method, "octra_circleViewAuth");
   assert.equal(proof.circle_method, "query_typed");
   assert.equal(proof.normalized_limit, 10);
@@ -529,6 +540,9 @@ test("lab mirror history read planner stays bounded to the missing gap", async (
   }, async () => {
     assert.deepEqual(historyReadOptionsForGap(300, 1), { maxSealedCapsules: 4 });
     assert.deepEqual(historyReadOptionsForGap(300, 299), { maxSealedCapsules: 3 });
+  });
+  await withEnv({ VITALS_LAB_HISTORY_SYNC_TAIL_ROWS: "NaN" }, async () => {
+    assert.throws(() => historyReadOptionsForGap(300, 299), /must be an integer/);
   });
 });
 

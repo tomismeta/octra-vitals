@@ -3,8 +3,8 @@ import { createCipheriv, createHash, pbkdf2Sync, randomBytes } from "node:crypto
 import { mkdir, readFile, stat, writeFile } from "node:fs/promises";
 import { dirname, extname, join, resolve } from "node:path";
 import { verifyCircleAssetIntegrity } from "../lib/circle-asset-integrity.js";
-import { feeTelemetry, octraRpc } from "../lib/octra-rpc.js";
-import { loadWalletFromEnv, publicTransactionJson, signTransaction, transactionHash, type OctraTransaction } from "../lib/octra-transaction.js";
+import { feeTelemetry, isExplicitDevelopmentRpcUrl, octraProgramRpcUrl, octraRpc } from "../lib/octra-rpc.js";
+import { loadWalletFromEnv, publicTransactionJson, signTransaction, submittedTransactionHash, transactionHash, type OctraTransaction } from "../lib/octra-transaction.js";
 import { runtimeVitalsManifest, stableJson } from "../lib/vitals-manifest.js";
 
 const BASE58_ALPHABET = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz";
@@ -13,7 +13,11 @@ const appDir = join(root, "app");
 const args = process.argv.slice(2);
 const dryRunOnly = args.includes("--dry-run");
 const outPath = args.find((arg) => arg !== "--dry-run") || join(root, "build", "site_circle_deploy.json");
-const releasePath = process.env.VITALS_SITE_RELEASE_PATH || join(root, "build", "site-circle-release.json");
+const buildRoot = resolve(root, "build");
+const releasePath = resolve(root, process.env.VITALS_SITE_RELEASE_PATH || join("build", "site-circle-release.json"));
+if (releasePath !== buildRoot && !releasePath.startsWith(`${buildRoot}/`)) {
+  throw new Error("VITALS_SITE_RELEASE_PATH must stay under build/");
+}
 const deployEnabled = !dryRunOnly && process.env.VITALS_DEPLOY_SITE_CIRCLE === "1";
 const waitForConfirmations = process.env.VITALS_DEPLOY_WAIT !== "0";
 const batchAssets = process.env.VITALS_SITE_ASSET_SUBMIT_BATCH === "1";
@@ -150,17 +154,61 @@ function encryptSealedAsset(circleId: string, keyId: string, passphrase: string,
 async function nextNonce(address: string): Promise<number> {
   const balance = await octraRpc<any>("octra_balance", [address]);
   const nonce = Number(balance?.pending_nonce ?? balance?.nonce ?? 0);
-  if (!Number.isInteger(nonce) || nonce < 0) throw new Error(`invalid nonce response for ${address}`);
+  if (!Number.isSafeInteger(nonce) || nonce < 0 || nonce >= Number.MAX_SAFE_INTEGER) {
+    throw new Error(`invalid nonce response for ${address}`);
+  }
   return nonce + 1;
 }
 
-async function submitCall(wallet: NonNullable<ReturnType<typeof loadWalletFromEnv>>, tx: OctraTransaction) {
+async function submitCall(
+  wallet: NonNullable<ReturnType<typeof loadWalletFromEnv>>,
+  tx: OctraTransaction,
+  onPrepared: (prepared: Record<string, unknown>) => Promise<void>
+) {
   const { txJson, txHash } = signedSubmission(wallet, tx);
+  await onPrepared({
+    prepared_tx_hash: txHash,
+    tx_hash: txHash,
+    hash_source: "prepared_transaction",
+    nonce: tx.nonce,
+    op_type: tx.op_type,
+    to: tx.to_
+  });
   const submitResult = await octraRpc<any>("octra_submit", [txJson]);
+  const { txHash: chainTxHash, returnedTxHash, hashSource } = submittedTransactionHash(submitResult, txHash);
   return {
-    tx_hash: submitResult?.tx_hash || submitResult?.hash || txHash,
+    prepared_tx_hash: txHash,
+    tx_hash: chainTxHash,
+    returned_tx_hash: returnedTxHash,
+    hash_source: hashSource,
     submit_result: submitResult
   };
+}
+
+function normalizeTransactionHash(value: unknown): string | null {
+  if (!value) return null;
+  const text = String(value).replace(/^sha256:/, "").toLowerCase();
+  return /^[0-9a-f]{64}$/.test(text) ? text : null;
+}
+
+function requiredAssetPath(value: unknown, label: string): string {
+  const path = String(value || "");
+  if (!/^\/[A-Za-z0-9._/-]{1,239}$/.test(path) || path.includes("//") || path.split("/").some((part) => part === "." || part === "..")) {
+    throw new Error(`${label} is not a safe absolute asset path`);
+  }
+  return path;
+}
+
+function requiredOctraAddress(value: unknown, label: string): string {
+  const address = String(value || "");
+  if (!/^oct[1-9A-HJ-NP-Za-km-z]{44}$/.test(address)) throw new Error(`${label} is not a valid Octra address`);
+  return address;
+}
+
+function positiveIntegerSetting(value: unknown, label: string, max: number): number {
+  const parsed = Number(value);
+  if (!Number.isSafeInteger(parsed) || parsed < 1 || parsed > max) throw new Error(`${label} must be an integer from 1 to ${max}`);
+  return parsed;
 }
 
 function signedSubmission(wallet: NonNullable<ReturnType<typeof loadWalletFromEnv>>, tx: OctraTransaction) {
@@ -233,6 +281,7 @@ interface PreparedAssetTx {
   nonce: number;
   ou: string;
   op_type: string;
+  prepared_tx_hash: string;
   tx_hash: string;
   tx_json: Record<string, unknown>;
 }
@@ -288,16 +337,18 @@ function validateBatchSubmitResult(batchSubmitResult: unknown, assetTxs: Prepare
     if (acceptedResult === false) {
       errors.push(`batch result ${index} for ${asset.path} was not accepted`);
     }
-    const confirmationTxHash = returnedHash || asset.tx_hash;
+    const normalizedReturnedHash = normalizeTransactionHash(returnedHash);
+    if (returnedHash && !normalizedReturnedHash) errors.push(`batch result ${index} for ${asset.path} returned a malformed transaction hash`);
+    const txHash = normalizedReturnedHash || asset.tx_hash;
     return {
       path: asset.path,
       nonce: asset.nonce,
-      prepared_tx_hash: asset.tx_hash,
-      tx_hash: confirmationTxHash,
+      prepared_tx_hash: asset.prepared_tx_hash,
+      tx_hash: txHash,
       batch_result_index: index,
       status,
       returned_tx_hash: returnedHash,
-      hash_source: returnedHash ? "batch_result" : "prepared_transaction",
+      hash_source: normalizedReturnedHash ? "rpc" : "prepared_transaction",
       accepted: acceptedResult
     };
   });
@@ -424,7 +475,7 @@ async function selectAssetsForUpload(assets: SiteAsset[], circleId: string, depl
       error: null
     }));
   } else {
-    const concurrency = Math.max(1, Math.min(8, Number(process.env.VITALS_SITE_ASSET_DIFF_CONCURRENCY || 4)));
+    const concurrency = positiveIntegerSetting(process.env.VITALS_SITE_ASSET_DIFF_CONCURRENCY || 4, "VITALS_SITE_ASSET_DIFF_CONCURRENCY", 8);
     live = await mapWithConcurrency(assets, concurrency, (asset) => readLiveAssetStatus(circleId, asset, forcePaths));
   }
   const liveByPath = new Map(live.map((item) => [item.path, item]));
@@ -494,20 +545,24 @@ const [circleConfig, siteManifest, vitalsManifest, releaseManifest] = await Prom
 ]);
 
 const wallet = loadWalletFromEnv({
-  privateKeyEnv: ["VITALS_DEPLOYER_PRIVATE_KEY_B64", "VITALS_OPERATOR_PRIVATE_KEY_B64", "OCTRA_PRIVATE_KEY_B64"],
-  addressEnv: ["VITALS_DEPLOYER_ADDRESS", "VITALS_OPERATOR_ADDRESS"],
+  privateKeyEnv: ["VITALS_DEPLOYER_PRIVATE_KEY_B64"],
+  addressEnv: ["VITALS_DEPLOYER_ADDRESS"],
   label: "site circle deployer"
 });
-const deployerAddress = wallet?.address || process.env.VITALS_DEPLOYER_ADDRESS || process.env.VITALS_OPERATOR_ADDRESS || null;
+const deployerAddress = wallet?.address || process.env.VITALS_DEPLOYER_ADDRESS || null;
+if (deployerAddress) requiredOctraAddress(deployerAddress, "Site Circle deployer");
+const productionWrite = deployEnabled && !isExplicitDevelopmentRpcUrl(octraProgramRpcUrl());
 const releaseKind = typeof releaseManifest?.release_kind === "string" ? releaseManifest.release_kind : "core";
 const configuredCircleIdCandidates = releaseKind === "lab"
   ? [process.env.VITALS_SITE_CIRCLE_ID, releaseManifest?.site_circle_id]
   : [process.env.VITALS_SITE_CIRCLE_ID, releaseManifest?.site_circle_id, vitalsManifest.site_circle_id];
 const configuredCircleId = configuredCircleIdCandidates
   .find((value) => typeof value === "string" && value.length > 0 && value !== "pending") || null;
-const releaseEntry = typeof releaseManifest?.entry === "string" && releaseManifest.entry.startsWith("/")
-  ? releaseManifest.entry
-  : siteManifest.entry || "/index.html";
+if (configuredCircleId) requiredOctraAddress(configuredCircleId, "configured Site Circle");
+const releaseEntry = requiredAssetPath(
+  typeof releaseManifest?.entry === "string" ? releaseManifest.entry : siteManifest.entry || "/index.html",
+  "Site Circle release entry"
+);
 const assetMode = String(circleConfig.assets?.mode || siteManifest.mode || "plain");
 const sealedAssets = assetMode === "sealed" || payloadMode(siteManifest.mode) === "sealed_read";
 const sealedKeyId = String(circleConfig.assets?.key_id || "octra-vitals-site");
@@ -516,9 +571,12 @@ const sealedMetadataMode = String(circleConfig.assets?.metadata_mode || "reveal"
 const sealedPassphrase = process.env.VITALS_SITE_CIRCLE_PASSPHRASE || "";
 const assetOuOverride = process.env.VITALS_SITE_ASSET_OU || circleConfig.assets?.ou || null;
 const missing = [
-  deployerAddress ? null : "VITALS_DEPLOYER_ADDRESS or VITALS_OPERATOR_ADDRESS",
-  deployEnabled && !wallet ? "VITALS_DEPLOYER_PRIVATE_KEY_B64 or VITALS_OPERATOR_PRIVATE_KEY_B64" : null,
-  deployEnabled && sealedAssets && !sealedPassphrase ? "VITALS_SITE_CIRCLE_PASSPHRASE" : null
+  deployerAddress ? null : "VITALS_DEPLOYER_ADDRESS",
+  deployEnabled && !wallet ? "VITALS_DEPLOYER_PRIVATE_KEY_B64" : null,
+  deployEnabled && sealedAssets && !sealedPassphrase ? "VITALS_SITE_CIRCLE_PASSPHRASE" : null,
+  deployEnabled && !waitForConfirmations ? "VITALS_DEPLOY_WAIT must not be 0" : null,
+  productionWrite && process.env.VITALS_DEPLOY_SITE_CIRCLE_ALLOW_MAINNET !== "1"
+    ? "VITALS_DEPLOY_SITE_CIRCLE_ALLOW_MAINNET=1" : null
 ].filter((value): value is string => Boolean(value));
 
 const deploy = circleConfig.deploy || {};
@@ -548,13 +606,21 @@ if (!releaseManifest || !Array.isArray(releaseManifest.assets) || releaseManifes
 let nonce = deployerAddress ? await nextNonce(deployerAddress) : 0;
 const deployNeeded = !configuredCircleId;
 const circleId = configuredCircleId || (deployerAddress ? circleIdOfDeployPayloadJson(deployerAddress, nonce, deployPayloadJson) : "pending");
+if (deployEnabled && !deployNeeded && wallet) {
+  const circle = await octraRpc<any>("circle_info", [circleId]);
+  const liveOwner = String(circle?.owner || circle?.circle?.owner || "");
+  if (!liveOwner || liveOwner !== wallet.address) {
+    throw new Error(`site Circle owner mismatch: live=${liveOwner || "<missing>"}, signer=${wallet.address}`);
+  }
+}
 const releaseAssetPaths = Array.isArray(releaseManifest.assets)
-  ? releaseManifest.assets
-    .map((asset: any) => asset?.path)
-    .filter((assetPath: unknown): assetPath is string => typeof assetPath === "string" && assetPath.startsWith("/"))
+  ? releaseManifest.assets.map((asset: any, index: number) => requiredAssetPath(asset?.path, `release asset ${index}`))
   : [];
+if (new Set(releaseAssetPaths).size !== releaseAssetPaths.length) throw new Error("Site Circle release contains duplicate asset paths");
+if (!releaseAssetPaths.includes(releaseEntry)) throw new Error("Site Circle release entry is missing from its asset list");
 const assets: SiteAsset[] = await Promise.all(releaseAssetPaths.map(async (assetPath: string) => {
-  const filePath = join(appDir, assetPath.replace(/^\//, ""));
+  const filePath = resolve(appDir, `.${assetPath}`);
+  if (!filePath.startsWith(`${appDir}/`)) throw new Error(`asset path escaped app/: ${assetPath}`);
   const bytes = assetPath === "/vitals.manifest.json"
     ? Buffer.from(stableJson(runtimeVitalsManifest(vitalsManifest, {
       siteCircleId: circleId,
@@ -649,7 +715,16 @@ if (!deployEnabled) {
       op_type: "deploy_circle",
       message: deployPayloadJson
     };
-    deploySubmission = await submitCall(wallet, deployTx);
+    deploySubmission = await submitCall(wallet, deployTx, (prepared) => writeReport({
+      schema: "octra-vitals-site-circle-deploy-report-v0",
+      status: "deploy_prepared",
+      generated_at: new Date().toISOString().replace(/\.\d{3}Z$/, "Z"),
+      deploy_enabled: true,
+      deployer_address: wallet.address,
+      circle_id: circleId,
+      entry_uri: `oct://${circleId}${releaseEntry}`,
+      pending_transaction: prepared
+    }));
     deployConfirmation = await requireConfirmed(deploySubmission.tx_hash, "Site Circle deploy");
     nonce += 1;
   }
@@ -686,6 +761,7 @@ if (!deployEnabled) {
       nonce,
       ou: asset.ou,
       op_type: tx.op_type,
+      prepared_tx_hash: signed.txHash,
       tx_hash: signed.txHash,
       tx_json: signed.txJson
     };
@@ -696,6 +772,19 @@ if (!deployEnabled) {
   const assetSubmissions = [];
   let batchSubmitResult: unknown = null;
   let batchValidation: ReturnType<typeof validateBatchSubmitResult> | null = null;
+  if (assetTxs.length > 0) {
+    await writeReport({
+      schema: "octra-vitals-site-circle-deploy-report-v0",
+      status: "assets_prepared",
+      generated_at: new Date().toISOString().replace(/\.\d{3}Z$/, "Z"),
+      deploy_enabled: true,
+      deployer_address: wallet.address,
+      circle_id: circleId,
+      entry_uri: `oct://${circleId}${releaseEntry}`,
+      deploy_tx_hash: deploySubmission?.tx_hash || null,
+      prepared_asset_transactions: assetTxs.map(({ tx_json: _txJson, ...asset }) => asset)
+    });
+  }
   if (batchAssets && assetTxs.length > 0) {
     batchSubmitResult = await octraRpc<any>("octra_submitBatch", [assetTxs.map((asset) => asset.tx_json)]);
     batchValidation = validateBatchSubmitResult(batchSubmitResult, assetTxs);
@@ -713,8 +802,10 @@ if (!deployEnabled) {
         nonce: asset.nonce,
         ou: asset.ou,
         op_type: asset.op_type,
-        prepared_tx_hash: asset.tx_hash,
+        prepared_tx_hash: asset.prepared_tx_hash,
         tx_hash: txHash,
+        returned_tx_hash: perAssetValidation?.returned_tx_hash || null,
+        hash_source: perAssetValidation?.hash_source || "prepared_transaction",
         submit_result: results[index] || batchSubmitResult,
         batch_result_index: index,
         batch_validation: perAssetValidation,
@@ -724,14 +815,17 @@ if (!deployEnabled) {
   } else {
     for (const asset of assetTxs) {
       const submitResult = await octraRpc<any>("octra_submit", [asset.tx_json]);
-      const txHash = submitResult?.tx_hash || submitResult?.hash || asset.tx_hash;
+      const { txHash, returnedTxHash, hashSource } = submittedTransactionHash(submitResult, asset.tx_hash);
       const confirmation = await requireConfirmed(txHash, `asset upload ${asset.path}`);
       assetSubmissions.push({
         path: asset.path,
         nonce: asset.nonce,
         ou: asset.ou,
         op_type: asset.op_type,
+        prepared_tx_hash: asset.prepared_tx_hash,
         tx_hash: txHash,
+        returned_tx_hash: returnedTxHash,
+        hash_source: hashSource,
         submit_result: submitResult,
         tx: txSummary(confirmation)
       });

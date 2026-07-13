@@ -2,6 +2,7 @@ import { createHmac, randomBytes } from "node:crypto";
 import type http from "node:http";
 import { chmod, mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import { extname, join, resolve } from "node:path";
+import { trustedClientIdentity } from "./gateway-policy.js";
 
 export const TRAFFIC_SCHEMA_VERSION = "octra-vitals-traffic-hour-v0";
 
@@ -17,6 +18,7 @@ export interface TrafficMetric {
   latency_ms: CounterMap;
   client_sources: CounterMap;
   clients?: ClientMap;
+  client_overflow?: number;
 }
 
 export interface TrafficHourFile {
@@ -27,15 +29,19 @@ export interface TrafficHourFile {
   routes: Record<string, TrafficMetric>;
   diagnostic_paths?: Record<string, TrafficMetric>;
   diagnostic_path_overflow?: TrafficMetric;
+  dropped_records?: number;
 }
 
 interface TrafficRecorderOptions {
   enabled: boolean;
   dir: string;
   clientMode: "none" | "daily_hash";
-  trustProxyHeaders: boolean;
+  trustedProxyAddresses: string[];
+  clientIpHeader: string;
   flushDelayMs: number;
   diagnosticPathLimit: number;
+  clientCardinalityLimit: number;
+  queueLimit: number;
 }
 
 interface ClientIdentity {
@@ -65,41 +71,6 @@ function emptyMetric(): TrafficMetric {
 
 function bump(map: CounterMap, key: string, amount = 1): void {
   map[key] = (map[key] || 0) + amount;
-}
-
-function headerString(value: string | string[] | undefined): string | null {
-  if (Array.isArray(value)) return value[0] || null;
-  return value || null;
-}
-
-function normalizeIp(value: string | null | undefined): string | null {
-  if (!value) return null;
-  let ip = value.trim();
-  if (!ip) return null;
-  if (ip.includes(",")) ip = ip.split(",")[0]?.trim() || "";
-  if (!ip) return null;
-  if (ip.startsWith("::ffff:")) ip = ip.slice("::ffff:".length);
-  if (ip.startsWith("[") && ip.includes("]")) {
-    ip = ip.slice(1, ip.indexOf("]"));
-  } else if (/^\d{1,3}(?:\.\d{1,3}){3}:\d+$/.test(ip)) {
-    ip = ip.slice(0, ip.lastIndexOf(":"));
-  }
-  return ip || null;
-}
-
-function proxyIp(req: http.IncomingMessage): string | null {
-  return normalizeIp(
-    headerString(req.headers["x-forwarded-for"]) ||
-      headerString(req.headers["x-real-ip"]) ||
-      headerString(req.headers["cf-connecting-ip"]) ||
-      headerString(req.headers["true-client-ip"]) ||
-      headerString(req.headers["x-client-ip"]) ||
-      headerString(req.headers["fly-client-ip"])
-  );
-}
-
-function remoteIp(req: http.IncomingMessage): string | null {
-  return normalizeIp(req.socket.remoteAddress);
 }
 
 function hourIso(date: Date): string {
@@ -156,11 +127,18 @@ export class TrafficRecorder {
   private ready: Promise<void> | null = null;
   private flushTimer: NodeJS.Timeout | null = null;
   private queue: Promise<void> = Promise.resolve();
+  private pendingRecords = 0;
+  private droppedRecords = 0;
 
   constructor(private readonly options: TrafficRecorderOptions) {}
 
   record(req: http.IncomingMessage, res: http.ServerResponse, startedAtNs: bigint): void {
     if (!this.options.enabled) return;
+    if (this.pendingRecords >= this.options.queueLimit) {
+      this.droppedRecords += 1;
+      return;
+    }
+    this.pendingRecords += 1;
     const finishedAt = new Date();
     const durationMs = Math.max(0, Number(process.hrtime.bigint() - startedAtNs) / 1_000_000);
     const method = req.method || "UNKNOWN";
@@ -178,6 +156,9 @@ export class TrafficRecorder {
       })
       .catch((error) => {
         console.warn("traffic aggregate write failed", error instanceof Error ? error.message : String(error));
+      })
+      .finally(() => {
+        this.pendingRecords = Math.max(0, this.pendingRecords - 1);
       });
   }
 
@@ -195,6 +176,7 @@ export class TrafficRecorder {
     if (!this.ready) {
       this.ready = (async () => {
         await mkdir(this.options.dir, { recursive: true, mode: 0o750 });
+        await chmod(this.options.dir, 0o750);
         if (this.options.clientMode === "daily_hash") {
           this.salt = await this.loadOrCreateSalt();
         }
@@ -219,14 +201,17 @@ export class TrafficRecorder {
 
   private clientIdentity(req: http.IncomingMessage, date: Date): ClientIdentity {
     if (this.options.clientMode !== "daily_hash") return { hash: null, source: "none" };
-    const proxied = this.options.trustProxyHeaders ? proxyIp(req) : null;
-    const ip = proxied || remoteIp(req);
-    if (!ip || !this.salt) return { hash: null, source: ip ? (proxied ? "proxy" : "remote") : "none" };
+    const identity = trustedClientIdentity(req, {
+      trustedProxyAddresses: this.options.trustedProxyAddresses,
+      clientIpHeader: this.options.clientIpHeader
+    });
+    const ip = identity.ip;
+    if (!ip || !this.salt) return { hash: null, source: identity.source };
     const hash = createHmac("sha256", this.salt)
       .update(`${dayIso(date)}\0${ip}`)
       .digest("hex")
       .slice(0, 24);
-    return { hash, source: proxied ? "proxy" : "remote" };
+    return { hash, source: identity.source };
   }
 
   private async recordInner(
@@ -252,6 +237,7 @@ export class TrafficRecorder {
       this.applyDiagnosticPath(diagnosticPath, method, status, bytes, durationMs, client);
     }
     this.current.updated_at = new Date().toISOString();
+    this.current.dropped_records = this.droppedRecords;
     this.scheduleFlush();
   }
 
@@ -265,7 +251,11 @@ export class TrafficRecorder {
     bump(metric.client_sources, client.source);
     if (client.hash) {
       metric.clients ||= {};
-      metric.clients[client.hash] = true;
+      if (metric.clients[client.hash] || Object.keys(metric.clients).length < this.options.clientCardinalityLimit) {
+        metric.clients[client.hash] = true;
+      } else {
+        metric.client_overflow = (metric.client_overflow || 0) + 1;
+      }
     }
   }
 
@@ -312,6 +302,7 @@ export class TrafficRecorder {
     const file = join(this.options.dir, hourFileName(this.current.hour));
     const tmp = `${file}.tmp-${process.pid}`;
     await writeFile(tmp, `${JSON.stringify(this.current, null, 2)}\n`, { mode: 0o640 });
+    await chmod(tmp, 0o640);
     await rename(tmp, file);
   }
 }
@@ -341,17 +332,31 @@ function diagnosticPathname(pathname: string): string {
   return `${normalized.slice(0, 237)}...`;
 }
 
+function boundedIntegerEnv(name: string, fallback: number, min: number, max: number): number {
+  const configured = process.env[name];
+  const parsed = configured !== undefined && configured !== "" ? Number(configured) : fallback;
+  if (!Number.isSafeInteger(parsed) || parsed < min || parsed > max) {
+    throw new Error(`${name} must be an integer from ${min} to ${max}`);
+  }
+  return parsed;
+}
+
 export function configuredTrafficRecorder(dataDir: string): TrafficRecorder | null {
   const enabled = process.env.VITALS_TRAFFIC_AGGREGATES === "1";
   if (!enabled) return null;
   const clientMode = process.env.VITALS_TRAFFIC_CLIENT_MODE === "daily_hash" ? "daily_hash" : "none";
-  const diagnosticPathLimit = Number(process.env.VITALS_TRAFFIC_DIAGNOSTIC_PATH_LIMIT || 0);
+  const diagnosticPathLimit = boundedIntegerEnv("VITALS_TRAFFIC_DIAGNOSTIC_PATH_LIMIT", 0, 0, 500);
+  const trustedProxyAddresses = (process.env.VITALS_TRUSTED_PROXY_ADDRESSES || "127.0.0.1,::1")
+    .split(",").map((value) => value.trim()).filter(Boolean);
   return new TrafficRecorder({
     enabled,
     dir: resolve(process.env.VITALS_TRAFFIC_DIR || join(dataDir, "traffic")),
     clientMode,
-    trustProxyHeaders: process.env.VITALS_TRAFFIC_TRUST_PROXY_HEADERS === "1",
-    flushDelayMs: Math.max(100, Number(process.env.VITALS_TRAFFIC_FLUSH_MS || 2_000)),
-    diagnosticPathLimit: Math.max(0, Math.min(500, Number.isFinite(diagnosticPathLimit) ? diagnosticPathLimit : 0))
+    trustedProxyAddresses: process.env.VITALS_TRAFFIC_TRUST_PROXY_HEADERS === "1" ? trustedProxyAddresses : [],
+    clientIpHeader: process.env.VITALS_PROXY_CLIENT_IP_HEADER || "x-forwarded-for",
+    flushDelayMs: boundedIntegerEnv("VITALS_TRAFFIC_FLUSH_MS", 2_000, 100, 60_000),
+    diagnosticPathLimit,
+    clientCardinalityLimit: boundedIntegerEnv("VITALS_TRAFFIC_CLIENT_CARDINALITY_LIMIT", 10_000, 1, 100_000),
+    queueLimit: boundedIntegerEnv("VITALS_TRAFFIC_QUEUE_LIMIT", 5_000, 1, 100_000)
   });
 }

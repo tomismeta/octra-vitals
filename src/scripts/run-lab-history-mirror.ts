@@ -186,6 +186,15 @@ function snapshotIndex(value: unknown): number {
   return Number.isSafeInteger(parsed) && parsed > 0 ? parsed : 0;
 }
 
+function boundedIntegerEnv(name: string, fallback: number, min: number, max: number): number {
+  const configured = process.env[name];
+  const parsed = configured !== undefined && configured !== "" ? Number(configured) : fallback;
+  if (!Number.isSafeInteger(parsed) || parsed < min || parsed > max) {
+    throw new Error(`${name} must be an integer from ${min} to ${max}`);
+  }
+  return parsed;
+}
+
 async function readLatestIndex(target: ReturnType<typeof configuredStateTarget>): Promise<number> {
   if (!target.id) return 0;
   const snapshot = target.kind === "circle_program"
@@ -196,11 +205,10 @@ async function readLatestIndex(target: ReturnType<typeof configuredStateTarget>)
 
 export function historyReadOptionsForGap(latestIndex: number, completeThroughIndex: number): HistoryReadOptions {
   const rowsPerCapsule = 48;
-  const configuredMax = Number(process.env.VITALS_LAB_HISTORY_MAX_SEALED_CAPSULES || 64);
-  const safeMax = Number.isSafeInteger(configuredMax) && configuredMax > 0 ? configuredMax : 64;
+  const safeMax = boundedIntegerEnv("VITALS_LAB_HISTORY_MAX_SEALED_CAPSULES", 64, 1, 256);
   const missingRows = Math.max(0, latestIndex - completeThroughIndex);
   if (missingRows <= 0) return {};
-  const requestedRows = missingRows + Number(process.env.VITALS_LAB_HISTORY_SYNC_TAIL_ROWS || 0);
+  const requestedRows = missingRows + boundedIntegerEnv("VITALS_LAB_HISTORY_SYNC_TAIL_ROWS", 0, 0, 100_000);
   return {
     maxSealedCapsules: Math.max(1, Math.min(safeMax, Math.ceil(requestedRows / rowsPerCapsule) + 1))
   };
@@ -213,8 +221,8 @@ async function pruneLabRunDirs(
 ): Promise<Record<string, unknown>> {
   return timed(timings, "retention_ms", () => pruneRunDirs(
     runsDir,
-    Number(process.env.VITALS_LAB_HISTORY_RETENTION_MAX_RUNS || 672),
-    Number(process.env.VITALS_LAB_HISTORY_RETENTION_MAX_AGE_MS || 7 * 24 * 60 * 60_000),
+    boundedIntegerEnv("VITALS_LAB_HISTORY_RETENTION_MAX_RUNS", 672, 0, 100_000),
+    boundedIntegerEnv("VITALS_LAB_HISTORY_RETENTION_MAX_AGE_MS", 7 * 24 * 60 * 60_000, 0, 10 * 365 * 24 * 60 * 60_000),
     runDir
   ));
 }
@@ -226,11 +234,11 @@ export async function runLabHistoryMirror(): Promise<Record<string, any>> {
   const runsDir = resolve(process.env.VITALS_LAB_HISTORY_RUNS_DIR || join(dataDir, "lab-history-runs"));
   const runDir = resolve(process.env.VITALS_LAB_HISTORY_RUN_DIR || join(runsDir, runId));
   const lockPath = resolve(process.env.VITALS_LAB_HISTORY_LOCK_PATH || join(dataDir, "lab-history-mirror.lock"));
-  const lockStaleMs = Number(process.env.VITALS_LAB_HISTORY_LOCK_STALE_MS || 10 * 60_000);
+  const lockStaleMs = boundedIntegerEnv("VITALS_LAB_HISTORY_LOCK_STALE_MS", 10 * 60_000, 1, 24 * 60 * 60_000);
   const manifestPath = resolve(process.env.VITALS_LAB_HISTORY_MANIFEST_PATH || join(root, "app", "vitals.manifest.json"));
   const runReportPath = join(runDir, "lab_history_mirror_report.json");
   const latestReportPath = resolve(process.env.VITALS_LAB_HISTORY_REPORT_PATH || join(dataDir, "latest_lab_history_mirror_report.json"));
-  const startDelayMs = Number(process.env.VITALS_LAB_HISTORY_START_DELAY_MS || 0);
+  const startDelayMs = boundedIntegerEnv("VITALS_LAB_HISTORY_START_DELAY_MS", 0, 0, 60 * 60_000);
   const timings: Record<string, number> = {};
   const totalStarted = performance.now();
   const paths = {

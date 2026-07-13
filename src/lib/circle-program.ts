@@ -1,4 +1,4 @@
-import { octraProgramRpcUrls, octraRpc } from "./octra-rpc.js";
+import { octraProgramRpcUrls, octraRpc, RpcAdmissionController } from "./octra-rpc.js";
 
 export type StateTargetMode = "state_program" | "circle_program";
 
@@ -19,49 +19,30 @@ export function circleViewCaller(): string | null {
 }
 
 function positiveIntEnv(name: string, fallback: number): number {
-  const parsed = Number(process.env[name] || fallback);
-  return Number.isSafeInteger(parsed) && parsed > 0 ? parsed : fallback;
+  const configured = process.env[name];
+  const parsed = configured !== undefined && configured !== "" ? Number(configured) : fallback;
+  if (!Number.isSafeInteger(parsed) || parsed <= 0) throw new Error(`${name} must be a positive integer`);
+  return parsed;
 }
 
 function nonNegativeIntEnv(name: string, fallback: number): number {
-  const parsed = Number(process.env[name] || fallback);
-  return Number.isSafeInteger(parsed) && parsed >= 0 ? parsed : fallback;
+  const configured = process.env[name];
+  const parsed = configured !== undefined && configured !== "" ? Number(configured) : fallback;
+  if (!Number.isSafeInteger(parsed) || parsed < 0) throw new Error(`${name} must be a non-negative integer`);
+  return parsed;
 }
 
 const circleViewMaxConcurrent = positiveIntEnv("VITALS_CIRCLE_VIEW_MAX_CONCURRENT", 4);
 const circleViewMinStartGapMs = nonNegativeIntEnv("VITALS_CIRCLE_VIEW_MIN_START_GAP_MS", 50);
-let activeCircleViews = 0;
-let nextCircleViewStartAt = 0;
-const circleViewQueue: Array<() => void> = [];
-
-function sleep(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
-function releaseCircleViewSlot(): void {
-  activeCircleViews = Math.max(0, activeCircleViews - 1);
-  const next = circleViewQueue.shift();
-  if (next) next();
-}
-
-async function acquireCircleViewSlot(): Promise<void> {
-  if (activeCircleViews >= circleViewMaxConcurrent) {
-    await new Promise<void>((resolve) => circleViewQueue.push(resolve));
-  }
-  activeCircleViews += 1;
-  const now = Date.now();
-  const waitMs = Math.max(0, nextCircleViewStartAt - now);
-  nextCircleViewStartAt = Math.max(now, nextCircleViewStartAt) + circleViewMinStartGapMs;
-  if (waitMs > 0) await sleep(waitMs);
-}
+const circleViewAdmission = new RpcAdmissionController(
+  circleViewMaxConcurrent,
+  circleViewMinStartGapMs,
+  nonNegativeIntEnv("VITALS_CIRCLE_VIEW_MAX_QUEUE", 128),
+  positiveIntEnv("VITALS_CIRCLE_VIEW_QUEUE_WAIT_MS", 15_000)
+);
 
 async function withCircleViewSlot<T>(fn: () => Promise<T>): Promise<T> {
-  await acquireCircleViewSlot();
-  try {
-    return await fn();
-  } finally {
-    releaseCircleViewSlot();
-  }
+  return circleViewAdmission.run(fn);
 }
 
 export async function circleProgramView<T = any>(

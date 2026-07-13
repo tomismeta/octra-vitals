@@ -13,7 +13,7 @@ Environment=VITALS_GATEWAY_ROLE=production
 Environment=VITALS_DATA_DIR=/var/lib/octra-vitals
 Environment=VITALS_STATE_SOURCE_MODE=program_required
 Environment=VITALS_STATIC_ASSET_SOURCE=circle_required
-Environment=VITALS_TRAFFIC_DIR=/var/lib/octra-vitals/traffic
+Environment=VITALS_TRAFFIC_DIR=/var/lib/octra-vitals-gateway/traffic
 EnvironmentFile=-/etc/octra-vitals/gateway.env
 ExecStart=/usr/bin/node /opt/octra-vitals/current/dist/gateway/node-gateway/server.js
 Restart=always
@@ -23,7 +23,8 @@ PrivateTmp=yes
 PrivateDevices=yes
 ProtectSystem=strict
 ProtectHome=read-only
-ReadWritePaths=/var/lib/octra-vitals
+ReadOnlyPaths=/var/lib/octra-vitals
+ReadWritePaths=/var/lib/octra-vitals-gateway
 RestrictSUIDSGID=yes
 LockPersonality=yes
 RemoveIPC=yes
@@ -41,7 +42,7 @@ RestrictNamespaces=yes
 RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
 RestrictRealtime=yes
 SystemCallArchitectures=native
-UMask=0007
+UMask=0077
 
 [Install]
 WantedBy=multi-user.target

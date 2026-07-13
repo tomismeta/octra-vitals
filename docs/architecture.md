@@ -22,13 +22,15 @@ Snapshot Producer
   signed writes into the programmed Circle
 ```
 
+Host custody mirrors the chain roles: a hot operator identity performs scheduled snapshot writes, while a separate service-free owner identity is used only for code, configuration, and asset-owner actions. Their env files, writable directories, and reports are disjoint.
+
 The programmed Site Circle is the canonical app identity and the canonical state boundary. The gateway exists so normal browsers can use the app before Circle-native browser APIs are universal. It must translate, verify, and fail closed; it must not originate production truth.
 
 ## Verification Boundary
 
-Normal browsers receive data through the gateway, then the app re-derives canonical hashes and conservation checks before rendering. This path is integrity-verified and gateway-tamper-evident, but it is still transported through the gateway.
+Normal browsers receive data through the gateway, then the app re-derives canonical hashes, fixed-row commitments, freshness, and conservation checks before rendering. This proves response self-consistency inside the HTTPS origin; it does not make a gateway-served app tamper-evident against that same gateway.
 
-Circle-native clients can read the programmed Circle directly and verify against the chain-native state surface. That is the stronger trust boundary.
+Circle-native clients can read the programmed Circle directly and verify against the chain-native state surface. That is the authenticity-verifying trust boundary.
 
 ## State Model
 
@@ -82,7 +84,7 @@ The producer observes:
 - relayer status and recovery data;
 - source metadata needed to reproduce or inspect the observation.
 
-The observation RPC and program RPC are separate lanes. The gateway compares all configured program RPCs for latest/history/readback agreement and fails closed on disagreement. If only one canonical program RPC exists, the system can run with one while keeping the multi-RPC comparison path ready.
+The observation RPC and program RPC are separate lanes. Production observations require independently configured Octra and Ethereum provider quorums. Octra reads are fenced by matching status/root reads; Ethereum calls are pinned to a canonical block hash and re-read that block afterward. The relayer remains a named single attestor rather than being mislabeled as a quorum. Program latest/history reads are fenced by `get_latest_bundle`, compared across every configured program RPC, and fail closed on disagreement.
 
 ## Assets
 

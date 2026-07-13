@@ -85,8 +85,8 @@ function sha256Prefixed(value: string): string {
   return `sha256:${createHash("sha256").update(value).digest("hex")}`;
 }
 
-async function configuredRpcUrl(config: OctraSqliteConfig): Promise<string | null> {
-  const envRpc = envValue(process.env, "OCTRA_RPC_URL") || envValue(process.env, "VITALS_LAB_HISTORY_RPC");
+async function configuredRpcUrl(config: OctraSqliteConfig, env = process.env): Promise<string | null> {
+  const envRpc = envValue(env, "VITALS_LAB_HISTORY_RPC") || envValue(env, "OCTRA_SQLITE_RPC_URL");
   if (envRpc) return envRpc;
   if (config.configPath) {
     try {
@@ -101,6 +101,24 @@ async function configuredRpcUrl(config: OctraSqliteConfig): Promise<string | nul
   if (config.network === "devnet") return "https://devnet.octrascan.io/rpc";
   if (config.network === "mainnet") return "https://octra.network/rpc";
   return null;
+}
+
+async function octraSqliteChildEnv(config: OctraSqliteConfig): Promise<NodeJS.ProcessEnv> {
+  const env = { ...process.env };
+  for (const key of [
+    "OCTRA_RPC_URL",
+    "OCTRA_RPC_URLS",
+    "OCTRA_PROGRAM_RPC_URL",
+    "OCTRA_PROGRAM_RPC_URLS",
+    "OCTRA_OBSERVATION_RPC_URL",
+    "OCTRA_OBSERVATION_RPC_URLS"
+  ]) {
+    delete env[key];
+  }
+  if (config.configPath) env.OCTRA_SQLITE_CONFIG = config.configPath;
+  const rpcUrl = await configuredRpcUrl(config, env);
+  if (rpcUrl) env.OCTRA_RPC_URL = rpcUrl;
+  return env;
 }
 
 export function octraSqliteConfig(env = process.env): OctraSqliteConfig {
@@ -210,8 +228,7 @@ export async function octraSqliteOpen(sql: string, config = octraSqliteConfig())
   if (!config.enabled || !config.database) {
     throw new Error(config.reason || "lab_history_unavailable");
   }
-  const env = { ...process.env };
-  if (config.configPath) env.OCTRA_SQLITE_CONFIG = config.configPath;
+  const env = await octraSqliteChildEnv(config);
   const args = ["open", "--json", config.database, sql];
   const stdout = await new Promise<string>((resolve, reject) => {
     execFile(config.bin, args, {

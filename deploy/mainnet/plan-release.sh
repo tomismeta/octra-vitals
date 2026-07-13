@@ -12,15 +12,12 @@ cleanup() {
 trap cleanup EXIT
 
 npm run build >/dev/null
+. deploy/lib/env-file.sh
 
 node - <<'NODE' "${GATEWAY_URL}" "${LIVE_ENV}"
 const fs = require("fs");
 const [gatewayUrlRaw, outPath] = process.argv.slice(2);
 const gatewayUrl = String(gatewayUrlRaw || "https://octra.live").replace(/\/+$/, "");
-
-function quote(value) {
-  return `'${String(value ?? "").replace(/'/g, `'\\''`)}'`;
-}
 
 (async () => {
   const response = await fetch(`${gatewayUrl}/api/version`, { headers: { Accept: "application/json" } });
@@ -38,7 +35,11 @@ function quote(value) {
     ["VITALS_RELEASE_GIT_DIRTY", require("child_process").execFileSync("git", ["status", "--porcelain"], { encoding: "utf8" }).trim() ? "1" : "0"]
   ]
     .filter(([, value]) => value !== undefined && value !== null && value !== "pending")
-    .map(([name, value]) => `export ${name}=${quote(value)}`);
+    .map(([name, value]) => {
+      const text = String(value);
+      if (/[^\x20-\x7e]/.test(text)) throw new Error(`unsafe env value for ${name}`);
+      return `${name}=${text}`;
+    });
   fs.writeFileSync(outPath, `${lines.join("\n")}\n`);
 })().catch((error) => {
   console.error(error instanceof Error ? error.message : String(error));
@@ -46,9 +47,7 @@ function quote(value) {
 });
 NODE
 
-set -a
-. "${LIVE_ENV}"
-set +a
+load_env_file_data "${LIVE_ENV}"
 
 node dist/scripts/build-producer-audit-manifest.js >/dev/null
 node dist/scripts/build-site-circle-release.js "${CANDIDATE_RELEASE}" >/dev/null
