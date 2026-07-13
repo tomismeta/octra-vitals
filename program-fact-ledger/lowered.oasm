@@ -248,24 +248,27 @@ JIF r3, 10600
 LDI r2, "initialize_fact_ledger"
 EQ r3, r1, r2
 JIF r3, 10700
-LDI r2, "register_fact_family"
+LDI r2, "initialize_core_family"
 EQ r3, r1, r2
 JIF r3, 10800
-LDI r2, "set_operator"
+LDI r2, "register_fact_family"
 EQ r3, r1, r2
 JIF r3, 10900
-LDI r2, "set_paused"
+LDI r2, "set_operator"
 EQ r3, r1, r2
 JIF r3, 11000
-LDI r2, "set_successor_program"
+LDI r2, "set_paused"
 EQ r3, r1, r2
 JIF r3, 11100
-LDI r2, "record_snapshot_fact_v1"
+LDI r2, "set_successor_program"
 EQ r3, r1, r2
 JIF r3, 11200
-LDI r2, "record_snapshot_fact_v2"
+LDI r2, "record_snapshot_fact_v1"
 EQ r3, r1, r2
 JIF r3, 11300
+LDI r2, "record_snapshot_fact_v2"
+EQ r3, r1, r2
+JIF r3, 11400
 REVERT
 JDEST 200
 SLOAD r1, "initialized"
@@ -3897,16 +3900,51 @@ STOP
 STOP
 JDEST 10800
 MLOAD r1, 1001
+CALL_INT r2, 300
+SLOAD r2, "predecessor_set"
+LDI r3, "true"
+EQ r2, r2, r3
+JIF r2, 10264
+LDI r4, "predecessor required"
+EMIT "Require", r4
+REVERT
+JDEST 10264
+SLOAD r2, "family_count"
+LDI r3, 0
+ADD r2, r3, r2
+LDI r4, 0
+EQ r5, r2, r4
+JIF r5, 10265
+LDI r6, "core already registered"
+EMIT "Require", r6
+REVERT
+JDEST 10265
+LDI r2, "0000"
+MSTORE 1001, r1
+MSTORE 1002, r2
+CALL_INT r3, 2700
+LDI r2, "0000"
+LDI r3, "008f25bcfca4b6697b53109e77f176f25d0475cc32097bf5925086ba0ffebdb3"
+MSTORE 1001, r2
+MSTORE 1002, r1
+MSTORE 1003, r3
+CALL_INT r4, 3700
+LDI r2, true
+MOV r0, r2
+STOP
+STOP
+JDEST 10900
+MLOAD r1, 1001
 MLOAD r2, 1002
 MLOAD r3, 1003
 CALL_INT r4, 300
 LDI r4, "0000"
 NEQ r5, r1, r4
-JIF r5, 10264
+JIF r5, 10266
 LDI r6, "core already registered"
 EMIT "Require", r6
 REVERT
-JDEST 10264
+JDEST 10266
 MSTORE 1001, r1
 MSTORE 1002, r2
 MSTORE 1003, r3
@@ -3915,7 +3953,7 @@ LDI r4, true
 MOV r0, r4
 STOP
 STOP
-JDEST 10900
+JDEST 11000
 MLOAD r1, 1001
 CALL_INT r2, 300
 ASSERT_ADDR r1
@@ -3926,22 +3964,22 @@ LDI r2, true
 MOV r0, r2
 STOP
 STOP
-JDEST 11000
+JDEST 11100
 MLOAD r1, 1001
 CALL_INT r2, 300
-JIF r1, 10265
+JIF r1, 10267
 LDI r2, "false"
-JMP 10266
-JDEST 10265
+JMP 10268
+JDEST 10267
 LDI r2, "true"
-JDEST 10266
+JDEST 10268
 SSTORE "paused", r2
 EMIT "Paused", r1
 LDI r2, true
 MOV r0, r2
 STOP
 STOP
-JDEST 11100
+JDEST 11200
 MLOAD r1, 1001
 CALL_INT r2, 300
 ASSERT_ADDR r1
@@ -3951,26 +3989,26 @@ LDI r3, "true"
 EQ r2, r2, r3
 LDI r4, true
 NEQ r4, r2, r4
-JIF r4, 10267
+JIF r4, 10269
 LDI r5, "successor already set"
 EMIT "Require", r5
 REVERT
-JDEST 10267
+JDEST 10269
 SSTORE "successor_program", r1
 LDI r2, true
-JIF r2, 10268
+JIF r2, 10270
 LDI r3, "false"
-JMP 10269
-JDEST 10268
+JMP 10271
+JDEST 10270
 LDI r3, "true"
-JDEST 10269
+JDEST 10271
 SSTORE "successor_set", r3
 EMIT "SuccessorProgramSet", r1
 LDI r2, true
 MOV r0, r2
 STOP
 STOP
-JDEST 11200
+JDEST 11300
 MLOAD r1, 1001
 MLOAD r2, 1002
 MLOAD r3, 1003
@@ -3986,11 +4024,11 @@ LDI r11, "true"
 EQ r10, r10, r11
 LDI r12, true
 NEQ r12, r10, r12
-JIF r12, 10270
+JIF r12, 10272
 LDI r13, "paused"
 EMIT "Require", r13
 REVERT
-JDEST 10270
+JDEST 10272
 MSTORE 1001, r6
 CALL_INT r10, 1100
 MSTORE 1001, r7
@@ -3998,126 +4036,126 @@ CALL_INT r10, 1400
 MSTORE 1001, r6
 CALL_INT r10, 1200
 EQ r11, r7, r10
-JIF r11, 10271
+JIF r11, 10273
 LDI r12, "capsule observed_at mismatch"
 EMIT "Require", r12
 REVERT
-JDEST 10271
+JDEST 10273
 SLOAD r10, "latest_observed_at"
 MSTORE 1001, r6
 MSTORE 1002, r10
 CALL_INT r11, 1300
-JIF r11, 10272
+JIF r11, 10274
 LDI r12, "observed_at not increasing"
 EMIT "Require", r12
 REVERT
-JDEST 10272
+JDEST 10274
 SLOAD r10, "snapshot_count"
 LDI r11, 0
 ADD r10, r11, r10
 LDI r12, 1
 ADD r13, r10, r12
 EQ r14, r9, r13
-JIF r14, 10273
+JIF r14, 10275
 LDI r15, "snapshot index"
 EMIT "Require", r15
 REVERT
-JDEST 10273
+JDEST 10275
 SLOAD r10, "era_first_snapshot_index"
 LDI r11, 0
 ADD r10, r11, r10
 LT r12, r9, r10
 LDI r13, true
 NEQ r12, r12, r13
-JIF r12, 10274
+JIF r12, 10276
 LDI r14, "snapshot before era"
 EMIT "Require", r14
 REVERT
-JDEST 10274
+JDEST 10276
 SLOAD r10, "latest_epoch"
 LDI r11, 0
 ADD r10, r11, r10
 LT r12, r8, r10
 LDI r13, true
 NEQ r12, r12, r13
-JIF r12, 10275
+JIF r12, 10277
 SLOAD r15, "latest_epoch"
 LDI r16, 0
 ADD r15, r16, r15
 LDI r17, 0
 EQ r18, r15, r17
 MOV r14, r18
-JMP 10276
-JDEST 10275
+JMP 10278
+JDEST 10277
 LDI r14, true
-JDEST 10276
-JIF r14, 10277
+JDEST 10278
+JIF r14, 10279
 LDI r19, "snapshot epoch moved backward"
 EMIT "Require", r19
 REVERT
-JDEST 10277
+JDEST 10279
 STRLEN r10, r1
 LDI r11, 0
 GT r12, r10, r11
-JIF r12, 10278
+JIF r12, 10280
 LDI r13, "payload required"
 EMIT "Require", r13
 REVERT
-JDEST 10278
+JDEST 10280
 STRLEN r10, r2
 LDI r11, 0
 GT r12, r10, r11
-JIF r12, 10279
+JIF r12, 10281
 LDI r13, "evidence required"
 EMIT "Require", r13
 REVERT
-JDEST 10279
+JDEST 10281
 STRLEN r10, r3
 LDI r11, 0
 GT r12, r10, r11
-JIF r12, 10280
+JIF r12, 10282
 LDI r13, "source refs required"
 EMIT "Require", r13
 REVERT
-JDEST 10280
+JDEST 10282
 STRLEN r10, r4
 LDI r11, 208
 EQ r12, r10, r11
-JIF r12, 10281
+JIF r12, 10283
 LDI r13, "summary row length"
 EMIT "Require", r13
 REVERT
-JDEST 10281
+JDEST 10283
 STRLEN r10, r1
 LDI r11, 12000
 GT r12, r10, r11
 LDI r13, true
 NEQ r12, r12, r13
-JIF r12, 10282
+JIF r12, 10284
 LDI r14, "payload too large"
 EMIT "Require", r14
 REVERT
-JDEST 10282
+JDEST 10284
 STRLEN r10, r2
 LDI r11, 8000
 GT r12, r10, r11
 LDI r13, true
 NEQ r12, r12, r13
-JIF r12, 10283
+JIF r12, 10285
 LDI r14, "evidence too large"
 EMIT "Require", r14
 REVERT
-JDEST 10283
+JDEST 10285
 STRLEN r10, r3
 LDI r11, 4096
 GT r12, r10, r11
 LDI r13, true
 NEQ r12, r12, r13
-JIF r12, 10284
+JIF r12, 10286
 LDI r14, "source refs too large"
 EMIT "Require", r14
 REVERT
-JDEST 10284
+JDEST 10286
 LDI r10, "sha256:"
 LDI r11, "octra-vitals:snapshot:v0"
 LDI r12, "
@@ -4207,7 +4245,7 @@ LDI r18, true
 MOV r0, r18
 STOP
 STOP
-JDEST 11300
+JDEST 11400
 MLOAD r1, 1001
 MLOAD r2, 1002
 MLOAD r3, 1003
@@ -4228,11 +4266,11 @@ LDI r16, "true"
 EQ r15, r15, r16
 LDI r17, true
 NEQ r17, r15, r17
-JIF r17, 10285
+JIF r17, 10287
 LDI r18, "paused"
 EMIT "Require", r18
 REVERT
-JDEST 10285
+JDEST 10287
 MSTORE 1001, r6
 CALL_INT r15, 1100
 MSTORE 1001, r7
@@ -4240,144 +4278,144 @@ CALL_INT r15, 1400
 MSTORE 1001, r6
 CALL_INT r15, 1200
 EQ r16, r7, r15
-JIF r16, 10286
+JIF r16, 10288
 LDI r17, "capsule observed_at mismatch"
 EMIT "Require", r17
 REVERT
-JDEST 10286
+JDEST 10288
 SLOAD r15, "latest_observed_at"
 MSTORE 1001, r6
 MSTORE 1002, r15
 CALL_INT r16, 1300
-JIF r16, 10287
+JIF r16, 10289
 LDI r17, "observed_at not increasing"
 EMIT "Require", r17
 REVERT
-JDEST 10287
+JDEST 10289
 SLOAD r15, "snapshot_count"
 LDI r16, 0
 ADD r15, r16, r15
 LDI r17, 1
 ADD r18, r15, r17
 EQ r19, r9, r18
-JIF r19, 10288
+JIF r19, 10290
 LDI r20, "snapshot index"
 EMIT "Require", r20
 REVERT
-JDEST 10288
+JDEST 10290
 SLOAD r15, "era_first_snapshot_index"
 LDI r16, 0
 ADD r15, r16, r15
 LT r17, r9, r15
 LDI r18, true
 NEQ r17, r17, r18
-JIF r17, 10289
+JIF r17, 10291
 LDI r19, "snapshot before era"
 EMIT "Require", r19
 REVERT
-JDEST 10289
+JDEST 10291
 SLOAD r15, "latest_epoch"
 LDI r16, 0
 ADD r15, r16, r15
 LT r17, r8, r15
 LDI r18, true
 NEQ r17, r17, r18
-JIF r17, 10290
+JIF r17, 10292
 SLOAD r20, "latest_epoch"
 LDI r21, 0
 ADD r20, r21, r20
 LDI r22, 0
 EQ r23, r20, r22
 MOV r19, r23
-JMP 10291
-JDEST 10290
+JMP 10293
+JDEST 10292
 LDI r19, true
-JDEST 10291
-JIF r19, 10292
+JDEST 10293
+JIF r19, 10294
 LDI r24, "snapshot epoch moved backward"
 EMIT "Require", r24
 REVERT
-JDEST 10292
+JDEST 10294
 LDI r15, 0
 LT r16, r10, r15
 LDI r17, true
 NEQ r16, r16, r17
-JIF r16, 10293
+JIF r16, 10295
 LDI r18, "aux count negative"
 EMIT "Require", r18
 REVERT
-JDEST 10293
+JDEST 10295
 LDI r15, 4
 GT r16, r10, r15
 LDI r17, true
 NEQ r16, r16, r17
-JIF r16, 10294
+JIF r16, 10296
 LDI r18, "aux count too large"
 EMIT "Require", r18
 REVERT
-JDEST 10294
+JDEST 10296
 STRLEN r15, r1
 LDI r16, 0
 GT r17, r15, r16
-JIF r17, 10295
+JIF r17, 10297
 LDI r18, "payload required"
 EMIT "Require", r18
 REVERT
-JDEST 10295
+JDEST 10297
 STRLEN r15, r2
 LDI r16, 0
 GT r17, r15, r16
-JIF r17, 10296
+JIF r17, 10298
 LDI r18, "evidence required"
 EMIT "Require", r18
 REVERT
-JDEST 10296
+JDEST 10298
 STRLEN r15, r3
 LDI r16, 0
 GT r17, r15, r16
-JIF r17, 10297
+JIF r17, 10299
 LDI r18, "source refs required"
 EMIT "Require", r18
 REVERT
-JDEST 10297
+JDEST 10299
 STRLEN r15, r4
 LDI r16, 208
 EQ r17, r15, r16
-JIF r17, 10298
+JIF r17, 10300
 LDI r18, "summary row length"
 EMIT "Require", r18
 REVERT
-JDEST 10298
+JDEST 10300
 STRLEN r15, r1
 LDI r16, 12000
 GT r17, r15, r16
 LDI r18, true
 NEQ r17, r17, r18
-JIF r17, 10299
+JIF r17, 10301
 LDI r19, "payload too large"
 EMIT "Require", r19
 REVERT
-JDEST 10299
+JDEST 10301
 STRLEN r15, r2
 LDI r16, 8000
 GT r17, r15, r16
 LDI r18, true
 NEQ r17, r17, r18
-JIF r17, 10300
+JIF r17, 10302
 LDI r19, "evidence too large"
 EMIT "Require", r19
 REVERT
-JDEST 10300
+JDEST 10302
 STRLEN r15, r3
 LDI r16, 4096
 GT r17, r15, r16
 LDI r18, true
 NEQ r17, r17, r18
-JIF r17, 10301
+JIF r17, 10303
 LDI r19, "source refs too large"
 EMIT "Require", r19
 REVERT
-JDEST 10301
+JDEST 10303
 LDI r15, "sha256:"
 LDI r16, "octra-vitals:snapshot:v0"
 LDI r17, "
@@ -4437,26 +4475,26 @@ LDI r21, 1
 LT r22, r10, r21
 LDI r23, true
 NEQ r22, r22, r23
-JIF r22, 10302
+JIF r22, 10304
 MSTORE 1001, r11
 CALL_INT r21, 2100
-JIF r21, 10304
+JIF r21, 10306
 LDI r22, "aux row 0 empty"
 EMIT "Require", r22
 REVERT
+JDEST 10306
+JMP 10305
 JDEST 10304
-JMP 10303
-JDEST 10302
 MSTORE 1001, r9
 MSTORE 1002, r15
 MSTORE 1003, r11
 CALL_INT r21, 3500
 GT r22, r21, r20
-JIF r22, 10305
+JIF r22, 10307
 LDI r23, "aux family order 0"
 EMIT "Require", r23
 REVERT
-JDEST 10305
+JDEST 10307
 MSTORE 1001, r21
 MSTORE 1002, r7
 MSTORE 1003, r9
@@ -4464,31 +4502,31 @@ MSTORE 1004, r15
 MSTORE 1005, r11
 CALL_INT r22, 4200
 MOV r20, r21
-JDEST 10303
+JDEST 10305
 LDI r22, 2
 LT r23, r10, r22
 LDI r24, true
 NEQ r23, r23, r24
-JIF r23, 10306
+JIF r23, 10308
 MSTORE 1001, r12
 CALL_INT r22, 2100
-JIF r22, 10308
+JIF r22, 10310
 LDI r23, "aux row 1 empty"
 EMIT "Require", r23
 REVERT
+JDEST 10310
+JMP 10309
 JDEST 10308
-JMP 10307
-JDEST 10306
 MSTORE 1001, r9
 MSTORE 1002, r15
 MSTORE 1003, r12
 CALL_INT r22, 3500
 GT r23, r22, r20
-JIF r23, 10309
+JIF r23, 10311
 LDI r24, "aux family order 1"
 EMIT "Require", r24
 REVERT
-JDEST 10309
+JDEST 10311
 MSTORE 1001, r22
 MSTORE 1002, r7
 MSTORE 1003, r9
@@ -4496,31 +4534,31 @@ MSTORE 1004, r15
 MSTORE 1005, r12
 CALL_INT r23, 4200
 MOV r20, r22
-JDEST 10307
+JDEST 10309
 LDI r23, 3
 LT r24, r10, r23
 LDI r25, true
 NEQ r24, r24, r25
-JIF r24, 10310
+JIF r24, 10312
 MSTORE 1001, r13
 CALL_INT r23, 2100
-JIF r23, 10312
+JIF r23, 10314
 LDI r24, "aux row 2 empty"
 EMIT "Require", r24
 REVERT
+JDEST 10314
+JMP 10313
 JDEST 10312
-JMP 10311
-JDEST 10310
 MSTORE 1001, r9
 MSTORE 1002, r15
 MSTORE 1003, r13
 CALL_INT r23, 3500
 GT r24, r23, r20
-JIF r24, 10313
+JIF r24, 10315
 LDI r25, "aux family order 2"
 EMIT "Require", r25
 REVERT
-JDEST 10313
+JDEST 10315
 MSTORE 1001, r23
 MSTORE 1002, r7
 MSTORE 1003, r9
@@ -4528,38 +4566,38 @@ MSTORE 1004, r15
 MSTORE 1005, r13
 CALL_INT r24, 4200
 MOV r20, r23
-JDEST 10311
+JDEST 10313
 LDI r24, 4
 LT r25, r10, r24
 LDI r26, true
 NEQ r25, r25, r26
-JIF r25, 10314
+JIF r25, 10316
 MSTORE 1001, r14
 CALL_INT r24, 2100
-JIF r24, 10316
+JIF r24, 10318
 LDI r25, "aux row 3 empty"
 EMIT "Require", r25
 REVERT
+JDEST 10318
+JMP 10317
 JDEST 10316
-JMP 10315
-JDEST 10314
 MSTORE 1001, r9
 MSTORE 1002, r15
 MSTORE 1003, r14
 CALL_INT r24, 3500
 GT r25, r24, r20
-JIF r25, 10317
+JIF r25, 10319
 LDI r26, "aux family order 3"
 EMIT "Require", r26
 REVERT
-JDEST 10317
+JDEST 10319
 MSTORE 1001, r24
 MSTORE 1002, r7
 MSTORE 1003, r9
 MSTORE 1004, r15
 MSTORE 1005, r14
 CALL_INT r25, 4200
-JDEST 10315
+JDEST 10317
 LDI r25, "0000"
 LDI r26, "0000"
 MSTORE 1001, r25

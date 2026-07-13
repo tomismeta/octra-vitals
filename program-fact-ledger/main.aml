@@ -1060,6 +1060,15 @@ contract VitalsFactLedgerState {
     return true
   }
 
+  public fn initialize_core_family(core_family_definition: string): bool {
+    only_owner()
+    require(self.predecessor_set, "predecessor required")
+    require(self.family_count == 0, "core already registered")
+    assert_family_definition(core_family_definition, CORE_FAMILY_ID)
+    register_family_internal(CORE_FAMILY_ID, core_family_definition, EMPTY_CORE_FAMILY_ROOT)
+    return true
+  }
+
   public fn register_fact_family(family_id: string, definition: string, empty_family_root: string): bool {
     only_owner()
     require(family_id != CORE_FAMILY_ID, "core already registered")

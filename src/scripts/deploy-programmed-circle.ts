@@ -711,6 +711,75 @@ if (!deployEnabled) {
   if (requireContractReceipt && (initReceipt?.success !== true || initReceipt?.method !== initMethod || initReceipt?.contract !== circleId)) {
     throw new Error(`programmed Circle ${initMethod} receipt did not verify: ${JSON.stringify(initReceipt || { error: initReceiptError })}`);
   }
+  currentNonce += 1;
+
+  const expectedCoreFamilyRoot = factLedgerEmptyFamilyRootHex(FACT_LEDGER_CORE_FAMILY_ID, FACT_LEDGER_CORE_SCHEMA_ID);
+  const expectedCoreCapsulesRoot = factLedgerEmptyFamilyCapsulesRootHex(FACT_LEDGER_CORE_FAMILY_ID, FACT_LEDGER_CORE_SCHEMA_ID);
+  async function coreFamilyRegistered(): Promise<boolean> {
+    try {
+      const [
+        readbackDefinition,
+        readbackRoot,
+        readbackCapsulesRoot,
+        readbackLatestIndex
+      ] = await Promise.all([
+        circleView(circleId, "get_family_definition", wallet!.address, [FACT_LEDGER_CORE_FAMILY_ID]),
+        circleView(circleId, "get_family_root", wallet!.address, [FACT_LEDGER_CORE_FAMILY_ID]),
+        circleView(circleId, "get_family_capsules_root", wallet!.address, [FACT_LEDGER_CORE_FAMILY_ID]),
+        circleView(circleId, "get_family_latest_index", wallet!.address, [FACT_LEDGER_CORE_FAMILY_ID])
+      ]);
+      return (
+        readbackDefinition === factLedgerCoreDefinition &&
+        readbackRoot === expectedCoreFamilyRoot &&
+        readbackCapsulesRoot === expectedCoreCapsulesRoot &&
+        Number(readbackLatestIndex || 0) === factLedgerPredecessor!.predecessorFinalIndex
+      );
+    } catch {
+      return false;
+    }
+  }
+
+  const coreFamilyMethod = "initialize_core_family";
+  let coreFamilySubmission: Awaited<ReturnType<typeof submitTx>> | null = null;
+  let coreFamilyConfirmation: any = null;
+  let coreFamilyReceipt: Record<string, unknown> | null = null;
+  let coreFamilyReceiptError: string | null = null;
+  if (!(await coreFamilyRegistered())) {
+    const coreFamilyTx: OctraTransaction = {
+      from: wallet.address,
+      to_: circleId,
+      amount: "0",
+      nonce: currentNonce,
+      ou: callOu,
+      timestamp: Date.now() / 1000,
+      op_type: "circle_call",
+      encrypted_data: coreFamilyMethod,
+      message: JSON.stringify([factLedgerCoreDefinition])
+    };
+    coreFamilySubmission = await submitTx(wallet, coreFamilyTx, (prepared) => writeReport({
+      ...baseReport,
+      status: "core_family_prepared",
+      deploy_tx_hash: deploySubmission.tx_hash,
+      deploy_tx: txSummary(deployConfirmation),
+      program_update_tx_hash: updateSubmission?.tx_hash || null,
+      program_update_tx: updateConfirmation ? txSummary(updateConfirmation) : null,
+      initialize_tx_hash: initSubmission.tx_hash,
+      initialize_tx: txSummary(initConfirmation),
+      pending_transaction: { label: coreFamilyMethod, ...prepared }
+    }));
+    coreFamilyConfirmation = await requireConfirmed(coreFamilySubmission.tx_hash, `programmed Circle ${coreFamilyMethod}`);
+    currentNonce += 1;
+    if (waitForConfirmations) {
+      try {
+        coreFamilyReceipt = receiptSummary(await contractReceipt(coreFamilySubmission.tx_hash));
+      } catch (error) {
+        coreFamilyReceiptError = error instanceof Error ? error.message : String(error);
+      }
+    }
+    if (requireContractReceipt && (coreFamilyReceipt?.success !== true || coreFamilyReceipt?.method !== coreFamilyMethod || coreFamilyReceipt?.contract !== circleId)) {
+      throw new Error(`programmed Circle ${coreFamilyMethod} receipt did not verify: ${JSON.stringify(coreFamilyReceipt || { error: coreFamilyReceiptError })}`);
+    }
+  }
 
   const [
     programInfo,
@@ -758,8 +827,6 @@ if (!deployEnabled) {
   const initializedOk = initialized === true || initialized === "true";
   const ownerOk = owner === wallet.address;
   const operatorOk = operator === operatorAddress;
-  const expectedCoreFamilyRoot = factLedgerEmptyFamilyRootHex(FACT_LEDGER_CORE_FAMILY_ID, FACT_LEDGER_CORE_SCHEMA_ID);
-  const expectedCoreCapsulesRoot = factLedgerEmptyFamilyCapsulesRootHex(FACT_LEDGER_CORE_FAMILY_ID, FACT_LEDGER_CORE_SCHEMA_ID);
   const coreFamilyOk = (
     Number(familyCount || 0) >= 1 &&
     coreFamilyDefinitionReadback === factLedgerCoreDefinition &&
@@ -829,6 +896,11 @@ if (!deployEnabled) {
     initialize_tx: txSummary(initConfirmation),
     initialize_receipt: initReceipt,
     initialize_receipt_error: initReceiptError,
+    core_family_tx_hash: coreFamilySubmission?.tx_hash || null,
+    core_family_submit_result: coreFamilySubmission?.submit_result || null,
+    core_family_tx: coreFamilyConfirmation ? txSummary(coreFamilyConfirmation) : null,
+    core_family_receipt: coreFamilyReceipt,
+    core_family_receipt_error: coreFamilyReceiptError,
     program_info: programInfo,
     views: {
       manifest,
