@@ -83,7 +83,6 @@ export class RpcAdmissionController {
           reject(new Error("Timed out waiting for an Octra RPC slot"));
         }, this.queueWaitMs)
       };
-      entry.timer.unref?.();
       this.queue.push(entry);
     });
     await this.waitForReservedStart();

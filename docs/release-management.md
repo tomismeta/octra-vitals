@@ -52,6 +52,22 @@ candidate even if the site looks visually close.
 8. Promote the same SHA to mainnet only after devnet is green and reviewed.
 9. Tag the release after mainnet is verified.
 
+## Release History
+
+### v0.5.0 - Mainnet Circle-program hardening
+
+- Live mainnet release at `e10b09d08676337691d37d6f0251b2d9d88c6d6b`.
+- Kept the existing main/programmed Circle, Lab Circle, and Octra SQLite history
+  database addresses.
+- Updated the fact-ledger AML bytecode in place without creating a new era.
+- Made the SQLite history mirror the optimized `/api/history` read surface,
+  anchored back to AML with gateway latest/history TTL caching disabled.
+- Kept app assets Circle-served with `circle_required` static asset policy.
+- Added explicit single-provider acknowledgement paths for the current mainnet
+  compiler/program RPC topology.
+- Verified post-release snapshot `1579`, native readiness, Circle asset parity,
+  and SQLite mirror readback.
+
 ## Deployment Objects
 
 Every change should be classified before deployment.

@@ -22,3 +22,5 @@ jobs:
       - run: npm ci
       - run: npm run check
       - run: npm run native:verify
+        env:
+          VITALS_SINGLE_COMPILER_RPC_MAINNET_ACK: "I ACCEPT SINGLE AML COMPILER RPC FOR MAINNET"
