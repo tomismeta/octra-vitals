@@ -42,12 +42,18 @@ const urls = Array.isArray(raw.compiler_rpc_urls)
 const deploymentEnvironment = String(process.env.DEPLOY_ENVIRONMENT || process.env.VITALS_DEPLOY_ENVIRONMENT || "mainnet").toLowerCase();
 const developmentPromotion = deploymentEnvironment !== "mainnet" && urls.length > 0 && urls.every(isExplicitDevelopmentRpcUrl);
 const defaultMinimum = developmentPromotion ? 1 : 2;
+const singleCompilerMainnetAck = "I ACCEPT SINGLE AML COMPILER RPC FOR MAINNET";
+const singleCompilerMainnetAccepted =
+  deploymentEnvironment === "mainnet" &&
+  urls.length === 1 &&
+  process.env.VITALS_SINGLE_COMPILER_RPC_MAINNET_ACK === singleCompilerMainnetAck;
 const minimum = Number(process.env.VITALS_MIN_COMPILER_RPC_URLS || defaultMinimum);
-if (!Number.isSafeInteger(minimum) || minimum < defaultMinimum) {
+if (!Number.isSafeInteger(minimum) || (!singleCompilerMainnetAccepted && minimum < defaultMinimum)) {
   throw new Error(`promoted AML artifacts require at least ${defaultMinimum} compiler RPC${defaultMinimum === 1 ? "" : "s"}`);
 }
-if (raw.compiler_rpc_agreement !== true || new Set(urls).size < minimum) {
-  throw new Error(`promoted AML compile artifact does not prove ${minimum}-provider compiler agreement`);
+const effectiveMinimum = singleCompilerMainnetAccepted ? 1 : minimum;
+if (raw.compiler_rpc_agreement !== true || new Set(urls).size < effectiveMinimum) {
+  throw new Error(`promoted AML compile artifact does not prove ${effectiveMinimum}-provider compiler agreement`);
 }
 const compile: AmlCompileResult = { ...raw };
 if (!compile.version && raw.compiler_version) compile.version = raw.compiler_version;
@@ -63,5 +69,6 @@ console.log(JSON.stringify({
   verification_hash: validated.verification_hash,
   state_layout_hash: validated.state_layout_hash,
   compiler_rpc_urls: urls,
-  compiler_rpc_agreement: true
+  compiler_rpc_agreement: true,
+  single_compiler_mainnet_acknowledged: singleCompilerMainnetAccepted
 }, null, 2));
