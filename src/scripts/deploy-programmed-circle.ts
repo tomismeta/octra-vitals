@@ -498,7 +498,7 @@ await assertAmlCompileApproved(
   await readApprovedAmlRelease(join(root, artifactDir, "approved-release.json"))
 );
 const codeB64 = validatedCompile.code_b64;
-const deployWithCode = process.env.VITALS_DEPLOY_CIRCLE_WITH_CODE !== "0";
+const deployWithCode = process.env.VITALS_DEPLOY_CIRCLE_WITH_CODE === "1";
 
 const wallet = loadWalletFromEnv({
   privateKeyEnv: ["VITALS_DEPLOYER_PRIVATE_KEY_B64"],
