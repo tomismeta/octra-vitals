@@ -181,6 +181,11 @@ case "${gateway_traffic_dir}" in
     gateway_traffic_dir="${GATEWAY_DATA_DIR}/traffic"
     ;;
 esac
+gateway_origin_value="$(gateway_value VITALS_GATEWAY_ORIGIN "")"
+traffic_cookie_secure_default=0
+case "${gateway_origin_value}" in
+  https://*) traffic_cookie_secure_default=1 ;;
+esac
 cat >> "${tmp_gateway}" <<EOF
 HOST=${GATEWAY_HOST}
 PORT=${GATEWAY_PORT}
@@ -203,6 +208,9 @@ VITALS_TRAFFIC_CLIENT_MODE=$(gateway_value VITALS_TRAFFIC_CLIENT_MODE daily_hash
 VITALS_TRAFFIC_TRUST_PROXY_HEADERS=$(gateway_value VITALS_TRAFFIC_TRUST_PROXY_HEADERS 1)
 VITALS_TRAFFIC_FLUSH_MS=$(gateway_value VITALS_TRAFFIC_FLUSH_MS 2000)
 VITALS_TRAFFIC_DIAGNOSTIC_PATH_LIMIT=$(gateway_value VITALS_TRAFFIC_DIAGNOSTIC_PATH_LIMIT 100)
+VITALS_TRAFFIC_CLIENT_COOKIE=$(gateway_value VITALS_TRAFFIC_CLIENT_COOKIE 1)
+VITALS_TRAFFIC_CLIENT_COOKIE_NAME=$(gateway_value VITALS_TRAFFIC_CLIENT_COOKIE_NAME octra_vitals_client)
+VITALS_TRAFFIC_CLIENT_COOKIE_SECURE=$(gateway_value VITALS_TRAFFIC_CLIENT_COOKIE_SECURE "${traffic_cookie_secure_default}")
 VITALS_TRUSTED_PROXY_ADDRESSES=$(gateway_value VITALS_TRUSTED_PROXY_ADDRESSES "127.0.0.1,::1")
 VITALS_PROXY_CLIENT_IP_HEADER=$(gateway_value VITALS_PROXY_CLIENT_IP_HEADER x-forwarded-for)
 VITALS_LAB_QUERY_ALLOWED_ORIGINS=$(gateway_value VITALS_LAB_QUERY_ALLOWED_ORIGINS "${VITALS_GATEWAY_ORIGIN:-}")

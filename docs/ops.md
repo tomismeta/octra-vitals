@@ -174,7 +174,7 @@ Local retention does not prune AML state. AML stores compact historical facts an
 
 ## Traffic And Snapshot Diagnostics
 
-Optional traffic aggregation stores hourly route/status/latency counters plus daily-rotating client hashes. It does not store raw IPs, user agents, cookies, query strings, headers, or request bodies.
+Optional traffic aggregation stores hourly route/status/latency counters plus daily-rotating client hashes. The gateway sets a signed, first-party metrics cookie so browser traffic can be distinguished even when the hosting edge collapses source IPs; the aggregate files store only salted daily hashes, not raw IPs, user agents, cookie values, query strings, headers, or request bodies.
 
 ```bash
 npm run traffic:summary:dist -- --csv

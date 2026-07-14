@@ -2930,7 +2930,13 @@ const server = http.createServer((req: http.IncomingMessage, res: http.ServerRes
   if (trafficRecorder) {
     res.once("finish", () => trafficRecorder.record(req, res, startedAtNs));
   }
-  route(req, res).catch((error) => {
+  (async () => {
+    if (trafficRecorder) {
+      await trafficRecorder.prepareRequest(req, res)
+        .catch((error) => console.warn("traffic client cookie preparation failed", error instanceof Error ? error.message : String(error)));
+    }
+    await route(req, res);
+  })().catch((error) => {
     console.error(error);
     if (res.headersSent) {
       res.end();

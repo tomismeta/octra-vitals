@@ -38,6 +38,9 @@ interface TrafficRecorderOptions {
   clientMode: "none" | "daily_hash";
   trustedProxyAddresses: string[];
   clientIpHeader: string;
+  clientCookieEnabled?: boolean;
+  clientCookieName?: string;
+  clientCookieSecure?: boolean;
   flushDelayMs: number;
   diagnosticPathLimit: number;
   clientCardinalityLimit: number;
@@ -46,8 +49,11 @@ interface TrafficRecorderOptions {
 
 interface ClientIdentity {
   hash: string | null;
-  source: "none" | "remote" | "proxy";
+  source: "none" | "remote" | "proxy" | "cookie";
 }
+
+const preparedCookieSymbol = Symbol("octraVitalsTrafficClientCookie");
+const defaultClientCookieName = "octra_vitals_client";
 
 const latencyBuckets = [
   ["lt_100", 100],
@@ -132,6 +138,30 @@ export class TrafficRecorder {
 
   constructor(private readonly options: TrafficRecorderOptions) {}
 
+  async prepareRequest(req: http.IncomingMessage, res: http.ServerResponse): Promise<void> {
+    if (!this.options.enabled || this.options.clientMode !== "daily_hash" || this.options.clientCookieEnabled === false) return;
+    await this.ensureReady();
+    const cookieName = clientCookieName(this.options.clientCookieName);
+    const existing = parseCookieHeader(req.headers.cookie || "")[cookieName];
+    const existingSubject = existing ? this.verifyClientCookie(existing) : null;
+    if (existingSubject) {
+      (req as any)[preparedCookieSymbol] = existingSubject;
+      return;
+    }
+    if (res.headersSent) return;
+    const subject = randomBytes(16).toString("hex");
+    const value = this.signClientCookie(subject);
+    const cookie = [
+      `${cookieName}=${value}`,
+      "Path=/",
+      "Max-Age=31536000",
+      "HttpOnly",
+      "SameSite=Lax",
+      this.options.clientCookieSecure ? "Secure" : null
+    ].filter(Boolean).join("; ");
+    appendSetCookie(res, cookie);
+  }
+
   record(req: http.IncomingMessage, res: http.ServerResponse, startedAtNs: bigint): void {
     if (!this.options.enabled) return;
     if (this.pendingRecords >= this.options.queueLimit) {
@@ -201,17 +231,49 @@ export class TrafficRecorder {
 
   private clientIdentity(req: http.IncomingMessage, date: Date): ClientIdentity {
     if (this.options.clientMode !== "daily_hash") return { hash: null, source: "none" };
+    const cookieSubject = (req as any)[preparedCookieSymbol];
+    if (typeof cookieSubject === "string" && cookieSubject) {
+      return {
+        hash: this.hashClientIdentity(date, `cookie\0${cookieSubject}`),
+        source: "cookie"
+      };
+    }
     const identity = trustedClientIdentity(req, {
       trustedProxyAddresses: this.options.trustedProxyAddresses,
       clientIpHeader: this.options.clientIpHeader
     });
     const ip = identity.ip;
     if (!ip || !this.salt) return { hash: null, source: identity.source };
-    const hash = createHmac("sha256", this.salt)
-      .update(`${dayIso(date)}\0${ip}`)
+    return {
+      hash: this.hashClientIdentity(date, `ip\0${ip}`),
+      source: identity.source
+    };
+  }
+
+  private hashClientIdentity(date: Date, subject: string): string {
+    if (!this.salt) throw new Error("traffic recorder salt is not initialized");
+    return createHmac("sha256", this.salt)
+      .update(`${dayIso(date)}\0${subject}`)
       .digest("hex")
       .slice(0, 24);
-    return { hash, source: identity.source };
+  }
+
+  private signClientCookie(subject: string): string {
+    if (!this.salt) throw new Error("traffic recorder salt is not initialized");
+    const signature = createHmac("sha256", this.salt)
+      .update(`traffic-cookie:v1\0${subject}`)
+      .digest("hex")
+      .slice(0, 32);
+    return `v1.${subject}.${signature}`;
+  }
+
+  private verifyClientCookie(value: string): string | null {
+    const match = /^v1\.([a-f0-9]{32})\.([a-f0-9]{32})$/i.exec(value.trim());
+    if (!match) return null;
+    const subject = match[1]?.toLowerCase();
+    const signature = match[2]?.toLowerCase();
+    if (!subject || !signature) return null;
+    return this.signClientCookie(subject) === `v1.${subject}.${signature}` ? subject : null;
   }
 
   private async recordInner(
@@ -348,15 +410,55 @@ export function configuredTrafficRecorder(dataDir: string): TrafficRecorder | nu
   const diagnosticPathLimit = boundedIntegerEnv("VITALS_TRAFFIC_DIAGNOSTIC_PATH_LIMIT", 0, 0, 500);
   const trustedProxyAddresses = (process.env.VITALS_TRUSTED_PROXY_ADDRESSES || "127.0.0.1,::1")
     .split(",").map((value) => value.trim()).filter(Boolean);
+  const gatewayRole = (process.env.VITALS_GATEWAY_ROLE || "").trim().toLowerCase();
+  const gatewayOrigin = (process.env.VITALS_GATEWAY_ORIGIN || "").trim().toLowerCase();
+  const secureCookie = process.env.VITALS_TRAFFIC_CLIENT_COOKIE_SECURE === undefined
+    ? gatewayRole === "production" || gatewayRole === "prod" || gatewayOrigin.startsWith("https://")
+    : process.env.VITALS_TRAFFIC_CLIENT_COOKIE_SECURE === "1";
   return new TrafficRecorder({
     enabled,
     dir: resolve(process.env.VITALS_TRAFFIC_DIR || join(dataDir, "traffic")),
     clientMode,
     trustedProxyAddresses: process.env.VITALS_TRAFFIC_TRUST_PROXY_HEADERS === "1" ? trustedProxyAddresses : [],
     clientIpHeader: process.env.VITALS_PROXY_CLIENT_IP_HEADER || "x-forwarded-for",
+    clientCookieEnabled: process.env.VITALS_TRAFFIC_CLIENT_COOKIE !== "0",
+    clientCookieName: process.env.VITALS_TRAFFIC_CLIENT_COOKIE_NAME || defaultClientCookieName,
+    clientCookieSecure: secureCookie,
     flushDelayMs: boundedIntegerEnv("VITALS_TRAFFIC_FLUSH_MS", 2_000, 100, 60_000),
     diagnosticPathLimit,
     clientCardinalityLimit: boundedIntegerEnv("VITALS_TRAFFIC_CLIENT_CARDINALITY_LIMIT", 10_000, 1, 100_000),
     queueLimit: boundedIntegerEnv("VITALS_TRAFFIC_QUEUE_LIMIT", 5_000, 1, 100_000)
   });
+}
+
+function clientCookieName(value: string | undefined): string {
+  const name = (value || defaultClientCookieName).trim();
+  if (!/^[A-Za-z0-9_-]{1,64}$/.test(name)) throw new Error("traffic client cookie name is invalid");
+  return name;
+}
+
+function parseCookieHeader(value: string | string[]): Record<string, string> {
+  const text = Array.isArray(value) ? value.join("; ") : value;
+  const parsed: Record<string, string> = {};
+  for (const part of text.split(";")) {
+    const index = part.indexOf("=");
+    if (index <= 0) continue;
+    const key = part.slice(0, index).trim();
+    const raw = part.slice(index + 1).trim();
+    if (key && raw) parsed[key] = raw;
+  }
+  return parsed;
+}
+
+function appendSetCookie(res: http.ServerResponse, cookie: string): void {
+  const existing = res.getHeader("Set-Cookie");
+  if (!existing) {
+    res.setHeader("Set-Cookie", cookie);
+    return;
+  }
+  if (Array.isArray(existing)) {
+    res.setHeader("Set-Cookie", [...existing.map(String), cookie]);
+    return;
+  }
+  res.setHeader("Set-Cookie", [String(existing), cookie]);
 }

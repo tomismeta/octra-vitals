@@ -274,10 +274,10 @@ test("operator digest is compact and uses aggregate traffic, not raw client deta
   const digest = formatOperatorDigest(healthySummary(), []);
   assert.match(digest, /<b>Octra Vitals digest<\/b> <code>OK<\/code>/);
   assert.match(digest, /<b>Last hour<\/b> <code>20:00-21:00 UTC<\/code>/);
-  assert.match(digest, /Web: <b>25<\/b> req, <b>7<\/b> unique daily hashes/);
+  assert.match(digest, /Web: <b>25<\/b> req, <b>7<\/b> unique browser\/IP hashes/);
   assert.match(digest, /Home: 5 req, 4 unique \| API latest: 8/);
   assert.match(digest, /<b>24h topline<\/b> <code>Jun 15 21:00-Jun 16 21:00 UTC<\/code>/);
-  assert.match(digest, /Web: 500 req, 32 unique daily hashes/);
+  assert.match(digest, /Web: 500 req, 32 unique browser\/IP hashes/);
   assert.match(digest, /Home: 80 req, 20 unique \| API latest: 100/);
   assert.match(digest, /Archive: 505 raw files/);
   assert.equal(digest.includes("203.0.113."), false);

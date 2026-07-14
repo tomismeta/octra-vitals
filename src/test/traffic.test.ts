@@ -75,6 +75,78 @@ test("traffic recorder stores daily client hashes, not raw IPs", async () => {
   }
 });
 
+test("traffic recorder uses signed first-party cookies before proxy identity", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "octra-vitals-traffic-"));
+  try {
+    const recorder = new TrafficRecorder({
+      enabled: true,
+      dir,
+      clientMode: "daily_hash",
+      trustedProxyAddresses: ["127.0.0.1"],
+      clientIpHeader: "x-forwarded-for",
+      clientCookieEnabled: true,
+      clientCookieName: "octra_vitals_client",
+      clientCookieSecure: true,
+      flushDelayMs: 100,
+      diagnosticPathLimit: 0,
+      clientCardinalityLimit: 100,
+      queueLimit: 100
+    });
+
+    const makeReq = (cookie?: string) => {
+      const req = new EventEmitter() as any;
+      req.method = "GET";
+      req.url = "/";
+      req.headers = {
+        "x-forwarded-for": "203.0.113.11",
+        ...(cookie ? { cookie } : {})
+      };
+      req.socket = { remoteAddress: "127.0.0.1" };
+      return req;
+    };
+    const makeRes = () => {
+      const headers = new Map<string, string | string[]>();
+      const res = new EventEmitter() as any;
+      res.statusCode = 200;
+      res.headersSent = false;
+      res.setHeader = (name: string, value: string | string[]) => headers.set(name.toLowerCase(), value);
+      res.getHeader = (name: string) => headers.get(name.toLowerCase());
+      return res;
+    };
+
+    const firstReq = makeReq();
+    const firstRes = makeRes();
+    await recorder.prepareRequest(firstReq, firstRes);
+    const setCookie = firstRes.getHeader("set-cookie");
+    assert.equal(typeof setCookie, "string");
+    assert.match(setCookie as string, /^octra_vitals_client=v1\.[a-f0-9]{32}\.[a-f0-9]{32}; Path=\/; Max-Age=31536000; HttpOnly; SameSite=Lax; Secure$/);
+    recorder.record(firstReq, firstRes, process.hrtime.bigint() - 1_000_000n);
+
+    const cookieHeader = (setCookie as string).split(";")[0];
+    assert.ok(cookieHeader);
+    const secondReq = makeReq(cookieHeader);
+    const secondRes = makeRes();
+    await recorder.prepareRequest(secondReq, secondRes);
+    assert.equal(secondRes.getHeader("set-cookie"), undefined);
+    recorder.record(secondReq, secondRes, process.hrtime.bigint() - 1_000_000n);
+
+    await recorder.flush();
+    const files = await (await import("node:fs/promises")).readdir(dir);
+    const hourFile = files.find((file) => file.endsWith(".json"));
+    assert.ok(hourFile);
+    const text = await readFile(join(dir, hourFile), "utf8");
+    assert.equal(text.includes(cookieHeader), false);
+    assert.equal(text.includes("203.0.113.11"), false);
+    const parsed = JSON.parse(text);
+    assert.equal(parsed.totals.requests, 2);
+    assert.equal(parsed.totals.client_sources.proxy, 1);
+    assert.equal(parsed.totals.client_sources.cookie, 1);
+    assert.equal(Object.keys(parsed.totals.clients).length, 2);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
 test("traffic recorder stores bounded diagnostic paths without queries or raw IPs", async () => {
   const dir = await mkdtemp(join(tmpdir(), "octra-vitals-traffic-"));
   try {

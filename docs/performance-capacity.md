@@ -70,7 +70,7 @@ When `VITALS_EXPOSE_PERFORMANCE=1` is set on the gateway, pass `--include-intern
 
 The probe is sequential by design. It should measure the site, not become load.
 
-Octra RPC admission covers fetch **and full response-body consumption**, reserves start spacing before work begins, and has finite queue, wait, and response-byte limits. Lab SQL has separate global, per-client, and concurrency limits. Proxy-derived client IPs are accepted only when the socket peer is in `VITALS_TRUSTED_PROXY_ADDRESSES`; the reverse proxy must overwrite the configured single client-IP header.
+Octra RPC admission covers fetch **and full response-body consumption**, reserves start spacing before work begins, and has finite queue, wait, and response-byte limits. Lab SQL has separate global, per-client, and concurrency limits. Traffic uniqueness prefers a signed first-party metrics cookie and falls back to proxy/IP identity. Proxy-derived client IPs are accepted only when the socket peer is in `VITALS_TRUSTED_PROXY_ADDRESSES`; do not broaden trusted proxy headers unless the edge overwrites them.
 
 `/api/performance` is disabled by default because it reports gateway internals such as cache state, uptime, memory, and RPC counters. Enable it only on trusted environments or for short diagnostic windows.
 
