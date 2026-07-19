@@ -26,6 +26,9 @@ export interface LabHistoryMirrorSummary {
   era_count: number;
   proof_scope: string;
   proof_truncated: boolean;
+  circle_write_count: number;
+  circle_tx_hashes: string[];
+  circle_ou_total: string | null;
   readback_status?: "verified" | "pending";
   readback_error?: string;
 }
@@ -483,7 +486,10 @@ function buildLabHistoryMirrorStatements(
       complete,
       era_count: history.eras?.length || 0,
       proof_scope: proofScope(history),
-      proof_truncated: proofTruncated(history)
+      proof_truncated: proofTruncated(history),
+      circle_write_count: 0,
+      circle_tx_hashes: [],
+      circle_ou_total: null
     }
   };
 }
@@ -605,15 +611,28 @@ export async function mirrorLabHistory(history: ProgramHistoryWindow, source: La
   if (!includeCatalog && plan.rows.length === 0 && plan.pendingRowCount === 0) {
     return summary;
   }
+  let totalOu = 0n;
+  let observedOu = false;
+  const txHashes = new Set<string>();
   for (const batch of statementBatches(statements)) {
     try {
-      await open(sqlBatch(batch));
+      const result = await open(sqlBatch(batch));
+      if (result.write) {
+        summary.circle_write_count += result.write.write_count;
+        for (const txHash of result.write.tx_hashes) txHashes.add(txHash);
+        if (result.write.total_ou !== null) {
+          totalOu += BigInt(result.write.total_ou);
+          observedOu = true;
+        }
+      }
     } catch (error) {
       const first = compactStatement(batch[0] || "").slice(0, 120);
       const bytes = Buffer.byteLength(sqlBatch(batch));
       throw new Error(`lab mirror batch failed (${batch.length} statements, ${bytes} bytes, first: ${first}): ${error instanceof Error ? error.message : String(error)}`);
     }
   }
+  summary.circle_tx_hashes = [...txHashes];
+  summary.circle_ou_total = observedOu ? totalOu.toString() : null;
   const readbackError = await verifyMirrorReadbackWithRetry(source, summary, plan.rows, open);
   if (readbackError) {
     summary.readback_status = "pending";

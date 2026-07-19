@@ -11,9 +11,11 @@ interface SnapshotRunRow {
   started_at: string | null;
   run_id: string;
   status: string;
+  operator_address: string | null;
   snapshot_id: string | null;
   snapshot_index: string | null;
   tx_hash: string | null;
+  ou: string | null;
   total_ms: number | null;
   collect_ms: number | null;
   submit_ms: number | null;
@@ -87,6 +89,21 @@ function numberValue(value: unknown): number | null {
   return typeof value === "number" && Number.isFinite(value) ? Math.round(value) : null;
 }
 
+function ouValue(value: unknown): string | null {
+  if (typeof value === "number" && Number.isSafeInteger(value) && value >= 0) return String(value);
+  if (typeof value !== "string") return null;
+  const trimmed = value.trim();
+  return /^\d+$/.test(trimmed) ? trimmed : null;
+}
+
+function reportOu(report: any): string | null {
+  return ouValue(report?.ou) ||
+    ouValue(report?.submit_result?.ou_cost) ||
+    ouValue(report?.confirmations?.[0]?.transaction?.ou) ||
+    ouValue(report?.submissions?.[0]?.submit_result?.ou_cost) ||
+    null;
+}
+
 function runRow(report: any): SnapshotRunRow {
   const attempts: Array<Record<string, unknown>> = Array.isArray(report?.collect_attempts) ? report.collect_attempts : [];
   return {
@@ -94,9 +111,11 @@ function runRow(report: any): SnapshotRunRow {
     started_at: textValue(report?.started_at),
     run_id: textValue(report?.run_id) || "",
     status: textValue(report?.status) || "unknown",
+    operator_address: textValue(report?.operator_address),
     snapshot_id: textValue(report?.snapshot_id),
     snapshot_index: report?.snapshot_index === undefined || report?.snapshot_index === null ? null : String(report.snapshot_index),
     tx_hash: textValue(report?.tx_hash),
+    ou: reportOu(report),
     total_ms: numberValue(report?.timings_ms?.total_ms),
     collect_ms: numberValue(report?.timings_ms?.collect_ms),
     submit_ms: numberValue(report?.timings_ms?.submit_ms),
@@ -201,9 +220,11 @@ async function main(): Promise<void> {
       "started_at",
       "run_id",
       "status",
+      "operator_address",
       "snapshot_id",
       "snapshot_index",
       "tx_hash",
+      "ou",
       "total_ms",
       "collect_ms",
       "submit_ms",

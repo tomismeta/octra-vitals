@@ -22,6 +22,8 @@ test("snapshot run summary reports cadence, status counts, and timings", async (
       snapshot_id: "vitals.2026-06-16T18:00:00Z",
       snapshot_index: "1",
       tx_hash: "abc",
+      operator_address: "octOperator",
+      ou: "1000",
       target_kind: "circle_program",
       commit_mode: "submit",
       collect_attempts: [{ status: "ok" }],
@@ -47,6 +49,8 @@ test("snapshot run summary reports cadence, status counts, and timings", async (
     assert.equal(summary.latest?.run_id, "snapshot-b");
     assert.equal(summary.latest?.failed_collect_attempts, 2);
     assert.equal(summary.rows[0]?.readback_matches, true);
+    assert.equal(summary.rows[0]?.operator_address, "octOperator");
+    assert.equal(summary.rows[0]?.ou, "1000");
   } finally {
     await rm(dataDir, { recursive: true, force: true });
   }

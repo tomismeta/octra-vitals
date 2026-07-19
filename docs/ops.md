@@ -262,6 +262,19 @@ sudo bash /opt/octra-vitals/current/deploy/mainnet/configure-telegram-notify.sh
 
 Alerts run every five minutes and de-duplicate repeated failures. Digests run hourly and report the last completed UTC hour plus a 24-hour topline.
 
+Operator digests also include known OCT spend from local run evidence: confirmed AML snapshot writes, successful Lab mirror writes reported by `octra-sqlite`, and any deployment spend that is explicitly reported. Wallet balance/runway alerts are based on the hot operator public address and one read-only `octra_balance` probe; if that probe is unavailable, the notifier records the error but does not page on an unknown balance.
+
+Useful wallet notification knobs:
+
+```text
+VITALS_NOTIFY_OPERATOR_ADDRESS=oct...
+VITALS_NOTIFY_OPERATOR_RPC_URL=https://octra.network/rpc
+VITALS_NOTIFY_ALERT_OPERATOR_WALLET_WARN_OCT=5
+VITALS_NOTIFY_ALERT_OPERATOR_WALLET_CRITICAL_OCT=2
+VITALS_NOTIFY_ALERT_OPERATOR_WALLET_RUNWAY_WARN_DAYS=30
+VITALS_NOTIFY_ALERT_OPERATOR_WALLET_RUNWAY_CRITICAL_DAYS=7
+```
+
 ## Security Notes
 
 - Keep signer material only in root-owned env files or protected deployment secrets.

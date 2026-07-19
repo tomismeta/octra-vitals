@@ -6,6 +6,7 @@ import { dirname, join, resolve } from "node:path";
 import { promisify } from "node:util";
 import { fileURLToPath } from "node:url";
 import { readSnapshotRunRows, summarizeSnapshotRunRows } from "./summarize-snapshot-runs.js";
+import { octraRpc } from "../lib/octra-rpc.js";
 import { TRAFFIC_SCHEMA_VERSION, type TrafficHourFile, type TrafficMetric } from "../lib/traffic.js";
 
 const execFileAsync = promisify(execFile);
@@ -17,6 +18,7 @@ export interface OperatorSummary {
   periods: OperatorPeriods;
   gateway: GatewaySummary;
   snapshots: SnapshotSummary;
+  spend: SpendSummary;
   traffic: OperatorTrafficSummary;
   archive: ArchiveSummary;
   disk: DiskSummary;
@@ -73,6 +75,33 @@ export interface SnapshotPeriodSummary {
   latest_snapshot_id: string | null;
   latest_snapshot_index: string | null;
   latest_tx_hash: string | null;
+}
+
+export interface SpendSummary {
+  last_hour: SpendPeriodSummary;
+  last_24h: SpendPeriodSummary;
+  wallet: OperatorWalletSummary;
+}
+
+export interface SpendPeriodSummary {
+  snapshot_writes: number;
+  snapshot_ou: string;
+  lab_mirror_writes: number;
+  lab_mirror_ou: string;
+  deploy_writes: number;
+  deploy_ou: string;
+  total_ou: string;
+}
+
+export interface OperatorWalletSummary {
+  address: string | null;
+  balance_raw: string | null;
+  balance_oct: string | null;
+  nonce: number | null;
+  pending_nonce: number | null;
+  daily_spend_ou: string;
+  runway_days: number | null;
+  error: string | null;
 }
 
 export interface OperatorTrafficSummary {
@@ -133,6 +162,10 @@ export interface AlertThresholds {
   disk_used_percent: number;
   diagnostic_requests_current_hour: number;
   raw_evidence_projected_disk_percent: number;
+  operator_wallet_warn_raw: string;
+  operator_wallet_critical_raw: string;
+  operator_wallet_runway_warn_days: number;
+  operator_wallet_runway_critical_days: number;
 }
 
 interface FetchResult {
@@ -140,6 +173,13 @@ interface FetchResult {
   ok: boolean;
   json: any | null;
   error: string | null;
+}
+
+interface LabMirrorSpendRow {
+  generated_at: string;
+  status: string;
+  write_count: number;
+  ou: string | null;
 }
 
 function isDirectCli(metaUrl: string, argvPath: string | undefined): boolean {
@@ -202,6 +242,11 @@ function envNumber(name: string, fallback: number): number {
   return Number.isFinite(value) ? value : fallback;
 }
 
+function envText(name: string): string | null {
+  const raw = process.env[name];
+  return raw && raw.trim() ? raw.trim() : null;
+}
+
 function text(value: unknown): string | null {
   return typeof value === "string" && value.length > 0 ? value : null;
 }
@@ -246,6 +291,50 @@ function bytes(value: number): string {
   }
   const precision = unit <= 1 ? 0 : 1;
   return `${next.toFixed(precision)} ${units[unit] || "B"}`;
+}
+
+const OCT_RAW_UNITS = 1_000_000n;
+
+function rawOctFromDecimal(value: string): string {
+  const trimmed = value.trim();
+  const match = trimmed.match(/^(\d+)(?:\.(\d{0,6}))?$/);
+  if (!match) return "0";
+  const whole = BigInt(match[1] || "0");
+  const fraction = (match[2] || "").padEnd(6, "0").slice(0, 6);
+  return (whole * OCT_RAW_UNITS + BigInt(fraction || "0")).toString();
+}
+
+function envOctRaw(name: string, fallbackOct: string): string {
+  const value = envText(name);
+  return rawOctFromDecimal(value || fallbackOct);
+}
+
+function bigintText(value: unknown): string | null {
+  if (typeof value === "bigint" && value >= 0n) return value.toString();
+  if (typeof value === "number" && Number.isSafeInteger(value) && value >= 0) return String(value);
+  if (typeof value !== "string") return null;
+  const trimmed = value.trim();
+  return /^\d+$/.test(trimmed) ? trimmed : null;
+}
+
+function addRaw(left: string, right: string | null): string {
+  return right === null ? left : (BigInt(left) + BigInt(right)).toString();
+}
+
+function formatOctRaw(raw: string | null): string {
+  if (raw === null) return "n/a";
+  const value = BigInt(raw);
+  const whole = value / OCT_RAW_UNITS;
+  const fraction = (value % OCT_RAW_UNITS).toString().padStart(6, "0").replace(/0+$/, "");
+  if (!fraction) return `${whole.toString()} OCT`;
+  return `${whole.toString()}.${fraction} OCT`;
+}
+
+function compactOctRaw(raw: string): string {
+  const value = BigInt(raw);
+  if (value === 0n) return "0";
+  if (value < OCT_RAW_UNITS) return formatOctRaw(raw).replace(/ OCT$/, "");
+  return formatOctRaw(raw).replace(/ OCT$/, "");
 }
 
 function h(value: unknown): string {
@@ -436,6 +525,168 @@ async function summarizeSnapshots(dataDir: string, periods: OperatorPeriods): Pr
     latest_readback_matches: latest?.readback_matches ?? null,
     median_cadence_minutes: summary.cadence_minutes.median,
     median_total_ms: summary.timings_ms.total.median
+  };
+}
+
+async function readJsonFile(path: string): Promise<any | null> {
+  try {
+    return JSON.parse(await readFile(path, "utf8"));
+  } catch {
+    return null;
+  }
+}
+
+function spendFromSnapshotRows(rows: SnapshotRunRow[], startAt: string, endAt: string): { writes: number; ou: string } {
+  let ou = "0";
+  let writes = 0;
+  for (const row of rows) {
+    if (row.status !== "confirmed" || !withinPeriod(row.generated_at, startAt, endAt)) continue;
+    writes += 1;
+    ou = addRaw(ou, bigintText(row.ou));
+  }
+  return { writes, ou };
+}
+
+async function readLabMirrorSpendRows(dataDir: string): Promise<LabMirrorSpendRow[]> {
+  const runsDir = join(dataDir, "lab-history-runs");
+  const dirs = await readdir(runsDir, { withFileTypes: true }).catch(() => []);
+  const rows: LabMirrorSpendRow[] = [];
+  for (const entry of dirs) {
+    if (!entry.isDirectory()) continue;
+    const report = await readJsonFile(join(runsDir, entry.name, "lab_history_mirror_report.json"));
+    if (!report) continue;
+    const mirror = report.mirror || {};
+    rows.push({
+      generated_at: text(report.generated_at) || "",
+      status: text(report.status) || "unknown",
+      write_count: Number.isFinite(Number(mirror.circle_write_count)) ? Number(mirror.circle_write_count) : 0,
+      ou: bigintText(mirror.circle_ou_total)
+    });
+  }
+  return rows.sort((a, b) => a.generated_at.localeCompare(b.generated_at));
+}
+
+function spendFromLabRows(rows: LabMirrorSpendRow[], startAt: string, endAt: string): { writes: number; ou: string } {
+  let ou = "0";
+  let writes = 0;
+  for (const row of rows) {
+    if (row.status !== "ok" || !withinPeriod(row.generated_at, startAt, endAt)) continue;
+    writes += row.write_count;
+    ou = addRaw(ou, row.ou);
+  }
+  return { writes, ou };
+}
+
+function spendPeriod(
+  snapshotRows: SnapshotRunRow[],
+  labRows: LabMirrorSpendRow[],
+  startAt: string,
+  endAt: string
+): SpendPeriodSummary {
+  const snapshot = spendFromSnapshotRows(snapshotRows, startAt, endAt);
+  const lab = spendFromLabRows(labRows, startAt, endAt);
+  const deployOu = "0";
+  const total = addRaw(addRaw(snapshot.ou, lab.ou), deployOu);
+  return {
+    snapshot_writes: snapshot.writes,
+    snapshot_ou: snapshot.ou,
+    lab_mirror_writes: lab.writes,
+    lab_mirror_ou: lab.ou,
+    deploy_writes: 0,
+    deploy_ou: deployOu,
+    total_ou: total
+  };
+}
+
+function operatorAddressFromRows(rows: SnapshotRunRow[]): string | null {
+  return envText("VITALS_NOTIFY_OPERATOR_ADDRESS") ||
+    envText("VITALS_OPERATOR_ADDRESS") ||
+    [...rows].reverse().find((row) => row.operator_address)?.operator_address ||
+    null;
+}
+
+function operatorWalletRpcUrl(): string {
+  const network = envText("VITALS_NOTIFY_NETWORK");
+  return envText("VITALS_NOTIFY_OPERATOR_RPC_URL") ||
+    envText("OCTRA_PROGRAM_RPC_URL") ||
+    envText("OCTRA_RPC_URL") ||
+    (network === "devnet" ? "https://devnet.octrascan.io/rpc" : "https://octra.network/rpc");
+}
+
+function numberOrNull(value: unknown): number | null {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+async function summarizeOperatorWallet(address: string | null, dailySpendOu: string): Promise<OperatorWalletSummary> {
+  if (!address) {
+    return {
+      address: null,
+      balance_raw: null,
+      balance_oct: null,
+      nonce: null,
+      pending_nonce: null,
+      daily_spend_ou: dailySpendOu,
+      runway_days: null,
+      error: "operator_address_unavailable"
+    };
+  }
+  if (process.env.VITALS_NOTIFY_WALLET_BALANCE_ENABLED === "0") {
+    return {
+      address,
+      balance_raw: null,
+      balance_oct: null,
+      nonce: null,
+      pending_nonce: null,
+      daily_spend_ou: dailySpendOu,
+      runway_days: null,
+      error: "wallet_balance_probe_disabled"
+    };
+  }
+  try {
+    const result = await octraRpc<any>("octra_balance", [address], { url: operatorWalletRpcUrl() });
+    const balanceRaw = bigintText(result?.balance_raw);
+    const daily = BigInt(dailySpendOu || "0");
+    const balance = balanceRaw === null ? null : BigInt(balanceRaw);
+    const runwayDays = balance !== null && daily > 0n
+      ? Math.floor(Number((balance * 10n) / daily)) / 10
+      : null;
+    return {
+      address,
+      balance_raw: balanceRaw,
+      balance_oct: balanceRaw === null ? null : formatOctRaw(balanceRaw).replace(/ OCT$/, ""),
+      nonce: numberOrNull(result?.nonce),
+      pending_nonce: numberOrNull(result?.pending_nonce),
+      daily_spend_ou: dailySpendOu,
+      runway_days: runwayDays,
+      error: null
+    };
+  } catch (error) {
+    return {
+      address,
+      balance_raw: null,
+      balance_oct: null,
+      nonce: null,
+      pending_nonce: null,
+      daily_spend_ou: dailySpendOu,
+      runway_days: null,
+      error: error instanceof Error ? error.message : String(error)
+    };
+  }
+}
+
+async function summarizeSpend(dataDir: string, periods: OperatorPeriods): Promise<SpendSummary> {
+  const [snapshotRows, labRows] = await Promise.all([
+    readSnapshotRunRows(dataDir),
+    readLabMirrorSpendRows(dataDir)
+  ]);
+  const lastHour = spendPeriod(snapshotRows, labRows, periods.last_hour_start_at, periods.last_hour_end_at);
+  const last24h = spendPeriod(snapshotRows, labRows, periods.last_24h_start_at, periods.last_24h_end_at);
+  const wallet = await summarizeOperatorWallet(operatorAddressFromRows(snapshotRows), last24h.total_ou);
+  return {
+    last_hour: lastHour,
+    last_24h: last24h,
+    wallet
   };
 }
 
@@ -729,7 +980,52 @@ export function detectOperatorAlerts(summary: OperatorSummary, thresholds: Alert
       message: `Scanner/probe noise is elevated: ${summary.traffic.diagnostic_requests_current_hour} rejected diagnostic paths this hour${top === "none" ? "." : `; top: ${top}.`}`
     });
   }
+  if (summary.spend.wallet.balance_raw !== null) {
+    const balance = BigInt(summary.spend.wallet.balance_raw);
+    const criticalBalance = BigInt(thresholds.operator_wallet_critical_raw);
+    const warnBalance = BigInt(thresholds.operator_wallet_warn_raw);
+    if (balance <= criticalBalance) {
+      alerts.push({
+        id: "operator_wallet_balance",
+        severity: "critical",
+        message: `Operator wallet is almost empty: ${formatOctRaw(summary.spend.wallet.balance_raw)} remaining${summary.spend.wallet.runway_days === null ? "." : `, about ${summary.spend.wallet.runway_days}d runway at the observed 24h spend.`}`
+      });
+    } else if (balance <= warnBalance) {
+      alerts.push({
+        id: "operator_wallet_balance",
+        severity: "warn",
+        message: `Operator wallet is getting low: ${formatOctRaw(summary.spend.wallet.balance_raw)} remaining${summary.spend.wallet.runway_days === null ? "." : `, about ${summary.spend.wallet.runway_days}d runway at the observed 24h spend.`}`
+      });
+    }
+  }
+  if (summary.spend.wallet.runway_days !== null) {
+    const severity = summary.spend.wallet.runway_days <= thresholds.operator_wallet_runway_critical_days
+      ? "critical"
+      : summary.spend.wallet.runway_days <= thresholds.operator_wallet_runway_warn_days
+        ? "warn"
+        : null;
+    if (severity) {
+      alerts.push({
+        id: "operator_wallet_runway",
+        severity,
+        message: `Operator wallet runway is about ${summary.spend.wallet.runway_days}d at the observed 24h spend of ${formatOctRaw(summary.spend.last_24h.total_ou)}.`
+      });
+    }
+  }
   return alerts;
+}
+
+function spendLine(period: SpendPeriodSummary): string {
+  return `Spend: snapshot ${compactOctRaw(period.snapshot_ou)} OCT (${period.snapshot_writes}), lab ${compactOctRaw(period.lab_mirror_ou)} OCT (${period.lab_mirror_writes}), deploy ${compactOctRaw(period.deploy_ou)} OCT, total ${compactOctRaw(period.total_ou)} OCT`;
+}
+
+function walletLine(wallet: OperatorWalletSummary): string {
+  if (!wallet.address) return "Wallet: n/a";
+  const balance = wallet.balance_raw === null
+    ? `unknown${wallet.error ? ` (${wallet.error.slice(0, 80)})` : ""}`
+    : `${formatOctRaw(wallet.balance_raw)}${wallet.runway_days === null ? "" : `, ~${wallet.runway_days}d runway`}`;
+  const nonce = wallet.nonce === null ? "n/a" : String(wallet.nonce);
+  return `Wallet: ${shortHash(wallet.address)} | ${balance} | nonce ${nonce}`;
 }
 
 export function formatOperatorDigest(summary: OperatorSummary, alerts: OperatorAlert[]): string {
@@ -749,6 +1045,7 @@ export function formatOperatorDigest(summary: OperatorSummary, alerts: OperatorA
     "",
     `${b("Last hour")} ${c(periodRange(summary.periods.last_hour_start_at, summary.periods.last_hour_end_at))}`,
     `Snapshots: ${b(snapshotHour.confirmed_count)} confirmed, ${b(snapshotHour.failed_count)} failed, ${snapshotHour.run_count} runs`,
+    `${h(spendLine(summary.spend.last_hour))}`,
     `Web: ${b(lastHour.requests)} req, ${b(lastHour.unique_daily_hashes)} unique browser/IP hashes`,
     `Home: ${lastHour.homepage_requests} req, ${lastHour.homepage_unique_daily_hashes} unique | API latest: ${lastHour.api_latest_requests}`,
     `Noise: ${lastHour.diagnostic_requests} diagnostic | top: ${topPaths(lastHour.top_diagnostic_paths)}`,
@@ -756,6 +1053,7 @@ export function formatOperatorDigest(summary: OperatorSummary, alerts: OperatorA
     "",
     `${b("24h topline")} ${c(periodRange(summary.periods.last_24h_start_at, summary.periods.last_24h_end_at))}`,
     `Snapshots: ${snapshot24h.confirmed_count} confirmed, ${snapshot24h.failed_count} failed, ${snapshot24h.run_count} runs`,
+    `${h(spendLine(summary.spend.last_24h))}`,
     `Web: ${last24h.requests} req, ${last24h.unique_daily_hashes} unique browser/IP hashes`,
     `Home: ${last24h.homepage_requests} req, ${last24h.homepage_unique_daily_hashes} unique | API latest: ${last24h.api_latest_requests}`,
     `Noise: ${last24h.diagnostic_requests} diagnostic | top: ${topPaths(last24h.top_diagnostic_paths)}`,
@@ -770,6 +1068,7 @@ export function formatOperatorDigest(summary: OperatorSummary, alerts: OperatorA
     `Native: ${c(summary.gateway.native_status || "n/a")} | site integrity=${c(summary.gateway.site_integrity_status || boolText(summary.gateway.site_integrity_ok))}`,
     `Archive: ${summary.archive.raw_evidence_files} raw files (${bytes(summary.archive.raw_evidence_bytes)}), ${summary.archive.raw_evidence_files_24h} in 24h, 365d pace ${bytes(summary.archive.raw_evidence_projected_365d_bytes)}`,
     `Cadence: ${cadence} median | run: ${duration(summary.snapshots.median_total_ms)}`,
+    `${h(walletLine(summary.spend.wallet))}`,
     `Disk: ${h(disk)}`,
     ...(alerts.length ? ["", `${b("Alerts")}`, ...alerts.map((alert) => `${c(alert.severity)} ${h(alert.message)}`)] : [])
   ].join("\n");
@@ -794,9 +1093,10 @@ async function collectOperatorSummary(): Promise<OperatorSummary> {
   const dataDir = resolve(process.env.VITALS_NOTIFY_DATA_DIR || process.env.VITALS_DATA_DIR || join(root, "data"));
   const gatewayUrl = process.env.VITALS_NOTIFY_GATEWAY_URL || "http://127.0.0.1:4173";
   const periods = completePeriods();
-  const [gateway, snapshots, traffic, archive, disk] = await Promise.all([
+  const [gateway, snapshots, spend, traffic, archive, disk] = await Promise.all([
     summarizeGateway(gatewayUrl),
     summarizeSnapshots(dataDir, periods),
+    summarizeSpend(dataDir, periods),
     summarizeTraffic(dataDir, periods),
     summarizeArchive(dataDir, periods),
     summarizeDisk(dataDir)
@@ -806,6 +1106,7 @@ async function collectOperatorSummary(): Promise<OperatorSummary> {
     periods,
     gateway,
     snapshots,
+    spend,
     traffic,
     archive,
     disk
@@ -817,7 +1118,11 @@ function alertThresholds(): AlertThresholds {
     max_snapshot_age_ms: envNumber("VITALS_NOTIFY_ALERT_MAX_SNAPSHOT_AGE_MS", 45 * 60_000),
     disk_used_percent: envNumber("VITALS_NOTIFY_ALERT_DISK_PCT", 75),
     diagnostic_requests_current_hour: envNumber("VITALS_NOTIFY_ALERT_DIAGNOSTIC_REQUESTS_PER_HOUR", 300),
-    raw_evidence_projected_disk_percent: envNumber("VITALS_NOTIFY_ALERT_RAW_EVIDENCE_365D_FREE_DISK_PCT", 60)
+    raw_evidence_projected_disk_percent: envNumber("VITALS_NOTIFY_ALERT_RAW_EVIDENCE_365D_FREE_DISK_PCT", 60),
+    operator_wallet_warn_raw: envOctRaw("VITALS_NOTIFY_ALERT_OPERATOR_WALLET_WARN_OCT", "5"),
+    operator_wallet_critical_raw: envOctRaw("VITALS_NOTIFY_ALERT_OPERATOR_WALLET_CRITICAL_OCT", "2"),
+    operator_wallet_runway_warn_days: envNumber("VITALS_NOTIFY_ALERT_OPERATOR_WALLET_RUNWAY_WARN_DAYS", 30),
+    operator_wallet_runway_critical_days: envNumber("VITALS_NOTIFY_ALERT_OPERATOR_WALLET_RUNWAY_CRITICAL_DAYS", 7)
   };
 }
 

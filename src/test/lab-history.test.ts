@@ -199,11 +199,25 @@ test("octra-sqlite output parser accepts query and write envelopes", () => {
     ok: true,
     type: "write",
     status: "confirmed",
-    tx_hash: "abc123",
+    tx_hash: "a".repeat(64),
+    ou_cost: "1000",
     receipt: { success: true }
   }));
 
-  assert.deepEqual(write, { columns: [], ok: true, row_count: 0, rows: [] });
+  assert.deepEqual(write, {
+    columns: [],
+    ok: true,
+    row_count: 0,
+    rows: [],
+    write: {
+      type: "write",
+      status: "confirmed",
+      write_count: 1,
+      tx_hashes: ["a".repeat(64)],
+      ou_costs: ["1000"],
+      total_ou: "1000"
+    }
+  });
 
   const writeScript = parseOctraSqliteOutput(JSON.stringify({
     ok: true,
@@ -211,20 +225,22 @@ test("octra-sqlite output parser accepts query and write envelopes", () => {
     schema: "octra-sqlite.cli.v1",
     statements: 14,
     batches: 1,
-    writes: [{ status: "confirmed" }]
+    writes: [{ status: "confirmed", tx_hash: "b".repeat(64), ou_cost: "1000" }]
   }));
 
-  assert.deepEqual(writeScript, { columns: [], ok: true, row_count: 0, rows: [] });
+  assert.deepEqual(writeScript.write?.tx_hashes, ["b".repeat(64)]);
+  assert.equal(writeScript.write?.total_ou, "1000");
 
   const restore = parseOctraSqliteOutput(JSON.stringify({
     ok: true,
     type: "restore",
     statements: 3279,
     batches: 200,
-    writes: [{ status: "confirmed" }, { status: "confirmed" }]
+    writes: [{ status: "confirmed", ou_cost: "1000" }, { status: "confirmed", ou_cost: "1000" }]
   }));
 
-  assert.deepEqual(restore, { columns: [], ok: true, row_count: 0, rows: [] });
+  assert.equal(restore.write?.write_count, 2);
+  assert.equal(restore.write?.total_ou, "2000");
   assert.throws(() => parseOctraSqliteOutput(JSON.stringify({ ok: false, error: "bad" })), /octra_sqlite_not_ok/);
 });
 
@@ -367,7 +383,17 @@ test("lab mirror confirms post-write readback before reporting success", async (
       return sqliteResult(["row_count"], [[2]]);
     }
     writes += 1;
-    return sqliteResult([]);
+    return {
+      ...sqliteResult([]),
+      write: {
+        type: "write_script",
+        status: "confirmed",
+        write_count: 1,
+        tx_hashes: [String(writes).repeat(64)],
+        ou_costs: ["1000"],
+        total_ou: "1000"
+      }
+    };
   };
 
   const summary = await mirrorLabHistory(history, {
@@ -379,6 +405,9 @@ test("lab mirror confirms post-write readback before reporting success", async (
   assert.equal(summary.complete_through_index, 11);
   assert.equal(summary.complete, true);
   assert.equal(summary.readback_status, "verified");
+  assert.equal(summary.circle_write_count, writes);
+  assert.equal(summary.circle_tx_hashes.length, writes);
+  assert.equal(summary.circle_ou_total, String(writes * 1000));
 });
 
 test("lab mirror performs no Circle writes when already complete", async () => {

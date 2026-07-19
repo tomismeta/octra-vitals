@@ -18,13 +18,23 @@ export interface OctraSqliteResult {
   ok: boolean;
   row_count: number;
   rows: unknown[][];
+  write?: OctraSqliteWriteSummary;
+}
+
+export interface OctraSqliteWriteSummary {
+  type: string | null;
+  status: string | null;
+  write_count: number;
+  tx_hashes: string[];
+  ou_costs: string[];
+  total_ou: string | null;
 }
 
 interface OctraSqliteWriteReceipt {
   ok?: boolean;
   type?: string;
   status?: string;
-  writes?: Array<{ status?: string }>;
+  writes?: Array<Record<string, unknown> & { status?: string }>;
   receipt?: {
     success?: boolean;
     error?: unknown;
@@ -34,6 +44,9 @@ interface OctraSqliteWriteReceipt {
     tx_hash?: string;
   };
   tx_hash?: string;
+  ou?: string | number;
+  ou_cost?: string | number;
+  cost_ou?: string | number;
 }
 
 export interface OctraSqliteQueryResult {
@@ -210,6 +223,63 @@ function successfulOctraSqliteWrite(parsed: OctraSqliteWriteReceipt): boolean {
   return false;
 }
 
+function txHashValue(value: unknown): string | null {
+  return typeof value === "string" && /^[0-9a-fA-F]{16,}$/.test(value.trim()) ? value.trim() : null;
+}
+
+function ouCostValue(value: unknown): string | null {
+  if (typeof value === "number" && Number.isSafeInteger(value) && value >= 0) return String(value);
+  if (typeof value !== "string") return null;
+  const trimmed = value.trim();
+  return /^\d+$/.test(trimmed) ? trimmed : null;
+}
+
+function addOuCost(value: unknown, out: string[]): void {
+  const parsed = ouCostValue(value);
+  if (parsed !== null) out.push(parsed);
+}
+
+function addTxHash(value: unknown, out: Set<string>): void {
+  const parsed = txHashValue(value);
+  if (parsed !== null) out.add(parsed);
+}
+
+function summarizeOctraSqliteWrite(parsed: OctraSqliteWriteReceipt): OctraSqliteWriteSummary {
+  const txHashes = new Set<string>();
+  const ouCosts: string[] = [];
+  const writes = Array.isArray(parsed.writes) ? parsed.writes : [];
+
+  addTxHash(parsed.tx_hash, txHashes);
+  addTxHash(parsed.result?.tx_hash, txHashes);
+  addOuCost(parsed.ou_cost, ouCosts);
+  addOuCost(parsed.cost_ou, ouCosts);
+  addOuCost(parsed.ou, ouCosts);
+
+  for (const write of writes) {
+    addTxHash(write.tx_hash, txHashes);
+    addTxHash((write.result as Record<string, unknown> | undefined)?.tx_hash, txHashes);
+    addOuCost(write.ou_cost, ouCosts);
+    addOuCost(write.cost_ou, ouCosts);
+    addOuCost(write.ou, ouCosts);
+    addOuCost((write.result as Record<string, unknown> | undefined)?.ou_cost, ouCosts);
+    addOuCost((write.result as Record<string, unknown> | undefined)?.cost_ou, ouCosts);
+    addOuCost((write.result as Record<string, unknown> | undefined)?.ou, ouCosts);
+  }
+
+  const total = ouCosts.length
+    ? ouCosts.reduce((sum, value) => sum + BigInt(value), 0n).toString()
+    : null;
+
+  return {
+    type: typeof parsed.type === "string" ? parsed.type : null,
+    status: typeof parsed.status === "string" ? parsed.status : (typeof parsed.result?.status === "string" ? parsed.result.status : null),
+    write_count: writes.length || txHashes.size || (successfulOctraSqliteWrite(parsed) ? 1 : 0),
+    tx_hashes: [...txHashes],
+    ou_costs: ouCosts,
+    total_ou: total
+  };
+}
+
 export function parseOctraSqliteOutput(stdout: string): OctraSqliteResult {
   const parsed = JSON.parse(stdout) as Record<string, unknown> & OctraSqliteWriteReceipt;
   if (parsed.ok === false) {
@@ -219,7 +289,12 @@ export function parseOctraSqliteOutput(stdout: string): OctraSqliteResult {
   const query = normalizeOctraSqliteQuery(parsed);
   if (query) return query;
 
-  if (successfulOctraSqliteWrite(parsed)) return emptyOctraSqliteResult();
+  if (successfulOctraSqliteWrite(parsed)) {
+    return {
+      ...emptyOctraSqliteResult(),
+      write: summarizeOctraSqliteWrite(parsed)
+    };
+  }
 
   throw new Error(`octra_sqlite_result_shape_invalid: ${stdout.slice(0, 1000)}`);
 }
