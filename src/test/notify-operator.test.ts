@@ -82,18 +82,18 @@ function healthySummary(overrides: Partial<OperatorSummary> = {}): OperatorSumma
         snapshot_ou: "4000",
         lab_mirror_writes: 4,
         lab_mirror_ou: "4000",
-        deploy_writes: 0,
-        deploy_ou: "0",
-        total_ou: "8000"
+        deploy_writes: 1,
+        deploy_ou: "20000",
+        total_ou: "28000"
       },
       last_24h: {
         snapshot_writes: 96,
         snapshot_ou: "96000",
         lab_mirror_writes: 96,
         lab_mirror_ou: "96000",
-        deploy_writes: 0,
-        deploy_ou: "0",
-        total_ou: "192000"
+        deploy_writes: 1,
+        deploy_ou: "20000",
+        total_ou: "212000"
       },
       wallet: {
         address: "oct3biwr26gwcgxM1TkHSxMN74KHQgJqry331CmpAuNzq6R",
@@ -101,7 +101,7 @@ function healthySummary(overrides: Partial<OperatorSummary> = {}): OperatorSumma
         balance_oct: "10",
         nonce: 5558,
         pending_nonce: 5558,
-        daily_spend_ou: "192000",
+        daily_spend_ou: "212000",
         runway_days: 52,
         error: null
       }
@@ -326,11 +326,11 @@ test("operator digest is compact and uses aggregate traffic, not raw client deta
   assert.match(digest, /<b>Octra Vitals digest<\/b> <code>OK<\/code>/);
   assert.match(digest, /<b>Last hour<\/b> <code>20:00-21:00 UTC<\/code>/);
   assert.match(digest, /Web: <b>25<\/b> req, <b>7<\/b> unique browser\/IP hashes/);
-  assert.match(digest, /Spend: snapshot 0\.004 OCT \(4\), lab 0\.004 OCT \(4\), deploy 0 OCT, total 0\.008 OCT/);
+  assert.match(digest, /Spend: snapshot 0\.004 OCT \(4\), lab 0\.004 OCT \(4\), deploy 0\.02 OCT, total 0\.028 OCT/);
   assert.match(digest, /Home: 5 req, 4 unique \| API latest: 8/);
   assert.match(digest, /<b>24h topline<\/b> <code>Jun 15 21:00-Jun 16 21:00 UTC<\/code>/);
   assert.match(digest, /Web: 500 req, 32 unique browser\/IP hashes/);
-  assert.match(digest, /Spend: snapshot 0\.096 OCT \(96\), lab 0\.096 OCT \(96\), deploy 0 OCT, total 0\.192 OCT/);
+  assert.match(digest, /Spend: snapshot 0\.096 OCT \(96\), lab 0\.096 OCT \(96\), deploy 0\.02 OCT, total 0\.212 OCT/);
   assert.match(digest, /Home: 80 req, 20 unique \| API latest: 100/);
   assert.match(digest, /Archive: 505 raw files/);
   assert.match(digest, /Wallet: oct3biwr26\.\.\.uNzq6R \| 10 OCT, ~52d runway \| nonce 5558/);

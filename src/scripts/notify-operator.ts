@@ -182,6 +182,15 @@ interface LabMirrorSpendRow {
   ou: string | null;
 }
 
+interface DeploymentSpendRow {
+  generated_at: string;
+  source_generated_at: string | null;
+  kind: string;
+  source_status: string;
+  write_count: number;
+  ou: string | null;
+}
+
 function isDirectCli(metaUrl: string, argvPath: string | undefined): boolean {
   if (!argvPath) return false;
   try {
@@ -566,6 +575,26 @@ async function readLabMirrorSpendRows(dataDir: string): Promise<LabMirrorSpendRo
   return rows.sort((a, b) => a.generated_at.localeCompare(b.generated_at));
 }
 
+async function readDeploymentSpendRows(dataDir: string): Promise<DeploymentSpendRow[]> {
+  const runsDir = resolve(process.env.VITALS_NOTIFY_DEPLOYMENT_RUNS_DIR || process.env.VITALS_DEPLOYMENT_RUNS_DIR || join(dataDir, "deployment-runs"));
+  const dirs = await readdir(runsDir, { withFileTypes: true }).catch(() => []);
+  const rows: DeploymentSpendRow[] = [];
+  for (const entry of dirs) {
+    if (!entry.isDirectory()) continue;
+    const report = await readJsonFile(join(runsDir, entry.name, "deployment_spend_report.json"));
+    if (!report || report.schema !== "octra-vitals-deployment-spend-report-v0") continue;
+    rows.push({
+      generated_at: text(report.generated_at) || "",
+      source_generated_at: text(report.source_generated_at),
+      kind: text(report.kind) || "deployment",
+      source_status: text(report.source_status) || "unknown",
+      write_count: Number.isFinite(Number(report.write_count)) ? Number(report.write_count) : 0,
+      ou: bigintText(report.total_ou)
+    });
+  }
+  return rows.sort((a, b) => a.generated_at.localeCompare(b.generated_at));
+}
+
 function spendFromLabRows(rows: LabMirrorSpendRow[], startAt: string, endAt: string): { writes: number; ou: string } {
   let ou = "0";
   let writes = 0;
@@ -577,23 +606,45 @@ function spendFromLabRows(rows: LabMirrorSpendRow[], startAt: string, endAt: str
   return { writes, ou };
 }
 
+function deploymentSpendTime(row: DeploymentSpendRow): string | null {
+  return row.source_generated_at || row.generated_at || null;
+}
+
+function deploymentStatusCounts(row: DeploymentSpendRow): boolean {
+  return !/^(dry_run|no_changes|failed_before_submission)$/i.test(row.source_status) &&
+    row.write_count > 0 &&
+    row.ou !== null;
+}
+
+function spendFromDeploymentRows(rows: DeploymentSpendRow[], startAt: string, endAt: string): { writes: number; ou: string } {
+  let ou = "0";
+  let writes = 0;
+  for (const row of rows) {
+    if (!deploymentStatusCounts(row) || !withinPeriod(deploymentSpendTime(row), startAt, endAt)) continue;
+    writes += row.write_count;
+    ou = addRaw(ou, row.ou);
+  }
+  return { writes, ou };
+}
+
 function spendPeriod(
   snapshotRows: SnapshotRunRow[],
   labRows: LabMirrorSpendRow[],
+  deploymentRows: DeploymentSpendRow[],
   startAt: string,
   endAt: string
 ): SpendPeriodSummary {
   const snapshot = spendFromSnapshotRows(snapshotRows, startAt, endAt);
   const lab = spendFromLabRows(labRows, startAt, endAt);
-  const deployOu = "0";
-  const total = addRaw(addRaw(snapshot.ou, lab.ou), deployOu);
+  const deploy = spendFromDeploymentRows(deploymentRows, startAt, endAt);
+  const total = addRaw(addRaw(snapshot.ou, lab.ou), deploy.ou);
   return {
     snapshot_writes: snapshot.writes,
     snapshot_ou: snapshot.ou,
     lab_mirror_writes: lab.writes,
     lab_mirror_ou: lab.ou,
-    deploy_writes: 0,
-    deploy_ou: deployOu,
+    deploy_writes: deploy.writes,
+    deploy_ou: deploy.ou,
     total_ou: total
   };
 }
@@ -676,12 +727,13 @@ async function summarizeOperatorWallet(address: string | null, dailySpendOu: str
 }
 
 async function summarizeSpend(dataDir: string, periods: OperatorPeriods): Promise<SpendSummary> {
-  const [snapshotRows, labRows] = await Promise.all([
+  const [snapshotRows, labRows, deploymentRows] = await Promise.all([
     readSnapshotRunRows(dataDir),
-    readLabMirrorSpendRows(dataDir)
+    readLabMirrorSpendRows(dataDir),
+    readDeploymentSpendRows(dataDir)
   ]);
-  const lastHour = spendPeriod(snapshotRows, labRows, periods.last_hour_start_at, periods.last_hour_end_at);
-  const last24h = spendPeriod(snapshotRows, labRows, periods.last_24h_start_at, periods.last_24h_end_at);
+  const lastHour = spendPeriod(snapshotRows, labRows, deploymentRows, periods.last_hour_start_at, periods.last_hour_end_at);
+  const last24h = spendPeriod(snapshotRows, labRows, deploymentRows, periods.last_24h_start_at, periods.last_24h_end_at);
   const wallet = await summarizeOperatorWallet(operatorAddressFromRows(snapshotRows), last24h.total_ou);
   return {
     last_hour: lastHour,

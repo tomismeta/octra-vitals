@@ -112,6 +112,15 @@ sudo -u "${APP_OWNER_USER}" env -i \
   node dist/scripts/deploy-site-circle.js "$2"
 ' bash "${CURRENT}" "${OWNER_DIR}/lab-site-circle-deploy.json" "${SITE_DEPLOY_ENV}"
 
+DATA_DIR="${VITALS_DATA_DIR:-/var/lib/octra-vitals}"
+install -d -m 750 -o root -g "${APP_USER}" "${DATA_DIR}/deployment-runs"
+node dist/scripts/archive-deploy-spend-report.js \
+  --kind lab_assets \
+  --report "${OWNER_DIR}/lab-site-circle-deploy.json" \
+  --out-dir "${DATA_DIR}/deployment-runs" || echo "warning: lab deployment spend archival failed" >&2
+chgrp -R "${APP_USER}" "${DATA_DIR}/deployment-runs" || true
+chmod -R g+rX "${DATA_DIR}/deployment-runs" || true
+
 LAB_CIRCLE_ID="$(node -e '
 const fs = require("fs");
 const path = process.argv[1];

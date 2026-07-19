@@ -262,7 +262,16 @@ sudo bash /opt/octra-vitals/current/deploy/mainnet/configure-telegram-notify.sh
 
 Alerts run every five minutes and de-duplicate repeated failures. Digests run hourly and report the last completed UTC hour plus a 24-hour topline.
 
-Operator digests also include known OCT spend from local run evidence: confirmed AML snapshot writes, successful Lab mirror writes reported by `octra-sqlite`, and any deployment spend that is explicitly reported. Wallet balance/runway alerts are based on the hot operator public address and one read-only `octra_balance` probe; if that probe is unavailable, the notifier records the error but does not page on an unknown balance.
+Operator digests also include known OCT spend from local run evidence: confirmed AML snapshot writes, successful Lab mirror writes reported by `octra-sqlite`, and sanitized deployment spend reports under `deployment-runs/`. Wallet balance/runway alerts are based on the hot operator public address and one read-only `octra_balance` probe; if that probe is unavailable, the notifier records the error but does not page on an unknown balance.
+
+Deploy scripts keep full owner reports in the owner-only data directory, then copy only public spend facts into `VITALS_DATA_DIR/deployment-runs`: kind, source status, circle id, public transaction hashes, and OU cost. To archive an older deploy report manually:
+
+```bash
+sudo node /opt/octra-vitals/current/dist/scripts/archive-deploy-spend-report.js \
+  --kind site_assets \
+  --report /var/lib/octra-vitals-owner/site-circle-deploy.json \
+  --out-dir /var/lib/octra-vitals/deployment-runs
+```
 
 Useful wallet notification knobs:
 

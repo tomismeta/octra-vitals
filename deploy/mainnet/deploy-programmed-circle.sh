@@ -2,6 +2,7 @@
 set -euo pipefail
 
 APP_OWNER_USER="${APP_OWNER_USER:-octra-vitals-owner}"
+APP_USER="${APP_USER:-octra-vitals}"
 APP_ROOT="${APP_ROOT:-/opt/octra-vitals}"
 OWNER_DIR="${VITALS_OWNER_DATA_DIR:-/var/lib/octra-vitals-owner}"
 ENV_DIR="${ENV_DIR:-/etc/octra-vitals}"
@@ -86,3 +87,12 @@ sudo -u "${APP_OWNER_USER}" env -i \
   umask 077
   node dist/scripts/deploy-programmed-circle.js "$2"
 ' bash "${CURRENT}" "${REPORT}" "${DEPLOY_ENV}"
+
+DATA_DIR="${VITALS_DATA_DIR:-/var/lib/octra-vitals}"
+install -d -m 750 -o root -g "${APP_USER}" "${DATA_DIR}/deployment-runs"
+node dist/scripts/archive-deploy-spend-report.js \
+  --kind program_deploy \
+  --report "${REPORT}" \
+  --out-dir "${DATA_DIR}/deployment-runs" || echo "warning: program deployment spend archival failed" >&2
+chgrp -R "${APP_USER}" "${DATA_DIR}/deployment-runs" || true
+chmod -R g+rX "${DATA_DIR}/deployment-runs" || true
