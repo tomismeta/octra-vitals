@@ -111,6 +111,11 @@ systemctl status octra-vitals-watchdog.timer
 journalctl -u octra-vitals-updater.service --since "24 hours ago"
 ```
 
+The updater is a timer-driven oneshot. Failed writes wait for the next
+15-minute timer interval; the service must not use `Restart=on-failure`,
+because permanent failures such as `insufficient balance` would otherwise loop
+and repeatedly hit mainnet RPC.
+
 Through the gateway:
 
 ```bash

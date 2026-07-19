@@ -20,8 +20,9 @@ Environment=NPM_CONFIG_CACHE=/var/lib/octra-vitals/npm-cache
 EnvironmentFile=-/etc/octra-vitals/updater.env
 ExecStart=/usr/bin/node /opt/octra-vitals/current/dist/scripts/run-snapshot-update.js
 TimeoutStartSec=600
-Restart=on-failure
-RestartSec=45s
+# The timer owns retry cadence. Do not auto-restart a failed oneshot here:
+# permanent failures such as an unfunded operator wallet should not loop and
+# repeatedly submit/hammer RPC between scheduled intervals.
 NoNewPrivileges=yes
 PrivateTmp=yes
 PrivateDevices=yes
