@@ -264,6 +264,8 @@ Alerts run every five minutes and de-duplicate repeated failures. Digests run ho
 
 Operator digests also include known OCT spend from local run evidence: confirmed AML snapshot writes, successful Lab mirror writes reported by `octra-sqlite`, and sanitized deployment spend reports under `deployment-runs/`. Wallet balance/runway alerts are based on the hot operator public address and one read-only `octra_balance` probe; if that probe is unavailable, the notifier records the error but does not page on an unknown balance.
 
+The snapshot updater collects a fenced source observation before submitting to AML. Production uses `VITALS_COLLECT_ATTEMPTS=3` so a single moment of Octra RPC state movement does not create a stale-site incident. These retries happen before transaction submission; failed collection attempts do not spend OCT.
+
 Deploy scripts keep full owner reports in the owner-only data directory, then copy only public spend facts into `VITALS_DATA_DIR/deployment-runs`: kind, source status, circle id, public transaction hashes, and OU cost. To archive an older deploy report manually:
 
 ```bash

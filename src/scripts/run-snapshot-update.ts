@@ -298,7 +298,7 @@ export async function acquireLock(lockPath: string, runId: string, staleMs: numb
 }
 
 async function collectLiveSnapshotWithRetries(attempts: Array<Record<string, unknown>>): Promise<{ snapshot: Awaited<ReturnType<typeof buildLiveSnapshot>>; attempts: Array<Record<string, unknown>> }> {
-  const maxAttempts = envInt("VITALS_COLLECT_ATTEMPTS", 2, 1, 10);
+  const maxAttempts = envInt("VITALS_COLLECT_ATTEMPTS", 3, 1, 10);
   const retryDelayMs = envInt("VITALS_COLLECT_RETRY_DELAY_MS", 15_000, 0, 300_000);
   for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
     const started = performance.now();

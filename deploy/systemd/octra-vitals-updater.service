@@ -16,6 +16,7 @@ Environment=VITALS_UPDATE_RETENTION_MAX_RUNS=672
 Environment=VITALS_UPDATE_RETENTION_MAX_AGE_MS=604800000
 Environment=VITALS_UPDATE_EVIDENCE_RETENTION_MAX_AGE_MS=31536000000
 Environment=VITALS_LAB_HISTORY_TRIGGER_PATH=/var/lib/octra-vitals/lab-history-trigger/latest.json
+Environment=VITALS_COLLECT_ATTEMPTS=3
 Environment=NPM_CONFIG_CACHE=/var/lib/octra-vitals/npm-cache
 EnvironmentFile=-/etc/octra-vitals/updater.env
 ExecStart=/usr/bin/node /opt/octra-vitals/current/dist/scripts/run-snapshot-update.js
