@@ -177,13 +177,13 @@ let historyMetrics = {
 };
 let liveVerificationCache: { address: string; checked_at: string; value: Record<string, any> } | null = null;
 let circleProgramVerificationCache: { circle_id: string; checked_at: string; value: Record<string, any> } | null = null;
-let circleMetadataCache: { circle_id: string; checked_at: number; value: CircleMetadata } | null = null;
-let circleMetadataReadInFlight: { circle_id: string; promise: Promise<CircleMetadata> } | null = null;
+let circleMetadataCache: { cache_key: string; circle_id: string; rpc_url: string | null; checked_at: number; value: CircleMetadata } | null = null;
+let circleMetadataReadInFlight: { cache_key: string; promise: Promise<CircleMetadata> } | null = null;
 let activeLabQueries = 0;
 const labQueryRates = new Map<string, { startedAt: number; count: number }>();
 let labQueryGlobalRate = { startedAt: 0, count: 0 };
-let siteIntegrityCache: { circle_id: string; checked_at: string; value: Record<string, any> } | null = null;
-let siteIntegrityReadInFlight: { circle_id: string; promise: Promise<Record<string, any> | null> } | null = null;
+let siteIntegrityCache: { cache_key: string; circle_id: string; rpc_url: string | null; checked_at: string; value: Record<string, any> } | null = null;
+let siteIntegrityReadInFlight: { cache_key: string; promise: Promise<Record<string, any> | null> } | null = null;
 let nativeReceiptProofCache = new Map<string, {
   cachedAt: number;
   value: Record<string, any>;
@@ -922,6 +922,20 @@ function extractCircleAssetBytes(value: any): Buffer | null {
   return null;
 }
 
+function siteCircleRpcUrl(): string | null {
+  const configured =
+    process.env.VITALS_SITE_CIRCLE_RPC_URL ||
+    process.env.VITALS_SITE_ASSET_RPC_URL ||
+    process.env.VITALS_ASSET_CIRCLE_RPC_URL ||
+    "";
+  const trimmed = configured.trim();
+  return trimmed.length > 0 ? trimmed : null;
+}
+
+function circleRpcCacheKey(circleId: string, rpcUrl: string | null): string {
+  return `${circleId}\n${rpcUrl || "default"}`;
+}
+
 function circleMetadataFromInfo(info: any, error: string | null = null): CircleMetadata {
   const stableRoot = typeof info?.stable_root === "string" && info.stable_root.length > 0 ? info.stable_root : null;
   const assetsRoot = typeof info?.assets_root === "string" && info.assets_root.length > 0 ? info.assets_root : null;
@@ -936,35 +950,36 @@ function circleMetadataFromInfo(info: any, error: string | null = null): CircleM
   };
 }
 
-async function loadCircleMetadata(circleId: string): Promise<CircleMetadata> {
+async function loadCircleMetadata(circleId: string, rpcUrl: string | null = null): Promise<CircleMetadata> {
+  const cacheKey = circleRpcCacheKey(circleId, rpcUrl);
   const cacheMs = nonNegativeIntegerEnv("VITALS_CIRCLE_METADATA_CACHE_MS", 60_000);
-  if (circleMetadataCache?.circle_id === circleId && Date.now() - circleMetadataCache.checked_at < cacheMs) {
+  if (circleMetadataCache?.cache_key === cacheKey && Date.now() - circleMetadataCache.checked_at < cacheMs) {
     return circleMetadataCache.value;
   }
-  if (circleMetadataReadInFlight?.circle_id === circleId) return circleMetadataReadInFlight.promise;
+  if (circleMetadataReadInFlight?.cache_key === cacheKey) return circleMetadataReadInFlight.promise;
 
   const promise = (async () => {
     try {
-      const info = await octraRpc<any>("circle_info", [circleId]);
+      const info = await octraRpc<any>("circle_info", [circleId], rpcUrl ? { url: rpcUrl } : undefined);
       const value = circleMetadataFromInfo(info);
-      circleMetadataCache = { circle_id: circleId, checked_at: Date.now(), value };
+      circleMetadataCache = { cache_key: cacheKey, circle_id: circleId, rpc_url: rpcUrl, checked_at: Date.now(), value };
       return value;
     } catch (error) {
       const value = circleMetadataFromInfo(null, error instanceof Error ? error.message : String(error));
-      circleMetadataCache = { circle_id: circleId, checked_at: Date.now(), value };
+      circleMetadataCache = { cache_key: cacheKey, circle_id: circleId, rpc_url: rpcUrl, checked_at: Date.now(), value };
       return value;
     }
   })().finally(() => {
     if (circleMetadataReadInFlight?.promise === promise) circleMetadataReadInFlight = null;
   });
-  circleMetadataReadInFlight = { circle_id: circleId, promise };
+  circleMetadataReadInFlight = { cache_key: cacheKey, promise };
   return promise;
 }
 
 async function loadCircleMetadataForStaticHeaders(circleId: string): Promise<CircleMetadata> {
   const timeoutMs = nonNegativeIntegerEnv("VITALS_CIRCLE_METADATA_HEADER_TIMEOUT_MS", 350);
   const fallback = circleMetadataFromInfo(null, timeoutMs <= 0 ? "circle_info_deferred" : "circle_info_header_timeout");
-  const read = loadCircleMetadata(circleId);
+  const read = loadCircleMetadata(circleId, siteCircleRpcUrl());
   if (timeoutMs <= 0) return fallback;
   return Promise.race([
     read,
@@ -1029,24 +1044,26 @@ function assetVerificationStatus(assetResults: Array<Record<string, any>>, relea
 async function loadSiteIntegrity(manifest: Record<string, any>): Promise<Record<string, any> | null> {
   const circleId = chooseValue(process.env.VITALS_SITE_CIRCLE_ID, manifest.site_circle_id);
   if (!circleId || circleId === "pending") return null;
+  const rpcUrl = siteCircleRpcUrl();
+  const cacheKey = circleRpcCacheKey(circleId, rpcUrl);
   const cacheMs = nonNegativeIntegerEnv("VITALS_SITE_INTEGRITY_CACHE_MS", 60 * 60_000);
   const failureCacheMs = nonNegativeIntegerEnv("VITALS_SITE_INTEGRITY_FAILURE_CACHE_MS", 5 * 60_000);
   const cachedTtl = siteIntegrityCache?.value?.circle_assets_match === true ? cacheMs : failureCacheMs;
-  if (siteIntegrityCache?.circle_id === circleId && Date.now() - Date.parse(siteIntegrityCache.checked_at) < cachedTtl) {
+  if (siteIntegrityCache?.cache_key === cacheKey && Date.now() - Date.parse(siteIntegrityCache.checked_at) < cachedTtl) {
     return siteIntegrityCache.value;
   }
-  if (siteIntegrityReadInFlight?.circle_id === circleId) return siteIntegrityReadInFlight.promise;
+  if (siteIntegrityReadInFlight?.cache_key === cacheKey) return siteIntegrityReadInFlight.promise;
 
-  const promise = computeSiteIntegrity(circleId).finally(() => {
+  const promise = computeSiteIntegrity(circleId, rpcUrl).finally(() => {
     if (siteIntegrityReadInFlight?.promise === promise) siteIntegrityReadInFlight = null;
   });
-  siteIntegrityReadInFlight = { circle_id: circleId, promise };
+  siteIntegrityReadInFlight = { cache_key: cacheKey, promise };
   return promise;
 }
 
-async function computeSiteIntegrity(circleId: string): Promise<Record<string, any> | null> {
+async function computeSiteIntegrity(circleId: string, rpcUrl: string | null = null): Promise<Record<string, any> | null> {
   const checkedAt = new Date().toISOString().replace(/\.\d{3}Z$/, "Z");
-  const circleMetadata = await loadCircleMetadata(circleId);
+  const circleMetadata = await loadCircleMetadata(circleId, rpcUrl);
   const release = await readJsonIfExists<Record<string, any>>(join(root, "build", "site-circle-release.json"));
   const releaseAssets = Array.isArray(release?.assets) ? release.assets as Array<Record<string, any>> : [];
   const releaseByPath = new Map<string, Record<string, any>>();
@@ -1087,7 +1104,7 @@ async function computeSiteIntegrity(circleId: string): Promise<Record<string, an
       circleError = "release_manifest_missing_pinned_hash";
     } else {
       try {
-        const circleAsset = await octraRpc<any>("circle_asset", [circleId, path]);
+        const circleAsset = await octraRpc<any>("circle_asset", [circleId, path], rpcUrl ? { url: rpcUrl } : undefined);
         const bytes = extractCircleAssetBytes(circleAsset);
         if (!bytes) throw new Error("circle_asset did not return bytes");
         const integrity = verifyCircleAssetIntegrity(circleId, path, bytes, circleAsset || {});
@@ -1127,6 +1144,7 @@ async function computeSiteIntegrity(circleId: string): Promise<Record<string, an
   const value = {
     checked_at: checkedAt,
     circle_id: circleId,
+    circle_rpc_url: rpcUrl,
     circle_stable_root: circleMetadata.stable_root,
     circle_assets_root: circleMetadata.assets_root,
     circle_code_hash: circleMetadata.code_hash,
@@ -1147,7 +1165,7 @@ async function computeSiteIntegrity(circleId: string): Promise<Record<string, an
     local_mismatch_assets: verification.local_mismatch_assets,
     assets: assetResults
   };
-  siteIntegrityCache = { circle_id: circleId, checked_at: checkedAt, value };
+  siteIntegrityCache = { cache_key: circleRpcCacheKey(circleId, rpcUrl), circle_id: circleId, rpc_url: rpcUrl, checked_at: checkedAt, value };
   return value;
 }
 
