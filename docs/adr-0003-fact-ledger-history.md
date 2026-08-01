@@ -26,6 +26,10 @@ The latest snapshot remains rich and AML-readable: full payload, evidence manife
 
 The first public shape may include a dormant typed-metric surface. It costs little when inactive and provides a controlled path for future durable scalar facts. Activation requires explicit registration, sorted auxiliary rows, readback tests, and soak evidence.
 
+The public AML ABI is intentionally small. Fact-family getters are the canonical read surface; core-only convenience aliases and constant getters are not part of the long-term contract. This keeps the program compatible with stricter runtimes that validate lowered jump labels and treats public AML methods as scarce protocol surface.
+
+Gateway APIs continue to expose stable, normalized `/api/latest` and `/api/history` responses. The gateway translates strict family reads into the existing JSON contract. The SQLite lab mirror remains downstream: it writes only after AML success/readback, and its query APIs must tolerate the strict ABI without becoming a second source of truth.
+
 ## Non-Goals
 
 - Store historical full RPC bodies in AML.
@@ -39,4 +43,5 @@ The first public shape may include a dormant typed-metric surface. It costs litt
 - The core row should change rarely.
 - New chains usually enter the latest payload first.
 - Durable new scalar history should use auxiliary fact families instead of widening the core row.
+- Removing or renaming public AML methods is a successor-era change. In-place updates must remain ABI-compatible unless an explicit new-era artifact refresh is acknowledged.
 - Mainnet promotion requires the current release gates in [Readiness](readiness.md).

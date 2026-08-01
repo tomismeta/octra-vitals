@@ -7,10 +7,12 @@ import {
   assertAmlCompileApproved,
   assertAmlCompilerAgreement,
   assertPreviousCompileApproved,
+  normalizeSha256,
   readApprovedAmlRelease,
   validateAmlCompile,
   type AmlCompileResult
 } from "../lib/aml-artifacts.js";
+import { assertNoDuplicateJdestLabels } from "../lib/aml-lowered-oasm.js";
 import { isExplicitDevelopmentRpcUrl, octraProgramRpcUrls, octraRpc, rpcUrlLabel } from "../lib/octra-rpc.js";
 
 const root = resolve(new URL("../..", import.meta.url).pathname);
@@ -19,9 +21,28 @@ const artifactDir = join(root, "program-fact-ledger");
 const buildDir = join(root, "build", "program-fact-ledger");
 const approvedPath = join(artifactDir, "approved-release.json");
 const refreshPins = process.argv.includes("--refresh-pins");
+const releaseMode = process.env.VITALS_AML_RELEASE_MODE || "in_place";
+if (releaseMode !== "in_place" && releaseMode !== "new_era") {
+  throw new Error("VITALS_AML_RELEASE_MODE must be in_place or new_era");
+}
 
 function stableJson(value: unknown): string {
   return `${JSON.stringify(value, null, 2)}\n`;
+}
+
+function abiFromCompileArtifact(value: Record<string, unknown>): unknown {
+  const directAbi = value.abi;
+  if (directAbi) return typeof directAbi === "string" ? JSON.parse(directAbi) : directAbi;
+  const result = value.result;
+  if (result && typeof result === "object" && "abi" in result) {
+    const resultAbi = (result as Record<string, unknown>).abi;
+    if (resultAbi) return typeof resultAbi === "string" ? JSON.parse(resultAbi) : resultAbi;
+  }
+  throw new Error("previous approved compile artifact does not contain an ABI");
+}
+
+function sourceHashFromCompileArtifact(value: Record<string, unknown>): string | null {
+  return normalizeSha256(value.source_hash) || normalizeSha256((value.certificate as Record<string, unknown> | undefined)?.source_hash);
 }
 
 async function writeJson(path: string, value: unknown): Promise<void> {
@@ -96,19 +117,25 @@ if (refreshPins) {
   if (process.env.VITALS_REFRESH_AML_PINS_ACK !== expectedAck) {
     throw new Error(`--refresh-pins requires VITALS_REFRESH_AML_PINS_ACK=${expectedAck}`);
   }
+  const allowNewEraAbiBreak = releaseMode === "new_era" && process.env.VITALS_REFRESH_AML_ABI_BREAK_ACK === expectedAck;
   if (primary.value.state_layout_hash !== currentApproved.state_layout_hash) {
     throw new Error("AML state layout changed; create a separately reviewed new era instead of refreshing in-place pins");
   }
-  assertAmlAbiBackwardCompatible(
-    JSON.parse(await readFile(join(artifactDir, "abi.json"), "utf8")),
-    typeof primary.value.result.abi === "string" ? JSON.parse(primary.value.result.abi) : primary.value.result.abi
-  );
+  if (!allowNewEraAbiBreak) {
+    if (!previousApprovedCompile) throw new Error("pin refresh requires a previous approved compile for ABI comparison");
+    assertAmlAbiBackwardCompatible(
+      abiFromCompileArtifact(previousApprovedCompile),
+      typeof primary.value.result.abi === "string" ? JSON.parse(primary.value.result.abi) : primary.value.result.abi
+    );
+  }
 } else {
   assertAmlCompileApproved(primary.value, currentApproved);
 }
 
 const result = primary.value.result;
 const abi = typeof result.abi === "string" ? JSON.parse(result.abi) : result.abi;
+const disasm = String(result.disasm || "");
+const jdestInspection = assertNoDuplicateJdestLabels(disasm);
 const compileArtifact = {
   schema: "octra-vitals-fact-ledger-program-compile-v2",
   generated_at: new Date().toISOString().replace(/\.\d{3}Z$/, "Z"),
@@ -126,20 +153,23 @@ const compileArtifact = {
   compiler_rpc_urls: urls.map(rpcUrlLabel),
   compiler_rpc_agreement: true,
   abi,
-  disasm: result.disasm,
+  disasm,
   verification: result.verification || null,
   certificate: result.certificate || null
 };
 
 await mkdir(buildDir, { recursive: true });
-if (refreshPins && previousApprovedCompile) {
+const previousApprovedCompileIsCandidate = previousApprovedCompile
+  ? sourceHashFromCompileArtifact(previousApprovedCompile) === primary.value.source_hash
+  : false;
+if (refreshPins && previousApprovedCompile && !previousApprovedCompileIsCandidate) {
   await writeJson(join(buildDir, "previous-approved-compile.json"), previousApprovedCompile);
   await writeJson(join(artifactDir, "previous-approved-compile.json"), previousApprovedCompile);
 }
 await writeJson(join(buildDir, "compile.json"), compileArtifact);
 if (refreshPins) {
   await writeJson(join(artifactDir, "abi.json"), abi);
-  await writeFile(join(artifactDir, "lowered.oasm"), `${String(result.disasm || "").trim()}\n`);
+  await writeFile(join(artifactDir, "lowered.oasm"), `${disasm.trim()}\n`);
   await writeJson(join(artifactDir, "formal_verification.json"), result.verification || {});
   await writeJson(join(artifactDir, "formal_certificate.json"), result.certificate || {});
   await writeJson(approvedPath, approvedAmlRelease(primary.value));
@@ -156,7 +186,14 @@ console.log(stableJson({
   compiler_rpc_urls: urls.map(rpcUrlLabel),
   compiler_rpc_agreement: true,
   outputs: ["build/program-fact-ledger/compile.json"],
-  previous_approved_compile: refreshPins ? "build/program-fact-ledger/previous-approved-compile.json" : null,
+  previous_approved_compile: refreshPins && previousApprovedCompile && !previousApprovedCompileIsCandidate
+    ? "build/program-fact-ledger/previous-approved-compile.json"
+    : null,
   previous_approved_compile_input: previousApprovedCompileInput?.replace(`${root}/`, "") || null,
+  previous_approved_compile_preserved: Boolean(refreshPins && previousApprovedCompile && !previousApprovedCompileIsCandidate),
+  aml_release_mode: refreshPins ? releaseMode : null,
+  abi_break_acknowledged: refreshPins && releaseMode === "new_era" && process.env.VITALS_REFRESH_AML_ABI_BREAK_ACK === primary.value.source_hash,
+  jdest_labels: jdestInspection.labels,
+  duplicate_jdest_labels: 0,
   pinned_artifacts_updated: refreshPins
 }));

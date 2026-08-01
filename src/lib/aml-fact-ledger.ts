@@ -21,6 +21,7 @@ export const FACT_LEDGER_PACKED_METRIC_SLOT_LEN = 42;
 export const FACT_LEDGER_FAMILY_DEFINITION_LEN = 702;
 export const FACT_LEDGER_FAMILY_STATE_LEN = 338;
 export const FACT_LEDGER_CAPSULE_META_LEN = 577;
+export const FACT_LEDGER_CAPSULE_ROW_LIMIT = 48;
 export const FACT_LEDGER_ROW_HASH_DOMAIN = "octra-vitals:fact-row:v1";
 export const FACT_LEDGER_FAMILY_ROOT_DOMAIN = "octra-vitals:fact-family-root:v1";
 export const FACT_LEDGER_FAMILY_CAPSULES_ROOT_DOMAIN = "octra-vitals:fact-family-capsules-root:v1";

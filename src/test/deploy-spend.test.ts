@@ -62,19 +62,17 @@ test("deployment spend sanitizer extracts programmed Circle deployment calls", (
     },
     deploy_tx_hash: "b".repeat(64),
     program_update_tx_hash: "c".repeat(64),
-    initialize_tx_hash: "d".repeat(64),
-    core_family_tx_hash: "e".repeat(64)
+    initialize_tx_hash: "d".repeat(64)
   };
 
   const report = deploymentSpendReportFromSource(source, JSON.stringify(source), "/owner/programmed-circle-deploy.json", "program_deploy");
 
-  assert.equal(report.write_count, 4);
-  assert.equal(report.total_ou, "800000");
+  assert.equal(report.write_count, 3);
+  assert.equal(report.total_ou, "600000");
   assert.deepEqual(report.writes.map((write) => write.label), [
     "programmed_circle_deploy",
     "programmed_circle_update",
-    "initialize_fact_ledger",
-    "initialize_core_family"
+    "initialize_fact_ledger"
   ]);
 });
 

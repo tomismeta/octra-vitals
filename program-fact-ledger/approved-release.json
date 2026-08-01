@@ -1,10 +1,10 @@
 {
   "schema": "octra-vitals-approved-aml-release-v1",
-  "source_hash": "sha256:86c29868d8c8e45ce361fd92b949126b8279439c516bcbbbb86ecfd1a7dd9dc1",
-  "bytecode_hash": "sha256:04cbd718885c4b67e9dcc96b6359b414d93d5e2337877d8c0132567cf11f4121",
-  "verification_hash": "sha256:951ddeda72644cb0c75976c14975002e0b3959a3c4630a9bd6266cf3c4dd45c0",
-  "abi_hash": "sha256:09b778dbc53df5d106924ce48c3eed5f5d6bf99d2ccad77636e027a8ac5161a4",
-  "disasm_hash": "sha256:86747630df1a94d9173b482b782243ed84d8b8179c608486e3dcaac5b16ad657",
+  "source_hash": "sha256:448f87d916408894b481e951481d3d2b0f20a9855c2a2d7f229a849baad929e8",
+  "bytecode_hash": "sha256:66b6c546471480847544ca5b0fd1a689396e7494f09a1568a6f2aa6e779241b3",
+  "verification_hash": "sha256:fb57095a91b17788548a68104ac0caa8c99c191cb764b9e33b7484d4d3135ff1",
+  "abi_hash": "sha256:339e14db28289116085abf07585c889c92241fbb80a5ca7751cf69379e73a5cc",
+  "disasm_hash": "sha256:71176ce26c1cf36c712be57819d5fb084b69b94c5f538221a872eb2fb4fcb7bf",
   "state_layout_hash": "sha256:644e55df8682c8bb228d5ccb15fb9839f281a14e2c9026926121f9047b8e3f02",
   "compiler": "octra_aml",
   "compiler_version": "1.0 Rehovot"

@@ -1,4 +1,5 @@
 {
+  "declaration": "contract",
   "functions": [
     {
       "name": "manifest",
@@ -211,41 +212,6 @@
       "payable": false
     },
     {
-      "name": "get_summary_row_len",
-      "inputs": [],
-      "output": "int",
-      "view": true,
-      "payable": false
-    },
-    {
-      "name": "get_history_row_len",
-      "inputs": [],
-      "output": "int",
-      "view": true,
-      "payable": false
-    },
-    {
-      "name": "get_capsule_meta_len",
-      "inputs": [],
-      "output": "int",
-      "view": true,
-      "payable": false
-    },
-    {
-      "name": "get_capsule_row_limit",
-      "inputs": [],
-      "output": "int",
-      "view": true,
-      "payable": false
-    },
-    {
-      "name": "get_max_aux_fact_rows_per_snapshot",
-      "inputs": [],
-      "output": "int",
-      "view": true,
-      "payable": false
-    },
-    {
       "name": "get_catalog_root",
       "inputs": [],
       "output": "string",
@@ -408,80 +374,6 @@
       "payable": false
     },
     {
-      "name": "get_history_root",
-      "inputs": [],
-      "output": "string",
-      "view": true,
-      "payable": false
-    },
-    {
-      "name": "get_capsules_root",
-      "inputs": [],
-      "output": "string",
-      "view": true,
-      "payable": false
-    },
-    {
-      "name": "get_open_capsule_body",
-      "inputs": [],
-      "output": "string",
-      "view": true,
-      "payable": false
-    },
-    {
-      "name": "get_open_capsule_row_count",
-      "inputs": [],
-      "output": "int",
-      "view": true,
-      "payable": false
-    },
-    {
-      "name": "get_open_capsule_end_root",
-      "inputs": [],
-      "output": "string",
-      "view": true,
-      "payable": false
-    },
-    {
-      "name": "get_capsule_count",
-      "inputs": [],
-      "output": "int",
-      "view": true,
-      "payable": false
-    },
-    {
-      "name": "get_latest_capsule_id",
-      "inputs": [],
-      "output": "string",
-      "view": true,
-      "payable": false
-    },
-    {
-      "name": "get_latest_capsule_root_after",
-      "inputs": [],
-      "output": "string",
-      "view": true,
-      "payable": false
-    },
-    {
-      "name": "get_history_capsule_body",
-      "inputs": [
-        "string"
-      ],
-      "output": "string",
-      "view": true,
-      "payable": false
-    },
-    {
-      "name": "get_history_capsule_meta",
-      "inputs": [
-        "string"
-      ],
-      "output": "string",
-      "view": true,
-      "payable": false
-    },
-    {
       "name": "get_latest_bundle",
       "inputs": [],
       "output": "string",
@@ -498,15 +390,6 @@
         "int",
         "string",
         "address",
-        "string"
-      ],
-      "output": "bool",
-      "view": false,
-      "payable": false
-    },
-    {
-      "name": "initialize_core_family",
-      "inputs": [
         "string"
       ],
       "output": "bool",
@@ -546,23 +429,6 @@
       "name": "set_successor_program",
       "inputs": [
         "address"
-      ],
-      "output": "bool",
-      "view": false,
-      "payable": false
-    },
-    {
-      "name": "record_snapshot_fact_v1",
-      "inputs": [
-        "string",
-        "string",
-        "string",
-        "string",
-        "string",
-        "string",
-        "string",
-        "int",
-        "int"
       ],
       "output": "bool",
       "view": false,

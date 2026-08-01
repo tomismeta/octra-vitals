@@ -22,6 +22,7 @@ import {
   factLedgerFoldFamilyCapsulesRootHex,
   factLedgerFoldFamilyRootHex,
   factLedgerRowHashHex,
+  FACT_LEDGER_CAPSULE_ROW_LIMIT,
   FACT_LEDGER_CORE_FAMILY_ID,
   FACT_LEDGER_CORE_SCHEMA_ID,
   FACT_LEDGER_MANIFEST
@@ -1226,14 +1227,13 @@ async function assertPreSubmitState(targetKind: StateTargetMode, targetId: strin
   }
   let factLedger: Record<string, unknown> | null = null;
   if (isFactLedgerCall(call) && targetKind === "circle_program") {
-    const [openRows, openBody, openStartRoot, openEndRoot, capsuleCount, latestCapsuleId, capsuleRowLimit, familyCapsulesRoot] = await Promise.all([
+    const [openRows, openBody, openStartRoot, openEndRoot, capsuleCount, latestCapsuleId, familyCapsulesRoot] = await Promise.all([
       circleProgramViewAtUrl<number>(primary.url, targetId, "get_family_open_capsule_row_count", [FACT_LEDGER_CORE_FAMILY_ID]),
       circleProgramViewAtUrl<string>(primary.url, targetId, "get_family_open_capsule_body", [FACT_LEDGER_CORE_FAMILY_ID]),
       circleProgramViewAtUrl<string>(primary.url, targetId, "get_family_open_capsule_start_root", [FACT_LEDGER_CORE_FAMILY_ID]),
       circleProgramViewAtUrl<string>(primary.url, targetId, "get_family_open_capsule_end_root", [FACT_LEDGER_CORE_FAMILY_ID]),
       circleProgramViewAtUrl<number>(primary.url, targetId, "get_family_capsule_count", [FACT_LEDGER_CORE_FAMILY_ID]),
       circleProgramViewAtUrl<string>(primary.url, targetId, "get_family_latest_capsule_id", [FACT_LEDGER_CORE_FAMILY_ID]).catch(() => ""),
-      circleProgramViewAtUrl<number>(primary.url, targetId, "get_capsule_row_limit").catch(() => 48),
       circleProgramViewAtUrl<string>(primary.url, targetId, "get_family_capsules_root", [FACT_LEDGER_CORE_FAMILY_ID]).catch(() => null)
     ]);
     factLedger = {
@@ -1243,7 +1243,7 @@ async function assertPreSubmitState(targetKind: StateTargetMode, targetId: strin
       open_capsule_end_root: openEndRoot || null,
       capsule_count: Number(capsuleCount || 0),
       latest_capsule_id: latestCapsuleId || null,
-      capsule_row_limit: Number(capsuleRowLimit || 48),
+      capsule_row_limit: FACT_LEDGER_CAPSULE_ROW_LIMIT,
       family_capsules_root: familyCapsulesRoot || null
     };
   }
@@ -1261,11 +1261,14 @@ export async function submitSnapshotCall(
   call: RecordSnapshotCall,
   options: SubmitSnapshotOptions = {}
 ): Promise<Record<string, any>> {
+  const rawCall = call as unknown as Record<string, unknown>;
+  if (rawCall.commit_mode === "fact-v1" || rawCall.method === "record_snapshot_fact_v1") {
+    throw new Error("record_snapshot_fact_v1 is retired; rebuild the call with VITALS_RECORD_SNAPSHOT_VERSION=fact-v2");
+  }
   if (
     !(
       (call.schema === "octra-vitals-record-snapshot-call-v0" && call.method === "record_snapshot_v0") ||
       (call.schema === "octra-vitals-record-snapshot-call-v1" && call.method === "record_snapshot_v1") ||
-      (call.schema === "octra-vitals-record-snapshot-call-fact-v1" && call.method === "record_snapshot_fact_v1") ||
       (call.schema === "octra-vitals-record-snapshot-call-fact-v2" && call.method === "record_snapshot_fact_v2")
     ) ||
     !Array.isArray(call.params)

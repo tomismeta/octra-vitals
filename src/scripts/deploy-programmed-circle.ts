@@ -22,7 +22,7 @@ const root = resolve(new URL("../..", import.meta.url).pathname);
 
 function assertProgramKind(): void {
   const configured = process.env.VITALS_PROGRAMMED_CIRCLE_PROGRAM || process.env.VITALS_RECORD_SNAPSHOT_VERSION;
-  if (configured === "fact-ledger" || configured === "fact-v1" || configured === "fact-v2" || configured === undefined || configured === "") return;
+  if (configured === "fact-ledger" || configured === "fact-v2" || configured === undefined || configured === "") return;
   throw new Error("VITALS_PROGRAMMED_CIRCLE_PROGRAM must be fact-ledger");
 }
 
@@ -408,7 +408,9 @@ async function resolveFactLedgerPredecessor(callerAddress: string, nextCircleId:
       };
     } else {
       bundle = parseFactLedgerLatestBundle(afterText, { allowRootOnly: true });
-      const historyRoot = await circleViewAtUrl(url, predecessorAddress, "get_history_root", callerAddress);
+      const historyRoot = manifest === FACT_LEDGER_MANIFEST
+        ? await circleViewAtUrl(url, predecessorAddress, "get_family_root", callerAddress, [FACT_LEDGER_CORE_FAMILY_ID])
+        : await circleViewAtUrl(url, predecessorAddress, "get_history_root", callerAddress);
       if (countNumber !== bundle.snapshot_index) throw new Error(`predecessor snapshot count mismatch from ${rpcUrlLabel(url)}`);
       if (requiredHex64(historyRoot, "predecessor history root") !== bundle.history_root) {
         throw new Error(`predecessor history root mismatch from ${rpcUrlLabel(url)}`);
@@ -739,46 +741,8 @@ if (!deployEnabled) {
     }
   }
 
-  const coreFamilyMethod = "initialize_core_family";
-  let coreFamilySubmission: Awaited<ReturnType<typeof submitTx>> | null = null;
-  let coreFamilyConfirmation: any = null;
-  let coreFamilyReceipt: Record<string, unknown> | null = null;
-  let coreFamilyReceiptError: string | null = null;
   if (!(await coreFamilyRegistered())) {
-    const coreFamilyTx: OctraTransaction = {
-      from: wallet.address,
-      to_: circleId,
-      amount: "0",
-      nonce: currentNonce,
-      ou: callOu,
-      timestamp: Date.now() / 1000,
-      op_type: "circle_call",
-      encrypted_data: coreFamilyMethod,
-      message: JSON.stringify([factLedgerCoreDefinition])
-    };
-    coreFamilySubmission = await submitTx(wallet, coreFamilyTx, (prepared) => writeReport({
-      ...baseReport,
-      status: "core_family_prepared",
-      deploy_tx_hash: deploySubmission.tx_hash,
-      deploy_tx: txSummary(deployConfirmation),
-      program_update_tx_hash: updateSubmission?.tx_hash || null,
-      program_update_tx: updateConfirmation ? txSummary(updateConfirmation) : null,
-      initialize_tx_hash: initSubmission.tx_hash,
-      initialize_tx: txSummary(initConfirmation),
-      pending_transaction: { label: coreFamilyMethod, ...prepared }
-    }));
-    coreFamilyConfirmation = await requireConfirmed(coreFamilySubmission.tx_hash, `programmed Circle ${coreFamilyMethod}`);
-    currentNonce += 1;
-    if (waitForConfirmations) {
-      try {
-        coreFamilyReceipt = receiptSummary(await contractReceipt(coreFamilySubmission.tx_hash));
-      } catch (error) {
-        coreFamilyReceiptError = error instanceof Error ? error.message : String(error);
-      }
-    }
-    if (requireContractReceipt && (coreFamilyReceipt?.success !== true || coreFamilyReceipt?.method !== coreFamilyMethod || coreFamilyReceipt?.contract !== circleId)) {
-      throw new Error(`programmed Circle ${coreFamilyMethod} receipt did not verify: ${JSON.stringify(coreFamilyReceipt || { error: coreFamilyReceiptError })}`);
-    }
+    throw new Error("fact-ledger core family was not registered by initialize_fact_ledger");
   }
 
   const [
@@ -896,11 +860,6 @@ if (!deployEnabled) {
     initialize_tx: txSummary(initConfirmation),
     initialize_receipt: initReceipt,
     initialize_receipt_error: initReceiptError,
-    core_family_tx_hash: coreFamilySubmission?.tx_hash || null,
-    core_family_submit_result: coreFamilySubmission?.submit_result || null,
-    core_family_tx: coreFamilyConfirmation ? txSummary(coreFamilyConfirmation) : null,
-    core_family_receipt: coreFamilyReceipt,
-    core_family_receipt_error: coreFamilyReceiptError,
     program_info: programInfo,
     views: {
       manifest,

@@ -275,35 +275,23 @@ test("record snapshot builder can emit v1 bundles without changing the v0 defaul
   const snapshot = snapshotFixture();
   const v0 = await buildRecordSnapshotCall(snapshot, { snapshotIndex: 5, recordVersion: "v0" });
   const v1 = await buildRecordSnapshotCall(snapshot, { snapshotIndex: 5, recordVersion: "v1" });
-  const factV1 = await buildRecordSnapshotCall(snapshot, { snapshotIndex: 5, recordVersion: "fact-v1" });
   const factV2 = await buildRecordSnapshotCall(snapshot, { snapshotIndex: 5, recordVersion: "fact-v2" });
+  await assert.rejects(
+    () => buildRecordSnapshotCall(snapshot, { snapshotIndex: 5, recordVersion: "fact-v1" as any }),
+    /record_snapshot_fact_v1 is retired/
+  );
 
   assert.equal(v0.method, "record_snapshot_v0");
   assert.equal(v1.method, "record_snapshot_v1");
   assert.equal(v1.history.row.length, HISTORY_V1_ROW_LEN);
   assert.equal(v1.expected_hashes.history_row_hash, historyV1RowHashHex(v1.history.row));
   assert.equal(v1.params[2], 1782216900);
-  assert.equal(factV1.method, "record_snapshot_fact_v1");
-  assert.equal(factV1.commit_mode, "fact-v1");
-  assert.equal(factV1.fact_ledger.manifest, FACT_LEDGER_MANIFEST);
-  assert.equal(factV1.fact_ledger.core_family_id, FACT_LEDGER_CORE_FAMILY_ID);
-  assert.equal(factV1.fact_ledger.core_schema_id, FACT_LEDGER_CORE_SCHEMA_ID);
-  assert.equal(factV1.fact_ledger.capsule_base_id, "2026-06-23T12");
-  assert.equal(factV1.history.schema_version, FACT_LEDGER_CORE_SCHEMA_VERSION);
-  assert.equal(factV1.history.row, v1.history.row);
-  assert.equal(factV1.expected_hashes.history_row_hash, factLedgerRowHashHex(FACT_LEDGER_CORE_FAMILY_ID, FACT_LEDGER_CORE_SCHEMA_ID, factV1.history.row));
-  assert.notEqual(factV1.expected_hashes.history_row_hash, v1.expected_hashes.history_row_hash);
-  assert.equal(factV1.snapshot_id, snapshot.envelope.snapshot_id);
-  assert.equal(factV1.observed_at, snapshot.envelope.observed_at);
-  assert.equal(factV1.params.length, 9);
-  assert.equal(factV1.params[0], snapshot.canonical_payload);
-  assert.equal(factV1.params[5], snapshot.envelope.observed_at);
-  assert.equal(factV1.params[6], "2026-06-23T12");
-  assert.equal(factV1.params[7], Number(factV1.history.row.slice(27, 39)));
-  assert.equal(factV1.params[8], factV1.snapshot_index);
   assert.equal(factV2.method, "record_snapshot_fact_v2");
   assert.equal(factV2.commit_mode, "fact-v2");
   assert.equal(factV2.fact_ledger.manifest, FACT_LEDGER_MANIFEST);
+  assert.equal(factV2.fact_ledger.core_family_id, FACT_LEDGER_CORE_FAMILY_ID);
+  assert.equal(factV2.fact_ledger.core_schema_id, FACT_LEDGER_CORE_SCHEMA_ID);
+  assert.equal(factV2.fact_ledger.capsule_base_id, "2026-06-23T12");
   assert.equal(factV2.fact_ledger.aux_count, 0);
   assert.equal(factV2.fact_ledger.max_aux_rows, 4);
   assert.equal(factV2.metric_facts.rows.length, 4);

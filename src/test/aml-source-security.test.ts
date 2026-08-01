@@ -19,12 +19,10 @@ test("programmed Circle deployer proves Circle metadata owner before zero-owner 
   assert.match(deployScript, /preInitializeOwnerUnset && preInitializeMetadataOwner === wallet\.address/);
 });
 
-test("core family split initializer stays owner-only and single-use", () => {
-  const coreInitializer = source.match(/public fn initialize_core_family[^\{]+\{([\s\S]*?)\n  \}/)?.[1] || "";
-  assert.match(coreInitializer, /only_owner\(\)/);
-  assert.match(coreInitializer, /require\(self\.family_count == 0, "core already registered"\)/);
-  assert.match(coreInitializer, /self\.family_definition_by_id\[CORE_FAMILY_ID\] = core_family_definition/);
-  assert.match(coreInitializer, /emit FamilyRegistered\(CORE_FAMILY_ID, CORE_SCHEMA_ID, FACT_ROW_BYTES\)/);
+test("fact-ledger initializer registers core atomically without a second public initializer", () => {
+  const initialize = source.match(/public fn initialize_fact_ledger[^\{]+\{([\s\S]*?)\n  \}/)?.[1] || "";
+  assert.match(initialize, /register_family_internal\(CORE_FAMILY_ID, core_family_definition, EMPTY_CORE_FAMILY_ROOT\)/);
+  assert.doesNotMatch(source, /public fn initialize_core_family/);
 });
 
 test("fact-ledger hardening preserves the established state layout", () => {
@@ -46,7 +44,7 @@ test("fact-ledger hardening preserves the established state layout", () => {
 });
 
 test("fact-ledger rejects clock rollback and sealed capsule key reuse", () => {
-  assert.equal((source.match(/observed_at not increasing/g) || []).length, 2);
+  assert.equal((source.match(/observed_at not increasing/g) || []).length, 1);
   assert.match(source, /private fn observed_at_after/);
   assert.doesNotMatch(source, /observed_at > self\.latest_observed_at/);
   assert.match(source, /observed_at month range/);
@@ -55,4 +53,15 @@ test("fact-ledger rejects clock rollback and sealed capsule key reuse", () => {
   assert.equal((source.match(/capsule body slot occupied/g) || []).length, 2);
   assert.match(source, /core burned separator/);
   assert.match(source, /aux row schema separator/);
+});
+
+test("fact-ledger public ABI stays below the strict runtime jump-label boundary", () => {
+  const publicMethods = [...source.matchAll(/^\s{2}public (?:view )?fn ([a-z0-9_]+)\(/gm)]
+    .map((match) => match[1] || "")
+    .filter(Boolean);
+  assert.ok(publicMethods.length <= 57, `expected <=57 public methods, found ${publicMethods.length}`);
+  assert.deepEqual(publicMethods.filter((method) => method.startsWith("get_history_")), []);
+  assert.deepEqual(publicMethods.filter((method) => method.startsWith("get_open_capsule")), []);
+  assert.equal(publicMethods.includes("record_snapshot_fact_v1"), false);
+  assert.equal(publicMethods.includes("record_snapshot_fact_v2"), true);
 });

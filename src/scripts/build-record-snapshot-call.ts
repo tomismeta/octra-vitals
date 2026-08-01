@@ -149,7 +149,7 @@ export interface RecordSnapshotCallFactV2 extends Omit<RecordSnapshotCallFactV1,
 export type RecordSnapshotCallFact = RecordSnapshotCallFactV1 | RecordSnapshotCallFactV2;
 
 export type RecordSnapshotCall = RecordSnapshotCallV0 | RecordSnapshotCallV1 | RecordSnapshotCallFact;
-export type RecordSnapshotVersion = "v0" | "v1" | "fact-v1" | "fact-v2";
+export type RecordSnapshotVersion = "v0" | "v1" | "fact-v2";
 
 export interface BuildRecordSnapshotCallOptions {
   compactMaxMessageBytes?: number;
@@ -276,8 +276,11 @@ function buildSizeHeadroom(input: {
 
 function recordSnapshotVersion(options: BuildRecordSnapshotCallOptions): RecordSnapshotVersion {
   const value = options.recordVersion || process.env.VITALS_RECORD_SNAPSHOT_VERSION || "v0";
-  if (value !== "v0" && value !== "v1" && value !== "fact-v1" && value !== "fact-v2") {
-    throw new Error("VITALS_RECORD_SNAPSHOT_VERSION must be v0, v1, fact-v1, or fact-v2");
+  if (value === "fact-v1") {
+    throw new Error("record_snapshot_fact_v1 is retired; use VITALS_RECORD_SNAPSHOT_VERSION=fact-v2");
+  }
+  if (value !== "v0" && value !== "v1" && value !== "fact-v2") {
+    throw new Error("VITALS_RECORD_SNAPSHOT_VERSION must be v0, v1, or fact-v2");
   }
   return value;
 }
@@ -394,19 +397,16 @@ export async function buildRecordSnapshotCall(
   const latestSummaryHash = summaryHash(summaryRow);
   const version = recordSnapshotVersion(options);
 
-  if (version === "v1" || version === "fact-v1" || version === "fact-v2") {
+  if (version === "v1" || version === "fact-v2") {
     const historyRowModel = historyV1RowFromSnapshot(snapshot, snapshotIndex);
     const historyRow = encodeHistoryV1Row(historyRowModel);
-    if (version === "fact-v1" || version === "fact-v2") {
+    if (version === "fact-v2") {
       const historyRowHash = factLedgerRowHashHex(FACT_LEDGER_CORE_FAMILY_ID, FACT_LEDGER_CORE_SCHEMA_ID, historyRow);
       const capsuleBaseId = factLedgerCapsuleBaseId(envelope.observed_at);
       const requestedAuxRows = options.auxRows || [];
       if (requestedAuxRows.length > 4) throw new Error("fact-v2 supports at most 4 aux rows per snapshot");
       if (requestedAuxRows.some((row) => typeof row !== "string" || row.length === 0)) {
         throw new Error("auxRows must contain non-empty encoded fact rows");
-      }
-      if (requestedAuxRows.length > 0 && version !== "fact-v2") {
-        throw new Error("auxRows are only supported for record_snapshot_fact_v2");
       }
       const auxRows = [
         ...requestedAuxRows,
@@ -446,65 +446,14 @@ export async function buildRecordSnapshotCall(
       });
 
       const circleId = configuredProgrammedCircleId();
-      if (version === "fact-v2") {
-        return {
-          schema: "octra-vitals-record-snapshot-call-fact-v2",
-          commit_mode: "fact-v2",
-          generated_at: options.generatedAt || isoNow(),
-          program_address: options.programAddress || process.env.VITALS_STATE_PROGRAM_ADDRESS || circleId || "pending",
-          target_kind: stateTargetMode(),
-          ...(circleId ? { circle_id: circleId } : {}),
-          method: "record_snapshot_fact_v2",
-          snapshot_id: envelope.snapshot_id,
-          observed_at: envelope.observed_at,
-          params,
-          compact_message_bytes: compactMessageBytes,
-          size_headroom: sizeHeadroom,
-          snapshot_index: snapshotIndex,
-          fact_ledger: {
-            manifest: FACT_LEDGER_MANIFEST,
-            core_family_id: FACT_LEDGER_CORE_FAMILY_ID,
-            core_schema_id: FACT_LEDGER_CORE_SCHEMA_ID,
-            core_schema_version: FACT_LEDGER_CORE_SCHEMA_VERSION,
-            capsule_base_id: capsuleBaseId,
-            aux_count: auxCount,
-            max_aux_rows: auxRows.length
-          },
-          metric_facts: {
-            aux_count: auxCount,
-            rows: auxRows
-          },
-          summary: {
-            schema_version: SUMMARY_SCHEMA_VERSION,
-            row: summaryRow,
-            row_hash: latestSummaryHash
-          },
-          history: {
-            schema_version: FACT_LEDGER_CORE_SCHEMA_VERSION,
-            row: historyRow,
-            row_hash: historyRowHash
-          },
-          expected_hashes: {
-            payload_hash: envelope.payload_hash,
-            evidence_manifest_hash: envelope.evidence_manifest_hash,
-            source_refs_hash: refsHash,
-            summary_hash: latestSummaryHash,
-            history_row_hash: historyRowHash
-          },
-          readonly_check: {
-            method: "get_latest_history_row_hash",
-            expected_after_submit: historyRowHash
-          }
-        };
-      }
       return {
-        schema: "octra-vitals-record-snapshot-call-fact-v1",
-        commit_mode: "fact-v1",
+        schema: "octra-vitals-record-snapshot-call-fact-v2",
+        commit_mode: "fact-v2",
         generated_at: options.generatedAt || isoNow(),
         program_address: options.programAddress || process.env.VITALS_STATE_PROGRAM_ADDRESS || circleId || "pending",
         target_kind: stateTargetMode(),
         ...(circleId ? { circle_id: circleId } : {}),
-        method: "record_snapshot_fact_v1",
+        method: "record_snapshot_fact_v2",
         snapshot_id: envelope.snapshot_id,
         observed_at: envelope.observed_at,
         params,
@@ -516,7 +465,13 @@ export async function buildRecordSnapshotCall(
           core_family_id: FACT_LEDGER_CORE_FAMILY_ID,
           core_schema_id: FACT_LEDGER_CORE_SCHEMA_ID,
           core_schema_version: FACT_LEDGER_CORE_SCHEMA_VERSION,
-          capsule_base_id: capsuleBaseId
+          capsule_base_id: capsuleBaseId,
+          aux_count: auxCount,
+          max_aux_rows: auxRows.length
+        },
+        metric_facts: {
+          aux_count: auxCount,
+          rows: auxRows
         },
         summary: {
           schema_version: SUMMARY_SCHEMA_VERSION,

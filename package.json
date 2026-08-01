@@ -18,6 +18,8 @@
     "program:compile:refresh": "npm run build && node dist/scripts/compile-fact-ledger-program.js --refresh-pins",
     "program:compile:artifact": "npm run build && node dist/scripts/verify-fact-ledger-compile-artifact.js",
     "program:compile:artifact:dist": "node dist/scripts/verify-fact-ledger-compile-artifact.js",
+    "program:jdest:check": "npm run build && node dist/scripts/check-aml-lowered-oasm.js",
+    "program:jdest:check:dist": "node dist/scripts/check-aml-lowered-oasm.js",
     "manifest:sync": "npm run build && node dist/scripts/sync-app-manifest.js",
     "producer:audit": "npm run build && node dist/scripts/build-producer-audit-manifest.js",
     "producer:audit:dist": "node dist/scripts/build-producer-audit-manifest.js",
@@ -53,9 +55,9 @@
     "circle:programmed:deploy:dist": "node dist/scripts/deploy-programmed-circle.js",
     "circle:programmed:update-code": "npm run program:compile && node dist/scripts/update-programmed-circle-code.js",
     "circle:programmed:update-code:dist": "node dist/scripts/update-programmed-circle-code.js",
-    "native:verify": "npm run test && npm run canonical:verify && npm run program:compile && npm run program:compile:artifact:dist && npm run circle:release && npm run circle:verify",
-    "native:verify:offline": "npm run test && npm run canonical:verify && npm run program:compile:artifact:dist && npm run circle:release && npm run circle:verify",
-    "native:verify:ci": "npm run test && npm run canonical:verify && npm run circle:release && npm run circle:verify"
+    "native:verify": "npm run test && npm run canonical:verify && npm run program:compile && npm run program:jdest:check:dist && npm run program:compile:artifact:dist && npm run circle:release && npm run circle:verify",
+    "native:verify:offline": "npm run test && npm run canonical:verify && npm run program:jdest:check:dist && npm run program:compile:artifact:dist && npm run circle:release && npm run circle:verify",
+    "native:verify:ci": "npm run test && npm run canonical:verify && npm run program:jdest:check:dist && npm run circle:release && npm run circle:verify"
   },
   "engines": {
     "node": ">=22.0.0"

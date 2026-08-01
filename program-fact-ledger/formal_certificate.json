@@ -2,9 +2,10 @@
   "schema": "aml_bytecode_certificate_v1",
   "compiler": "octra_aml",
   "compiler_version": "1.0 Rehovot",
+  "declaration": "contract",
   "verification_schema": "aml_safety_report_v1",
   "source_mode": "single",
-  "source_hash": "86c29868d8c8e45ce361fd92b949126b8279439c516bcbbbb86ecfd1a7dd9dc1",
-  "bytecode_hash": "04cbd718885c4b67e9dcc96b6359b414d93d5e2337877d8c0132567cf11f4121",
-  "verification_hash": "951ddeda72644cb0c75976c14975002e0b3959a3c4630a9bd6266cf3c4dd45c0"
+  "source_hash": "448f87d916408894b481e951481d3d2b0f20a9855c2a2d7f229a849baad929e8",
+  "bytecode_hash": "66b6c546471480847544ca5b0fd1a689396e7494f09a1568a6f2aa6e779241b3",
+  "verification_hash": "fb57095a91b17788548a68104ac0caa8c99c191cb764b9e33b7484d4d3135ff1"
 }

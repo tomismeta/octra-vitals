@@ -6,8 +6,10 @@ import { circleProgramViewAtUrl, configuredProgrammedCircleId } from "../lib/cir
 import { octraProgramRpcUrl, octraRpc, recommendedOu, contractReceipt } from "../lib/octra-rpc.js";
 import { loadOperatorWalletFromEnv, publicTransactionJson, signTransaction, transactionHash, type OctraTransaction, type OperatorWallet } from "../lib/octra-transaction.js";
 import {
+  FACT_LEDGER_CAPSULE_ROW_LIMIT,
   FACT_LEDGER_EMPTY_FAMILY_ID,
   FACT_LEDGER_PACKED_METRIC_FAMILY_ID,
+  FACT_LEDGER_PACKED_METRIC_MAX_SLOTS,
   FACT_LEDGER_PACKED_METRIC_SCHEMA_ID,
   FACT_LEDGER_VERSION,
   encodeFactFamilyDefinition,
@@ -146,15 +148,15 @@ if (!caller) throw new Error("VITALS_OPERATOR_ADDRESS or VITALS_CIRCLE_VIEW_CALL
 
 await mkdir(dirname(outPath), { recursive: true });
 
-const [manifest, owner, operator, snapshotCountBefore, familyCountBefore, maxAux, capsuleLimit] = await Promise.all([
+const [manifest, owner, operator, snapshotCountBefore, familyCountBefore] = await Promise.all([
   circleProgramViewAtUrl<string>(rpcUrl, circleId, "manifest", [], caller),
   circleProgramViewAtUrl<string>(rpcUrl, circleId, "get_owner", [], caller),
   circleProgramViewAtUrl<string>(rpcUrl, circleId, "get_operator", [], caller),
   circleProgramViewAtUrl<number>(rpcUrl, circleId, "get_snapshot_count", [], caller),
-  circleProgramViewAtUrl<number>(rpcUrl, circleId, "get_family_count", [], caller),
-  circleProgramViewAtUrl<number>(rpcUrl, circleId, "get_max_aux_fact_rows_per_snapshot", [], caller),
-  circleProgramViewAtUrl<number>(rpcUrl, circleId, "get_capsule_row_limit", [], caller)
+  circleProgramViewAtUrl<number>(rpcUrl, circleId, "get_family_count", [], caller)
 ]);
+const maxAux = FACT_LEDGER_PACKED_METRIC_MAX_SLOTS;
+const capsuleLimit = FACT_LEDGER_CAPSULE_ROW_LIMIT;
 
 const authNegative = await authNegativeProbe(rpcUrl, circleId, owner, operator);
 if (authNegative.ok !== true) {
