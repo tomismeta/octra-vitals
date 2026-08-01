@@ -684,14 +684,19 @@ export async function labStatus(): Promise<OctraSqliteQueryResult> {
       source_latest_index as source_latest_index,
       null as complete,
       finished_at as observed_at
-    from mirror_runs
-    order by observed_at desc
+    from (
+      select *
+      from mirror_runs
+      order by rowid desc
+      limit 19
+    )
+    order by section desc, observed_at desc
     limit 20
   `));
 }
 
 export function labHistorySql(window: string | null): string {
-  const hours = window === "1h" ? 1 : window === "7d" ? 24 * 7 : window === "30d" ? 24 * 30 : 24;
+  const rowLimit = window === "1h" ? 8 : window === "7d" ? 768 : window === "30d" ? 3072 : 128;
   return `
     select
       s.snapshot_index,
@@ -706,9 +711,7 @@ export function labHistorySql(window: string | null): string {
     from snapshots s
     join core_accounting_facts c using(snapshot_index)
     left join derived_snapshot_metrics d on d.snapshot_index = s.snapshot_index and d.metric_key = 'unclassified_raw'
-    where s.observed_at_unix >= (
-      select max(observed_at_unix) - ${hours * 60 * 60} from snapshots
-    )
-    order by s.snapshot_index asc
+    order by s.snapshot_index desc
+    limit ${rowLimit}
   `;
 }

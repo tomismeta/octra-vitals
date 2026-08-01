@@ -6,7 +6,7 @@ import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { promisify } from "node:util";
 
-import { buildLabHistoryMirrorSql, mirrorLabHistory, planLabHistoryMirrorRows } from "../lib/lab-history.js";
+import { buildLabHistoryMirrorSql, labHistorySql, mirrorLabHistory, planLabHistoryMirrorRows } from "../lib/lab-history.js";
 import { normalizeReadOnlySql, octraSqliteConfig, octraSqliteQueryProof, parseOctraSqliteOutput, publicLabQueryError } from "../lib/octra-sqlite-client.js";
 import { acquireLock, historyReadOptionsForGap, runLabHistoryMirror } from "../scripts/run-lab-history-mirror.js";
 import type { ProgramHistoryWindow, SummaryRow } from "../lib/summary-window.js";
@@ -125,6 +125,14 @@ test("lab query guard wraps bounded read-only select SQL", () => {
   assert.equal(normalized.limit, 25);
   assert.match(normalized.sql, /^select \* from \(select snapshot_index/);
   assert.match(normalized.sql, /limit 25$/);
+});
+
+test("lab canned history queries are bounded by snapshot cadence", () => {
+  assert.match(labHistorySql("1h"), /order by s\.snapshot_index desc\s+limit 8/i);
+  assert.match(labHistorySql("1d"), /order by s\.snapshot_index desc\s+limit 128/i);
+  assert.match(labHistorySql("7d"), /order by s\.snapshot_index desc\s+limit 768/i);
+  assert.match(labHistorySql("30d"), /order by s\.snapshot_index desc\s+limit 3072/i);
+  assert.match(labHistorySql("anything-else"), /order by s\.snapshot_index desc\s+limit 128/i);
 });
 
 test("lab query guard rejects mutating SQL", () => {
