@@ -2,7 +2,7 @@
 import http from "node:http";
 import { timingSafeEqual } from "node:crypto";
 import { readFile, stat } from "node:fs/promises";
-import { extname, join, resolve } from "node:path";
+import { dirname, extname, join, resolve } from "node:path";
 import { gunzipSync, gzip } from "node:zlib";
 import { buildLiveSnapshot, publicSnapshotArtifact } from "../../lib/snapshot.js";
 import { FACT_LEDGER_MANIFEST } from "../../lib/aml-fact-ledger.js";
@@ -16,11 +16,13 @@ import { circleInfoAtUrl, circleProgramInfoAtUrl, contractCall, contractReceipt,
 import { configuredTrafficRecorder } from "../../lib/traffic.js";
 import { runtimeVitalsManifest, stableJson } from "../../lib/vitals-manifest.js";
 import { HISTORY_API_SCHEMA, LEGACY_HISTORY_SCHEMA, emptyHistoryProof, filterHistorySnapshots, historyApiCoverage, historyApiRecommendedCapsuleLimit, parseHistoryApiRequest, verifiedHistoryProof, type HistoryApiRequest } from "../../lib/history-api.js";
+import { sqliteHistoryFallbackDecision } from "../../lib/history-read-policy.js";
+import { loadHistorySummaryAnchors, mergeHistorySummaryAnchors, rememberHistorySummaryAnchor, writeHistorySummaryAnchors } from "../../lib/history-summary-anchors.js";
 import { labHistorySql, labSchema, labStatus, labTables, mirrorLabHistory } from "../../lib/lab-history.js";
 import { verifyNativeSnapshotReceipt } from "../../lib/native-receipt.js";
 import { octraSqliteConfig, octraSqliteReadOnlyQuery, publicLabQueryError } from "../../lib/octra-sqlite-client.js";
 import { readSqliteHistoryReplica } from "../../lib/sqlite-history-replica.js";
-import { decodeSummaryRow, encodeSummaryRow, type ProgramHistoryWindow } from "../../lib/summary-window.js";
+import { encodeSummaryRow, type ProgramHistoryWindow } from "../../lib/summary-window.js";
 import type { ProgramArtifacts, SnapshotArtifact } from "../../lib/types.js";
 import { browserPostOriginAllowed, jsonContentType } from "../../lib/http-security.js";
 
@@ -30,6 +32,11 @@ const dataDir = resolve(process.env.VITALS_DATA_DIR || join(root, "data"));
 const evidenceDir = join(dataDir, "evidence");
 const latestPath = join(dataDir, "latest_snapshot.json");
 const latestSubmitReceiptPath = join(dataDir, "latest_submit_receipt.json");
+const gatewayCacheDir = resolve(
+  process.env.VITALS_GATEWAY_CACHE_DIR ||
+  (process.env.VITALS_TRAFFIC_DIR ? dirname(resolve(process.env.VITALS_TRAFFIC_DIR)) : join(dataDir, "gateway-cache"))
+);
+const historySummaryAnchorsPath = join(gatewayCacheDir, "history_summary_anchors.json");
 const host = process.env.HOST || "127.0.0.1";
 const port = positiveIntegerEnv("PORT", 4173);
 const staleAfterMs = positiveIntegerEnv("VITALS_STALE_AFTER_MS", 20 * 60_000);
@@ -173,8 +180,14 @@ let historyMetrics = {
   sqlite_prior_anchor_hits: 0,
   sqlite_anchor_mismatches: 0,
   sqlite_lag_fallbacks: 0,
-  sqlite_ahead_refreshes: 0
+  sqlite_ahead_refreshes: 0,
+  sqlite_unavailable_fallbacks: 0,
+  sqlite_trust_rejections: 0
 };
+let recentLatestSummariesLoaded = false;
+let recentLatestSummariesLoadInFlight: Promise<void> | null = null;
+let recentLatestSummariesPersistInFlight: Promise<void> | null = null;
+let recentLatestSummariesPersistQueued = false;
 let liveVerificationCache: { address: string; checked_at: string; value: Record<string, any> } | null = null;
 let circleProgramVerificationCache: { circle_id: string; checked_at: string; value: Record<string, any> } | null = null;
 let circleMetadataCache: { cache_key: string; circle_id: string; rpc_url: string | null; checked_at: number; value: CircleMetadata } | null = null;
@@ -1261,32 +1274,41 @@ function publicHistoryRead(cache: HistoryApiRead["cache"], history: ProgramHisto
   };
 }
 
-function snapshotIndex(snapshot: SnapshotArtifact | null | undefined): number | null {
-  const index = Number((snapshot as any)?.snapshot_index || 0);
-  return Number.isFinite(index) && index > 0 ? index : null;
+function rememberLatestSummary(snapshot: SnapshotArtifact | null | undefined): void {
+  if (!rememberHistorySummaryAnchor(recentLatestSummaries, snapshot, 8)) return;
+  scheduleRecentLatestSummariesPersist();
 }
 
-function rememberLatestSummary(snapshot: SnapshotArtifact | null | undefined): void {
-  const index = snapshotIndex(snapshot);
-  const latestSummary = (snapshot as any)?.latest_summary;
-  if (!index || typeof latestSummary !== "string" || !latestSummary) return;
-  const observedAtUnix = (() => {
-    try {
-      return decodeSummaryRow(latestSummary).observed_at_unix;
-    } catch {
-      return null;
-    }
-  })();
-  recentLatestSummaries.set(index, {
-    latest_summary: latestSummary,
-    observed_at_unix: observedAtUnix,
-    checked_at_ms: Date.now()
-  });
-  while (recentLatestSummaries.size > 8) {
-    const oldest = recentLatestSummaries.keys().next().value;
-    if (oldest === undefined) break;
-    recentLatestSummaries.delete(oldest);
+async function ensureRecentLatestSummariesLoaded(): Promise<void> {
+  if (recentLatestSummariesLoaded) return;
+  if (recentLatestSummariesLoadInFlight) return recentLatestSummariesLoadInFlight;
+  recentLatestSummariesLoadInFlight = loadHistorySummaryAnchors(historySummaryAnchorsPath, 8)
+    .then((loaded) => {
+      mergeHistorySummaryAnchors(recentLatestSummaries, loaded, 8);
+      recentLatestSummariesLoaded = true;
+    })
+    .finally(() => {
+      recentLatestSummariesLoadInFlight = null;
+    });
+  return recentLatestSummariesLoadInFlight;
+}
+
+function scheduleRecentLatestSummariesPersist(): void {
+  if (recentLatestSummariesPersistInFlight) {
+    recentLatestSummariesPersistQueued = true;
+    return;
   }
+  recentLatestSummariesPersistInFlight = writeHistorySummaryAnchors(historySummaryAnchorsPath, recentLatestSummaries)
+    .catch(() => {
+      // Anchor persistence is a resilience optimization; runtime verification still fails closed without it.
+    })
+    .finally(() => {
+      recentLatestSummariesPersistInFlight = null;
+      if (recentLatestSummariesPersistQueued) {
+        recentLatestSummariesPersistQueued = false;
+        scheduleRecentLatestSummariesPersist();
+      }
+    });
 }
 
 function historyTailAnchorOptions(source: HistoryCacheSource): { maxLagSnapshots: number; rememberedSummaries: ReadonlyMap<number, HistorySummaryAnchor> } {
@@ -1302,6 +1324,7 @@ function verifyHistoryTailForSource(history: ProgramHistoryWindow, latest: Snaps
 
 async function cachedHistoryTailMatchesLatest(entry: HistoryCacheEntry | undefined): Promise<boolean> {
   if (!entry?.value) return false;
+  await ensureRecentLatestSummariesLoaded();
   const latestResult = await getLatestSnapshot();
   if (latestResult.source !== "program" || !latestResult.snapshot) return false;
   try {
@@ -1377,6 +1400,7 @@ async function readCanonicalHistory(target: StateTarget, bypassCache = false, op
 }
 
 async function latestSnapshotForHistory(target: StateTarget, latestResult?: LatestSnapshotResult): Promise<SnapshotArtifact> {
+  await ensureRecentLatestSummariesLoaded();
   const resolved = latestResult || await getLatestSnapshot();
   if (resolved.source === "program" && resolved.snapshot) {
     rememberLatestSummary(resolved.snapshot);
@@ -1403,6 +1427,7 @@ function recordSqliteAnchorFailure(error: unknown): void {
 }
 
 async function readHistorySource(target: StateTarget, latest: SnapshotArtifact, options: HistoryReadOptions = {}): Promise<{ history: ProgramHistoryWindow; source: HistoryCacheSource; tail_anchor: HistoryTailAnchorVerification; latest: SnapshotArtifact }> {
+  await ensureRecentLatestSummariesLoaded();
   if (historyReadMode === "canonical") {
     const history = await readCanonicalHistory(target, true, options);
     try {
@@ -1471,7 +1496,13 @@ async function readHistorySource(target: StateTarget, latest: SnapshotArtifact, 
       }
     }
     recordSqliteAnchorFailure(sqliteError);
-    if (!sqliteHistoryFallbackToAml) throw sqliteError;
+    const fallbackDecision = sqliteHistoryFallbackDecision(sqliteError);
+    if (!fallbackDecision.allowed) {
+      historyMetrics.sqlite_trust_rejections += 1;
+      throw sqliteError instanceof Error ? sqliteError : new Error(String(sqliteError));
+    }
+    if (!sqliteHistoryFallbackToAml) throw sqliteError instanceof Error ? sqliteError : new Error(String(sqliteError));
+    historyMetrics.sqlite_unavailable_fallbacks += 1;
     const history = await readCanonicalHistory(target, true, options);
     try {
       return {
@@ -2162,6 +2193,7 @@ async function servePerformance(res: http.ServerResponse, head = false): Promise
     history_cache: {
       read_mode: historyReadMode,
       sqlite_fallback_to_aml: sqliteHistoryFallbackToAml,
+      sqlite_fallback_policy: "unavailable_only",
       sqlite_max_lag_snapshots: historyReplicaMaxLagSnapshots,
       remembered_latest_summary_count: recentLatestSummaries.size,
       ttl_ms: historyReadTtlMs,

@@ -14,7 +14,7 @@ The capacity changes described here affect read paths, retention, diagnostics, a
 - Octra RPC calls share one small concurrency budget.
 - The Lab mirror reads only the gap after its completion watermark.
 - `/api/history` can use the `octra-sqlite` Circle as a read replica, then anchor the tail row against the current or recently observed AML latest summary before serving it.
-- A SQLite replica may trail the AML latest snapshot by one row only when that row byte-matches a recent AML `latest_summary` already observed by the gateway. After a restart, or on any mismatch, the gateway falls back to AML instead of serving an unanchored mirror.
+- A SQLite replica may trail the AML latest snapshot by one row only when that row byte-matches a recent AML `latest_summary` observed by the gateway. Those recent anchors are persisted across gateway restarts. If SQLite is reachable but the tail is unanchored, mismatched, gapped, or incomplete, the gateway fails closed instead of masking it with AML.
 - New raw evidence bodies are stored gzip-compressed on disk.
 - Operator alerts include a 365-day raw-evidence growth projection.
 - `/api/performance` can expose low-impact timing and cache checks when explicitly enabled.
@@ -32,8 +32,9 @@ The capacity changes described here affect read paths, retention, diagnostics, a
 ```text
 VITALS_HISTORY_READ_TTL_MS=60000
 VITALS_HISTORY_READ_PATH=replica       # replica | canonical | cache_only
-VITALS_HISTORY_REPLICA_FALLBACK_TO_CANONICAL=1
+VITALS_HISTORY_REPLICA_FALLBACK_TO_CANONICAL=1  # emergency fallback only when SQLite is unavailable
 VITALS_HISTORY_REPLICA_MAX_LAG_SNAPSHOTS=1
+VITALS_GATEWAY_CACHE_DIR=/var/lib/octra-vitals-gateway
 VITALS_HISTORY_REPLICA_PAGE_ROWS=175
 VITALS_HISTORY_STALE_WHILE_REFRESH_MS=0
 VITALS_HISTORY_API_STALE_WINDOWS=
@@ -76,4 +77,4 @@ Octra RPC admission covers fetch **and full response-body consumption**, reserve
 
 ## Main Constraint
 
-The expensive surface is long-horizon AML history reads. The current answer is an Octra-native SQLite Circle history mirror, verified cache, and stale-while-refresh. AML remains canonical; the mirror is usable for display only after its latest row matches the latest AML snapshot. Future AML getter changes remain a separate gated design decision.
+The expensive surface is long-horizon AML history reads. The current answer is an Octra-native SQLite Circle history mirror, verified cache, and stale-while-refresh. AML remains canonical; the mirror is usable for display only after its latest row matches the current AML snapshot, or the immediately prior AML summary when the mirror is one snapshot behind. Future AML getter changes remain a separate gated design decision.

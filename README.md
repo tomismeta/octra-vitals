@@ -65,7 +65,7 @@ The Lab is intentionally **derived**, not canonical:
 
 - canonical truth remains the Vitals AML fact ledger;
 - the Lab mirror writes only after a confirmed AML snapshot write;
-- the same Circle database can serve as the Octra-native read replica for history APIs, with each response latest-row anchored against the AML latest snapshot;
+- the same Circle database can serve as the Octra-native read replica for history APIs, with each response anchored against the current or immediately prior AML latest summary;
 - the mirror is decoupled from the core updater, so Lab failure does not block Vitals;
 - the Lab database lives in its own sealed Octra SQLite Circle;
 - the Lab web assets live separately from the core Vitals Circle;
