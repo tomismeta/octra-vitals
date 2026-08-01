@@ -976,10 +976,10 @@ async function loadCircleMetadata(circleId: string, rpcUrl: string | null = null
   return promise;
 }
 
-async function loadCircleMetadataForStaticHeaders(circleId: string): Promise<CircleMetadata> {
+async function loadCircleMetadataForStaticHeaders(circleId: string, rpcUrl: string | null = siteCircleRpcUrl()): Promise<CircleMetadata> {
   const timeoutMs = nonNegativeIntegerEnv("VITALS_CIRCLE_METADATA_HEADER_TIMEOUT_MS", 350);
   const fallback = circleMetadataFromInfo(null, timeoutMs <= 0 ? "circle_info_deferred" : "circle_info_header_timeout");
-  const read = loadCircleMetadata(circleId, siteCircleRpcUrl());
+  const read = loadCircleMetadata(circleId, rpcUrl);
   if (timeoutMs <= 0) return fallback;
   return Promise.race([
     read,
@@ -1751,16 +1751,16 @@ async function readLocalStaticAsset(assetPath: string, releaseAsset: Record<stri
   };
 }
 
-async function readCircleStaticAsset(assetPath: string, circleId: string, releaseAsset: Record<string, any> | undefined) {
+async function readCircleStaticAsset(assetPath: string, circleId: string, releaseAsset: Record<string, any> | undefined, rpcUrl: string | null = siteCircleRpcUrl()) {
   const cacheMs = nonNegativeIntegerEnv("VITALS_STATIC_ASSET_CACHE_MS", 60_000);
   const expected = normalizeHash(releaseAsset?.sha256);
   if (!expected) throw new Error(`release manifest missing pinned hash for ${assetPath}`);
-  const cacheKey = `${circleId}:${assetPath}:${expected || "unverified"}`;
+  const cacheKey = `${circleId}:${rpcUrl || "default"}:${assetPath}:${expected || "unverified"}`;
   const cached = staticAssetCache.get(cacheKey);
   if (cached && Date.now() - cached.cachedAt < cacheMs) return cached;
 
-  const circleMetadataRead = loadCircleMetadataForStaticHeaders(circleId);
-  const circleAsset = await octraRpc<any>("circle_asset", [circleId, assetPath]);
+  const circleMetadataRead = loadCircleMetadataForStaticHeaders(circleId, rpcUrl);
+  const circleAsset = await octraRpc<any>("circle_asset", [circleId, assetPath], rpcUrl ? { url: rpcUrl } : undefined);
   const bytes = extractCircleAssetBytes(circleAsset);
   if (!bytes) throw new Error(`circle asset ${assetPath} did not return bytes`);
   const integrity = verifyCircleAssetIntegrity(circleId, assetPath, bytes, circleAsset || {});
