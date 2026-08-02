@@ -16,6 +16,10 @@ issue:
   then drop.
 - While pending, `staging_view` reports the transaction OU correctly, but
   `staging_stats` and `staging_estimateOu` account the queue as `1000`.
+- Historical `octra-sqlite` Circle writes on this same DB Circle confirmed
+  successfully before the recent program upgrades. The current failure pattern
+  begins after the newer DB program updates and affects both Vitals mirror SQL
+  and independent `octra-sqlite verify --write-smoke` SQL.
 
 ## Current Safe State
 
@@ -53,6 +57,39 @@ confirmed with a contract receipt.
   - `upgrade_needed: false`
 
 ## Reproduction Evidence
+
+### Historical Confirmed SQLite Write Baseline
+
+The same Lab DB Circle has confirmed SQLite writes in its address history. One
+representative write:
+
+- Tx: `713fe5558205558501f25ec23730e2e83fd9aa63638f371793d29839c9e9e763`
+- Epoch: `1209061`
+- Nonce: `10184`
+- OU: `1000`
+- Operation: `circle_call`
+- Contract receipt:
+
+```json
+{
+  "contract": "octBa1SdBvjQ38dJWBwiLByPSQrGTdja2HG15dZCkGJFeJP",
+  "method": "exec",
+  "success": true,
+  "effort": 0,
+  "events": [
+    {
+      "event": "octra.sqlite.exec",
+      "values": ["sql_fnv1a64:4a7d63a04d8ca018"]
+    }
+  ],
+  "error": null
+}
+```
+
+Recent DB address history now shows only `circle_program_update` transactions as
+confirmed. New `circle_call` writes to the DB Circle are landing in the dropped
+set with `reason: expired`, across `OU=1000`, `OU=20000`, `OU=200000`, and
+`OU=1000000`.
 
 ### Vitals Lab Mirror Write
 
