@@ -28,7 +28,7 @@ export interface EvidenceEntry {
 
 export interface EvidenceManifestEntry {
   id: string;
-  request_hash: string | null;
+  request_hash?: string | null;
   response_hash: string;
 }
 

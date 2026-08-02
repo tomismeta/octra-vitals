@@ -810,7 +810,15 @@ function extractSnapshotArtifact(value){
 
 function sourceRefUrl(refs, id){
   const ref = (refs || []).find((item)=>item?.id === id);
-  return ref?.hash ? apiHref(`/api/evidence/raw/${String(ref.hash).replace(/^sha256:/, "")}`) : ref?.url || null;
+  const hash = ref?.hash || ref?.response_hash;
+  return hash ? apiHref(`/api/evidence/raw/${String(hash).replace(/^sha256:/, "")}`) : ref?.url || null;
+}
+
+function evidenceSourceRefs(evidenceManifest){
+  const entries = evidenceManifest?.entries;
+  return Array.isArray(entries)
+    ? entries.filter((entry)=>entry?.id && entry?.response_hash).map((entry)=>({ id: entry.id, hash: entry.response_hash }))
+    : [];
 }
 
 function historyRows(history, currentData){
@@ -980,7 +988,11 @@ function adaptSnapshot(latestResult, versionResult, historyResult){
       src_chain: route.src_chain_id || relayer.src_chain_id || 7777,
       dst_chain: route.dst_chain_id || relayer.dst_chain_id || ethereum.chain_id || 1,
       route_id: route.route_id || null,
-      source_refs: envelope.source_refs || body.source_refs || []
+      source_refs: Array.isArray(envelope.source_refs) && envelope.source_refs.length
+        ? envelope.source_refs
+        : Array.isArray(body.source_refs) && body.source_refs.length
+          ? body.source_refs
+          : evidenceSourceRefs(artifact.evidence_manifest || body.evidence_manifest)
     },
     source: {
       status: sampleFallback ? "sample" : body.status || "program",

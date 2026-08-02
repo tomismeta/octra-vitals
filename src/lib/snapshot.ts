@@ -821,16 +821,13 @@ async function fetchEthereumWoct(observedAt: string): Promise<{ blockNumber: str
 }
 
 function sourceRefsFromEvidence(evidence: EvidenceEntry[]): SourceRef[] {
-  return evidence.map((entry) => ({
-    id: entry.id,
-    hash: entry.response_hash
-  }));
+  void evidence;
+  return [];
 }
 
 function manifestEntriesFromEvidence(evidence: EvidenceEntry[]): EvidenceManifestEntry[] {
   return evidence.map((entry) => ({
     id: entry.id,
-    request_hash: entry.request_hash,
     response_hash: entry.response_hash
   }));
 }

@@ -94,10 +94,13 @@
     const observedMs = canonicalUtcSecond(envelope.observed_at);
     requireEqual("snapshot id", envelope.snapshot_id, `vitals.${envelope.observed_at}`);
     requireEqual("evidence observed_at", evidence.observed_at, envelope.observed_at);
-    if(!Array.isArray(sourceRefs) || sourceRefs.length < 1) throw new Error("source refs are missing");
-    if(!Array.isArray(evidence.entries) || evidence.entries.length !== sourceRefs.length) throw new Error("evidence/source ref cardinality mismatch");
+    if(!Array.isArray(evidence.entries) || evidence.entries.length < 1) throw new Error("evidence entries are missing");
+    const effectiveSourceRefs = Array.isArray(sourceRefs) && sourceRefs.length
+      ? sourceRefs
+      : evidence.entries.map((entry)=>({ id: entry?.id, hash: entry?.response_hash }));
+    if(effectiveSourceRefs.length !== evidence.entries.length) throw new Error("evidence/source ref cardinality mismatch");
     const ids = new Set();
-    for(const [index, ref] of sourceRefs.entries()){
+    for(const [index, ref] of effectiveSourceRefs.entries()){
       if(!ref || typeof ref !== "object" || typeof ref.id !== "string" || !ref.id || ids.has(ref.id)) throw new Error(`source ref ${index} id is invalid`);
       if(!/^sha256:[0-9a-f]{64}$/.test(ref.hash || "")) throw new Error(`source ref ${index} hash is invalid`);
       const entry = evidence.entries[index];
