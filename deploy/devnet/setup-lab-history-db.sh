@@ -97,7 +97,6 @@ sudo env OCTRA_SQLITE_CONFIG="$OCTRA_SQLITE_CONFIG" OCTRA_SQLITE_WRITE_OU="$LAB_
   "$OCTRA_SQLITE_PREFIX/bin/octra-sqlite" open \
   --wallet "$OCTRA_SQLITE_WALLET" \
   --rpc "$LAB_RPC" \
-  --ou "$LAB_WRITE_OU" \
   "$LAB_DATABASE" \
   "alter table snapshots add column source_id text" >/dev/null 2>&1 || true
 
