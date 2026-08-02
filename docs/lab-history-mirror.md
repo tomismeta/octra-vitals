@@ -4,6 +4,10 @@ The history lab is an optional proving surface for querying Vitals history throu
 
 It is not canonical state. The canonical ledger remains the Vitals AML fact ledger in the programmed Circle. The lab database is a derived readback cache populated only after the updater has successfully persisted a snapshot to AML and verified the AML readback.
 
+Current devnet SQLite write-finalization evidence is tracked in
+[`docs/devnet-lab-sqlite-write-finalization.md`](devnet-lab-sqlite-write-finalization.md).
+Keep the Lab mirror writer disabled until that blocker is closed.
+
 ## Dependency
 
 The lab uses `tomismeta/octra-sqlite` as an external dependency, unchanged.
@@ -64,7 +68,7 @@ VITALS_LAB_HISTORY_DATABASE_URI=oct://devnet/octBa1SdBvjQ38dJWBwiLByPSQrGTdja2HG
 VITALS_LAB_SITE_CIRCLE_ID=octD4K6tHUsUsCb37fjd1Fa6Rv5WzeXhWfKfvzcXJb5tVZK
 VITALS_LAB_HISTORY_OCTRA_SQLITE_BIN=/opt/octra-sqlite/bin/octra-sqlite
 VITALS_LAB_HISTORY_WRITE_TOKEN=<host-local secret>
-VITALS_LAB_HISTORY_WRITE_OU=10000
+VITALS_LAB_HISTORY_WRITE_OU=200000
 VITALS_LAB_HISTORY_SYNC_SQL_MAX_BYTES=6000
 VITALS_LAB_HISTORY_SYNC_MAX_ROWS=8
 VITALS_LAB_HISTORY_SYNC_TAIL_ROWS=0
