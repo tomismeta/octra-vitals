@@ -348,6 +348,7 @@ export async function runLabHistoryMirror(): Promise<Record<string, any>> {
     lab_write_ou: config.writeOu,
     lab_write_ou_source: config.writeOuSource
   };
+  let operator_staging: OperatorStagingHealth | null = null;
 
   if (startDelayMs > 0) {
     await timed(timings, "start_delay_ms", () => sleep(startDelayMs));
@@ -389,7 +390,7 @@ export async function runLabHistoryMirror(): Promise<Record<string, any>> {
       return report;
     }
 
-    const operator_staging = await timed(timings, "operator_staging_check_ms", () => readOperatorStagingHealth(config));
+    operator_staging = await timed(timings, "operator_staging_check_ms", () => readOperatorStagingHealth(config));
     if (operator_staging.guard_enabled && operator_staging.pending) {
       const retention = await pruneLabRunDirs(timings, runsDir, runDir);
       timings.total_ms = ms(performance.now() - totalStarted);
@@ -432,6 +433,7 @@ export async function runLabHistoryMirror(): Promise<Record<string, any>> {
         started_at: startedAt,
         generated_at: isoNow(),
         ...configDiagnostics,
+        operator_staging,
         state_target_mode: target.kind,
         state_target_id: targetId,
         source_history: {
@@ -482,6 +484,7 @@ export async function runLabHistoryMirror(): Promise<Record<string, any>> {
       started_at: startedAt,
       generated_at: isoNow(),
       ...configDiagnostics,
+      operator_staging,
       state_target_mode: target.kind,
       state_target_id: targetId,
       source_history: {
@@ -513,6 +516,7 @@ export async function runLabHistoryMirror(): Promise<Record<string, any>> {
       generated_at: isoNow(),
       error: errorMessage(error),
       ...configDiagnostics,
+      ...(operator_staging ? { operator_staging } : {}),
       paths,
       timings_ms: timings
     };
@@ -537,6 +541,7 @@ async function main(): Promise<void> {
     lab_database: report.lab_database || null,
     lab_write_ou: report.lab_write_ou || null,
     lab_write_ou_source: report.lab_write_ou_source || null,
+    operator_staging: report.operator_staging || null,
     state_target_mode: report.state_target_mode || null,
     state_target_id: report.state_target_id || null,
     mirror: report.mirror || null,

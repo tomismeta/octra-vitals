@@ -527,6 +527,8 @@ test("failed lab mirror reports retain write OU diagnostics", async () => {
     assert.equal(report.lab_database, "oct://devnet/octExample");
     assert.equal(report.lab_write_ou, "250000");
     assert.equal(report.lab_write_ou_source, "VITALS_LAB_HISTORY_WRITE_OU");
+    assert.equal(report.operator_staging.guard_enabled, false);
+    assert.equal(report.operator_staging.reason, "operator_staging_guard_disabled");
   } finally {
     await rm(dir, { recursive: true, force: true });
   }
