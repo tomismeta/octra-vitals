@@ -28,6 +28,9 @@ issue:
 - Devnet Lab mirror systemd units are installed, but disabled/inactive.
 - Lab DB is upgraded and ready.
 - Lab mirror writer remains disabled until writes settle cleanly.
+- The Lab DB owner/write wallet is the same public address as the AML snapshot
+  operator. Failed Lab writes therefore block snapshot writes until the Lab tx
+  confirms or expires.
 
 The 2026-08-02 controlled write-smoke retry later dropped with TTL expiry, so
 the operator nonce recovered. A controlled AML-only snapshot run succeeded after
@@ -279,6 +282,30 @@ budget. It is also not solved by increasing the budget from `200000` to
 
 The likely issue is in devnet SQLite Circle call finalization, staging OU
 accounting, or the octra-sqlite transaction/receipt path for this runtime.
+
+The next write experiment should not use the shared Vitals operator wallet. Use
+one of these paths:
+
+1. a disposable devnet wallet with a disposable devnet SQLite DB Circle, or
+2. a new octra-sqlite/runtime candidate that specifically addresses dropped
+   sealed DB `circle_call` writes.
+
+Only after an isolated write confirms should the shared devnet Lab DB Circle be
+tested again. The useful isolated test is:
+
+```sh
+octra-sqlite status DISPOSABLE_DB --ready --json
+octra-sqlite verify DISPOSABLE_DB --write-smoke --write-ou 200000 --json
+octra-sqlite status DISPOSABLE_DB --ready --json
+```
+
+Pass criteria:
+
+- the write-smoke exits successfully,
+- the create/insert/drop writes confirm,
+- receipts are available or the CLI returns a confirmed write envelope,
+- the disposable wallet returns to `nonce == pending_nonce`,
+- devnet staging is empty afterward.
 
 ## Operating Rule
 
