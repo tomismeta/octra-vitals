@@ -263,6 +263,8 @@ for key in \
   VITALS_LAB_HISTORY_STAGING_GUARD \
   VITALS_LAB_HISTORY_START_DELAY_MS \
   VITALS_LAB_HISTORY_RPC \
+  OCTRA_SQLITE_WRITE_OU \
+  OCTRA_SQLITE_VERIFY_WRITE_OU \
   OCTRA_SQLITE_CONFIG; do
   value="$(optional_env_value "${key}")"
   remove_env "${updater_env}" "${key}" 600 root

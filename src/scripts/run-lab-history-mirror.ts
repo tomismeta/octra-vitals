@@ -389,6 +389,22 @@ export async function runLabHistoryMirror(): Promise<Record<string, any>> {
       await writeJsonAtomic(latestReportPath, report);
       return report;
     }
+    if (!config.writeOu) {
+      const report = {
+        schema: "octra-vitals-lab-history-mirror-report-v0",
+        status: "skipped",
+        reason: "lab_history_write_ou_required",
+        run_id: runId,
+        started_at: startedAt,
+        generated_at: isoNow(),
+        ...configDiagnostics,
+        paths,
+        timings_ms: { total_ms: ms(performance.now() - totalStarted) }
+      };
+      await writeJsonAtomic(runReportPath, report);
+      await writeJsonAtomic(latestReportPath, report);
+      return report;
+    }
 
     operator_staging = await timed(timings, "operator_staging_check_ms", () => readOperatorStagingHealth(config));
     if (operator_staging.guard_enabled && operator_staging.pending) {

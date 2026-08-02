@@ -437,6 +437,7 @@ test("lab history setup pins an octra-sqlite build with configurable write OU", 
   const script = await readFile(resolve("deploy/devnet/setup-lab-history-db.sh"), "utf8");
 
   assert.match(script, /OCTRA_SQLITE_COMMIT="\$\{OCTRA_SQLITE_COMMIT:-bbdb23e9818f07d10550116ddb5704373ac15560\}"/);
+  assert.match(script, /LAB_WRITE_OU="\$\{VITALS_LAB_HISTORY_WRITE_OU:-\$\{OCTRA_SQLITE_WRITE_OU:-200000\}\}"/);
   assert.match(script, /REPO_ROOT="\$\(cd -- "\$\{SCRIPT_DIR\}\/\.\.\/\.\." && pwd\)"/);
   assert.match(script, /VITALS_REPO_DIR="\$\{VITALS_REPO_DIR:-\$REPO_ROOT\}"/);
   assert.match(script, /octra-sqlite" setup --yes/);
@@ -495,12 +496,41 @@ test("lab history staging guard skips writes when the operator address is unconf
   }
 });
 
+test("lab mirror writer refuses to run without an explicit write OU budget", async () => {
+  const dir = await mkdtemp(join(tmpdir(), `octra-vitals-lab-write-ou-required-${process.pid}-`));
+  const latestReport = join(dir, "latest.json");
+  try {
+    const report = await withEnv({
+      VITALS_LAB_HISTORY_RUN_ID: "write-ou-required-test",
+      VITALS_LAB_HISTORY_DATA_DIR: dir,
+      VITALS_LAB_HISTORY_REPORT_PATH: latestReport,
+      VITALS_LAB_HISTORY_ENABLED: "1",
+      VITALS_LAB_HISTORY_DATABASE_URI: "oct://devnet/octExample",
+      VITALS_LAB_HISTORY_WRITE_OU: undefined,
+      OCTRA_SQLITE_WRITE_OU: undefined,
+      VITALS_CALL_OU: undefined
+    }, () => runLabHistoryMirror());
+
+    assert.equal(report.status, "skipped");
+    assert.equal(report.reason, "lab_history_write_ou_required");
+    assert.equal(report.lab_write_ou, null);
+    assert.equal(report.lab_write_ou_source, null);
+
+    const persisted = JSON.parse(await readFile(latestReport, "utf8"));
+    assert.equal(persisted.reason, "lab_history_write_ou_required");
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
 test("configure-programmed-circle carries lab staging guard without removing updater operator address", async () => {
   const script = await readFile(resolve("deploy/mainnet/configure-programmed-circle.sh"), "utf8");
   const loopStart = script.indexOf("for key in \\");
   const loopEnd = script.indexOf("\ndone", loopStart);
   const labLoop = loopStart >= 0 && loopEnd > loopStart ? script.slice(loopStart, loopEnd) : "";
   assert.match(script, /VITALS_LAB_HISTORY_STAGING_GUARD/);
+  assert.match(script, /OCTRA_SQLITE_WRITE_OU/);
+  assert.match(script, /OCTRA_SQLITE_VERIFY_WRITE_OU/);
   assert.match(script, /operator_address="\$\(optional_env_value VITALS_OPERATOR_ADDRESS\)"/);
   assert.match(script, /set_env "\$\{lab_env\}" VITALS_OPERATOR_ADDRESS/);
   assert.doesNotMatch(labLoop, /VITALS_OPERATOR_ADDRESS/);
