@@ -2,8 +2,9 @@
 Description=Run Octra Vitals snapshot updater
 
 [Timer]
+Unit=octra-vitals-updater.service
 OnBootSec=2min
-OnUnitActiveSec=15min
+OnCalendar=*:0/15
 RandomizedDelaySec=1min
 Persistent=true
 
