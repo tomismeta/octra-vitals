@@ -5,9 +5,10 @@ import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { performance } from "node:perf_hooks";
 import { configuredStateTarget, readVerifiedCanonicalHistory, type HistoryReadOptions } from "../lib/canonical-history.js";
+import { octraRpc } from "../lib/octra-rpc.js";
 import { readLatestCircleProgramSnapshot, readLatestProgramSnapshot } from "../lib/program-state.js";
 import { mirrorLabHistory, readLabHistoryWatermark, type LabHistorySource } from "../lib/lab-history.js";
-import { octraSqliteConfig } from "../lib/octra-sqlite-client.js";
+import { octraSqliteConfig, type OctraSqliteConfig } from "../lib/octra-sqlite-client.js";
 import { writeJsonAtomic } from "./submit-snapshot.js";
 
 const root = resolve(new URL("../..", import.meta.url).pathname);
@@ -21,6 +22,17 @@ interface MirrorLockPayload {
   run_id?: string;
   pid?: number;
   created_at?: string;
+}
+
+interface OperatorStagingHealth {
+  checked: boolean;
+  guard_enabled: boolean;
+  pending: boolean;
+  reason: string | null;
+  address: string | null;
+  nonce: number | null;
+  pending_nonce: number | null;
+  error: string | null;
 }
 
 function isoNow(): string {
@@ -186,6 +198,87 @@ function snapshotIndex(value: unknown): number {
   return Number.isSafeInteger(parsed) && parsed > 0 ? parsed : 0;
 }
 
+function envText(name: string): string | null {
+  const value = process.env[name];
+  return value && value.trim() ? value.trim() : null;
+}
+
+function labControlRpcUrl(config: OctraSqliteConfig): string {
+  return envText("VITALS_LAB_HISTORY_RPC") ||
+    envText("OCTRA_PROGRAM_RPC_URL") ||
+    (config.network === "devnet" ? "https://devnet.octrascan.io/rpc" : "https://octra.network/rpc");
+}
+
+export function operatorStagingHealthFromBalance(address: string, balance: Record<string, any>): OperatorStagingHealth {
+  const nonce = Number(balance?.nonce);
+  const pendingNonce = Number(balance?.pending_nonce);
+  if (!Number.isSafeInteger(nonce) || !Number.isSafeInteger(pendingNonce)) {
+    return {
+      checked: true,
+      guard_enabled: true,
+      pending: true,
+      reason: "operator_staging_unverified",
+      address,
+      nonce: null,
+      pending_nonce: null,
+      error: "operator balance response missing safe nonce/pending_nonce"
+    };
+  }
+  return {
+    checked: true,
+    guard_enabled: true,
+    pending: pendingNonce > nonce,
+    reason: pendingNonce > nonce ? "operator_staging_pending" : null,
+    address,
+    nonce,
+    pending_nonce: pendingNonce,
+    error: null
+  };
+}
+
+async function readOperatorStagingHealth(config: OctraSqliteConfig): Promise<OperatorStagingHealth> {
+  if (process.env.VITALS_LAB_HISTORY_STAGING_GUARD === "0") {
+    return {
+      checked: false,
+      guard_enabled: false,
+      pending: false,
+      reason: "operator_staging_guard_disabled",
+      address: null,
+      nonce: null,
+      pending_nonce: null,
+      error: null
+    };
+  }
+  const address = envText("VITALS_LAB_HISTORY_OPERATOR_ADDRESS") || envText("VITALS_OPERATOR_ADDRESS");
+  if (!address) {
+    return {
+      checked: false,
+      guard_enabled: true,
+      pending: true,
+      reason: "operator_address_unconfigured",
+      address: null,
+      nonce: null,
+      pending_nonce: null,
+      error: "operator address is required when VITALS_LAB_HISTORY_STAGING_GUARD is enabled"
+    };
+  }
+  try {
+    const balance = await octraRpc<Record<string, any>>("octra_balance", [address], { url: labControlRpcUrl(config) });
+    return operatorStagingHealthFromBalance(address, balance);
+  } catch (error) {
+    return {
+      checked: true,
+      guard_enabled: true,
+      pending: true,
+      reason: "operator_staging_unverified",
+      address,
+      nonce: null,
+      pending_nonce: null,
+      error: errorMessage(error)
+    };
+  }
+}
+
 function boundedIntegerEnv(name: string, fallback: number, min: number, max: number): number {
   const configured = process.env[name];
   const parsed = configured !== undefined && configured !== "" ? Number(configured) : fallback;
@@ -290,6 +383,28 @@ export async function runLabHistoryMirror(): Promise<Record<string, any>> {
         ...configDiagnostics,
         paths,
         timings_ms: { total_ms: ms(performance.now() - totalStarted) }
+      };
+      await writeJsonAtomic(runReportPath, report);
+      await writeJsonAtomic(latestReportPath, report);
+      return report;
+    }
+
+    const operator_staging = await timed(timings, "operator_staging_check_ms", () => readOperatorStagingHealth(config));
+    if (operator_staging.guard_enabled && operator_staging.pending) {
+      const retention = await pruneLabRunDirs(timings, runsDir, runDir);
+      timings.total_ms = ms(performance.now() - totalStarted);
+      const report = {
+        schema: "octra-vitals-lab-history-mirror-report-v0",
+        status: "skipped",
+        reason: operator_staging.reason || "operator_staging_pending",
+        run_id: runId,
+        started_at: startedAt,
+        generated_at: isoNow(),
+        ...configDiagnostics,
+        operator_staging,
+        retention,
+        paths,
+        timings_ms: timings
       };
       await writeJsonAtomic(runReportPath, report);
       await writeJsonAtomic(latestReportPath, report);

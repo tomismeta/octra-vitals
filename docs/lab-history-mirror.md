@@ -69,11 +69,15 @@ VITALS_LAB_HISTORY_SYNC_SQL_MAX_BYTES=6000
 VITALS_LAB_HISTORY_SYNC_MAX_ROWS=8
 VITALS_LAB_HISTORY_SYNC_TAIL_ROWS=0
 VITALS_LAB_HISTORY_START_DELAY_MS=90000
+VITALS_LAB_HISTORY_STAGING_GUARD=1
+VITALS_LAB_HISTORY_OPERATOR_ADDRESS=oct...
 VITALS_LAB_HISTORY_REPORT_PATH=/var/lib/octra-vitals/latest_lab_history_mirror_report.json
 OCTRA_SQLITE_CONFIG=/etc/octra-vitals/octra-sqlite/config.json
 ```
 
 `VITALS_LAB_HISTORY_WRITE_OU` is the Vitals-owned budget for owner-signed SQL writes. The Lab worker passes it to `octra-sqlite` as `OCTRA_SQLITE_WRITE_OU`; if it is unset, Vitals falls back to `OCTRA_SQLITE_WRITE_OU`, then `VITALS_CALL_OU`, then octra-sqlite's default. Use this for devnet/stage fee headroom without changing AML deploy or program-update budgets. The setup script pins octra-sqlite `0.6.3+` because earlier builds do not honor this write-OU surface.
+
+`VITALS_LAB_HISTORY_STAGING_GUARD` is enabled by default. Before a Lab SQL write, the worker checks the configured Lab operator address with `octra_balance`; dirty staging, missing address configuration, or an unverifiable balance read produces a skipped report rather than another write. Set `VITALS_LAB_HISTORY_OPERATOR_ADDRESS` only when the Lab wallet is not the normal `VITALS_OPERATOR_ADDRESS`.
 
 The gateway refuses lab page, asset, query, and sync calls unless the lab feature is enabled and the database URI network matches the configured network. Mainnet lab databases are refused unless `VITALS_LAB_HISTORY_ALLOW_MAINNET=1`. Disabled lab routes return `404`, including `/api/lab/status`.
 

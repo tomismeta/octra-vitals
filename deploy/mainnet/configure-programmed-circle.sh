@@ -260,6 +260,7 @@ for key in \
   VITALS_LAB_HISTORY_SYNC_SQL_MAX_BYTES \
   VITALS_LAB_HISTORY_SYNC_MAX_ROWS \
   VITALS_LAB_HISTORY_SYNC_TAIL_ROWS \
+  VITALS_LAB_HISTORY_STAGING_GUARD \
   VITALS_LAB_HISTORY_START_DELAY_MS \
   VITALS_LAB_HISTORY_RPC \
   OCTRA_SQLITE_CONFIG; do
@@ -273,6 +274,11 @@ for key in \
   fi
 done
 remove_env "${gateway_env}" VITALS_LAB_HISTORY_WRITE_TOKEN 640 "${APP_USER}"
+
+operator_address="$(optional_env_value VITALS_OPERATOR_ADDRESS)"
+if [ -n "${operator_address}" ]; then
+  set_env "${lab_env}" VITALS_OPERATOR_ADDRESS "${operator_address}" 600 root
+fi
 
 remove_env "${gateway_env}" VITALS_INCLUDE_LAB_HISTORY_ASSETS 640 "${APP_USER}"
 remove_env "${lab_env}" VITALS_INCLUDE_LAB_HISTORY_ASSETS 600 root

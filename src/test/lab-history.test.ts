@@ -8,7 +8,7 @@ import { promisify } from "node:util";
 
 import { buildLabHistoryMirrorSql, labHistorySql, mirrorLabHistory, planLabHistoryMirrorRows } from "../lib/lab-history.js";
 import { normalizeReadOnlySql, octraSqliteConfig, octraSqliteOpen, octraSqliteQueryProof, parseOctraSqliteOutput, publicLabQueryError } from "../lib/octra-sqlite-client.js";
-import { acquireLock, historyReadOptionsForGap, runLabHistoryMirror } from "../scripts/run-lab-history-mirror.js";
+import { acquireLock, historyReadOptionsForGap, operatorStagingHealthFromBalance, runLabHistoryMirror } from "../scripts/run-lab-history-mirror.js";
 import type { ProgramHistoryWindow, SummaryRow } from "../lib/summary-window.js";
 
 const execFileAsync = promisify(execFile);
@@ -450,6 +450,62 @@ test("lab history setup pins an octra-sqlite build with configurable write OU", 
   assert.match(script, /VITALS_LAB_HISTORY_ALLOW_MAINNET/);
 });
 
+test("lab history operator staging guard treats pending nonce as a write blocker", () => {
+  const clean = operatorStagingHealthFromBalance("octOperator", { nonce: 12, pending_nonce: 12 });
+  assert.equal(clean.checked, true);
+  assert.equal(clean.pending, false);
+  assert.equal(clean.reason, null);
+  assert.equal(clean.nonce, 12);
+  assert.equal(clean.pending_nonce, 12);
+
+  const pending = operatorStagingHealthFromBalance("octOperator", { nonce: 12, pending_nonce: 13 });
+  assert.equal(pending.pending, true);
+  assert.equal(pending.reason, "operator_staging_pending");
+
+  const malformed = operatorStagingHealthFromBalance("octOperator", { nonce: "oops", pending_nonce: 13 });
+  assert.equal(malformed.pending, true);
+  assert.equal(malformed.reason, "operator_staging_unverified");
+  assert.match(malformed.error || "", /missing safe nonce/);
+});
+
+test("lab history staging guard skips writes when the operator address is unconfigured", async () => {
+  const dir = await mkdtemp(join(tmpdir(), `octra-vitals-lab-staging-guard-${process.pid}-`));
+  const latestReport = join(dir, "latest.json");
+  try {
+    const report = await withEnv({
+      VITALS_LAB_HISTORY_RUN_ID: "staging-guard-missing-address-test",
+      VITALS_LAB_HISTORY_DATA_DIR: dir,
+      VITALS_LAB_HISTORY_REPORT_PATH: latestReport,
+      VITALS_LAB_HISTORY_ENABLED: "1",
+      VITALS_LAB_HISTORY_DATABASE_URI: "oct://devnet/octExample",
+      VITALS_LAB_HISTORY_WRITE_OU: "250000",
+      VITALS_LAB_HISTORY_STAGING_GUARD: "1",
+      VITALS_LAB_HISTORY_OPERATOR_ADDRESS: undefined,
+      VITALS_OPERATOR_ADDRESS: undefined
+    }, () => runLabHistoryMirror());
+
+    assert.equal(report.status, "skipped");
+    assert.equal(report.reason, "operator_address_unconfigured");
+    assert.equal(report.lab_write_ou, "250000");
+    assert.equal(report.operator_staging.pending, true);
+    assert.equal(report.operator_staging.checked, false);
+    assert.match(report.operator_staging.error || "", /operator address is required/);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("configure-programmed-circle carries lab staging guard without removing updater operator address", async () => {
+  const script = await readFile(resolve("deploy/mainnet/configure-programmed-circle.sh"), "utf8");
+  const loopStart = script.indexOf("for key in \\");
+  const loopEnd = script.indexOf("\ndone", loopStart);
+  const labLoop = loopStart >= 0 && loopEnd > loopStart ? script.slice(loopStart, loopEnd) : "";
+  assert.match(script, /VITALS_LAB_HISTORY_STAGING_GUARD/);
+  assert.match(script, /operator_address="\$\(optional_env_value VITALS_OPERATOR_ADDRESS\)"/);
+  assert.match(script, /set_env "\$\{lab_env\}" VITALS_OPERATOR_ADDRESS/);
+  assert.doesNotMatch(labLoop, /VITALS_OPERATOR_ADDRESS/);
+});
+
 test("failed lab mirror reports retain write OU diagnostics", async () => {
   const dir = await mkdtemp(join(tmpdir(), `octra-vitals-lab-failure-${process.pid}-`));
   const latestReport = join(dir, "latest.json");
@@ -461,7 +517,8 @@ test("failed lab mirror reports retain write OU diagnostics", async () => {
       VITALS_LAB_HISTORY_MANIFEST_PATH: join(dir, "missing-manifest.json"),
       VITALS_LAB_HISTORY_ENABLED: "1",
       VITALS_LAB_HISTORY_DATABASE_URI: "oct://devnet/octExample",
-      VITALS_LAB_HISTORY_WRITE_OU: "250000"
+      VITALS_LAB_HISTORY_WRITE_OU: "250000",
+      VITALS_LAB_HISTORY_STAGING_GUARD: "0"
     }, () => runLabHistoryMirror()), /ENOENT/);
 
     const report = JSON.parse(await readFile(latestReport, "utf8"));
