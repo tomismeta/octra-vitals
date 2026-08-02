@@ -25,10 +25,11 @@ issue:
 - Lab DB is upgraded and ready.
 - Lab mirror writer remains disabled until writes settle cleanly.
 
-After the 2026-08-02 controlled write-smoke retry, the operator staging lane is
-dirty until tx `a916049ba1ad899d98611785c902abccffc41d271b026a7da59c8c2b26899f13`
-confirms or drops. Do not re-enable snapshot cadence or Lab mirroring while
-`pending_nonce > nonce`.
+The 2026-08-02 controlled write-smoke retry later dropped with TTL expiry, so
+the operator nonce recovered. A controlled AML-only snapshot run succeeded after
+that recovery. Do not re-enable scheduled cadence or Lab mirroring unless
+`pending_nonce == nonce`, staging is empty, and a minimal Lab SQLite write has
+confirmed with a contract receipt.
 
 ## Environment
 
@@ -127,7 +128,8 @@ octra-sqlite verify "$VITALS_LAB_HISTORY_DATABASE_URI" \
 
 - CLI: `octra-sqlite 0.6.3`
 - Requested OU: `200000`
-- Result: submitted, then `contract_receipt` returned `receipt not found`
+- Result: submitted, `contract_receipt` returned `receipt not found`, then the
+  transaction dropped with TTL expiry
 - Example tx: `a916049ba1ad899d98611785c902abccffc41d271b026a7da59c8c2b26899f13`
 
 While pending:
@@ -167,6 +169,44 @@ While pending:
   }
 }
 ```
+
+Final transaction lookup:
+
+```json
+{
+  "status": "dropped",
+  "reason": "expired",
+  "detail": "TTL exceeded",
+  "tx_hash": "a916049ba1ad899d98611785c902abccffc41d271b026a7da59c8c2b26899f13",
+  "from": "oct1FnMzPjPXxXViAco3y7iAwjxvGg4gwjCbwnYx4hujd7p",
+  "to_": "octBa1SdBvjQ38dJWBwiLByPSQrGTdja2HG15dZCkGJFeJP",
+  "nonce": 10233,
+  "ou": "200000",
+  "op_type": "circle_call"
+}
+```
+
+After the drop:
+
+```json
+{
+  "staging_stats": {
+    "total_transactions": 0,
+    "total_ou": "0",
+    "ou_remaining": "10000000000"
+  },
+  "balance": {
+    "nonce": 10232,
+    "pending_nonce": 10232
+  }
+}
+```
+
+The next controlled AML-only updater run then confirmed snapshot
+`vitals.2026-08-02T21:05:19Z` at index `15` with tx
+`9d280600d8ddd78101885eeb14bcbdd6504978267cd858b35564e2488ad939c8`.
+Post-run staging remained empty and the operator recovered to
+`nonce == pending_nonce == 10233`.
 
 At the same time, staging reported:
 
