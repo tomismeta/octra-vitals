@@ -37,7 +37,7 @@ test("browser verifier checks complete latest semantics and summary fields", () 
   }), /external_block mismatch/);
 });
 
-test("browser verifier accepts compact evidence entries with rich source refs", () => {
+test("browser verifier accepts compact evidence entries with compact source refs", () => {
   const summary = encodeSummaryRow(summaryRowFromSnapshot(snapshot, 1));
   const observedMs = Date.parse(snapshot.envelope.observed_at);
   const compactEvidence = {
@@ -48,11 +48,15 @@ test("browser verifier accepts compact evidence entries with rich source refs", 
       response_hash: entry.response_hash
     }))
   };
+  const compactSourceRefs = snapshot.envelope.source_refs.map((entry) => ({
+    id: entry.id,
+    hash: entry.hash
+  }));
   const result = verifier.verifySnapshotSemantics({
     envelope: snapshot.envelope,
     payload: snapshot.envelope.payload,
     evidenceManifest: compactEvidence,
-    sourceRefs: snapshot.envelope.source_refs,
+    sourceRefs: compactSourceRefs,
     summaryRow: summary,
     snapshotIndex: 1,
     nowMs: observedMs + 1_000,

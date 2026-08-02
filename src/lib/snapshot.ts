@@ -823,9 +823,6 @@ async function fetchEthereumWoct(observedAt: string): Promise<{ blockNumber: str
 function sourceRefsFromEvidence(evidence: EvidenceEntry[]): SourceRef[] {
   return evidence.map((entry) => ({
     id: entry.id,
-    kind: entry.kind,
-    method: entry.method,
-    url: entry.url,
     hash: entry.response_hash
   }));
 }

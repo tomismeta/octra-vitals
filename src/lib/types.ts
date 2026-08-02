@@ -49,9 +49,9 @@ export interface RawEvidenceEntry {
 
 export interface SourceRef {
   id: string;
-  kind: string;
-  method: string;
-  url: string;
+  kind?: string;
+  method?: string;
+  url?: string;
   hash: string;
 }
 
