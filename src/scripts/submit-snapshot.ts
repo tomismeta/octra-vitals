@@ -46,6 +46,16 @@ export interface WriteLatestReceiptOptions {
   path?: string | undefined;
 }
 
+export interface OperatorSubmitStagingHealth {
+  checked: boolean;
+  guard_enabled: boolean;
+  pending: boolean;
+  reason: string | null;
+  address: string;
+  nonce: number | null;
+  pending_nonce: number | null;
+}
+
 const root = resolve(new URL("../..", import.meta.url).pathname);
 
 function isoNow(): string {
@@ -87,6 +97,55 @@ async function nextNonce(address: string): Promise<number> {
     throw new Error(`invalid nonce response for ${address}`);
   }
   return nonce + 1;
+}
+
+export function operatorSubmitStagingHealthFromBalance(address: string, balance: Record<string, any>): OperatorSubmitStagingHealth {
+  const nonce = Number(balance?.nonce);
+  const pendingNonce = Number(balance?.pending_nonce);
+  if (!Number.isSafeInteger(nonce) || !Number.isSafeInteger(pendingNonce)) {
+    return {
+      checked: true,
+      guard_enabled: true,
+      pending: true,
+      reason: "operator_staging_unverified",
+      address,
+      nonce: null,
+      pending_nonce: null
+    };
+  }
+  const pending = pendingNonce > nonce;
+  return {
+    checked: true,
+    guard_enabled: true,
+    pending,
+    reason: pending ? "operator_staging_pending" : null,
+    address,
+    nonce,
+    pending_nonce: pendingNonce
+  };
+}
+
+export function assertOperatorSubmitStagingHealthClean(health: OperatorSubmitStagingHealth): void {
+  if (!health.pending) return;
+  throw new Error(`${health.reason || "operator_staging_pending"}: ${health.address} nonce=${health.nonce ?? "unknown"} pending_nonce=${health.pending_nonce ?? "unknown"}`);
+}
+
+async function assertOperatorSubmitStagingClean(address: string): Promise<OperatorSubmitStagingHealth> {
+  if (process.env.VITALS_UPDATE_STAGING_GUARD === "0") {
+    return {
+      checked: false,
+      guard_enabled: false,
+      pending: false,
+      reason: null,
+      address,
+      nonce: null,
+      pending_nonce: null
+    };
+  }
+  const balance = await octraRpc<any>("octra_balance", [address]);
+  const health = operatorSubmitStagingHealthFromBalance(address, balance || {});
+  assertOperatorSubmitStagingHealthClean(health);
+  return health;
 }
 
 async function sleep(ms: number): Promise<void> {
@@ -1364,6 +1423,7 @@ export async function submitSnapshotCall(
   const preSubmitState = await assertPreSubmitState(targetKind, targetId, call);
   const wallet = loadOperatorWalletFromEnv();
   if (!wallet) throw new Error("VITALS_OPERATOR_PRIVATE_KEY_B64 is required when VITALS_SUBMIT=1");
+  const operatorStaging = await assertOperatorSubmitStagingClean(wallet.address);
 
   const nonce = await nextNonce(wallet.address);
   const opType = targetKind === "circle_program" ? "circle_call" : "call";
@@ -1467,6 +1527,7 @@ export async function submitSnapshotCall(
     program_address: programAddress || "pending",
     programmed_circle_id: programmedCircleId || null,
     operator_address: wallet.address,
+    operator_staging: operatorStaging,
     commit_mode: call.commit_mode || "v0",
     snapshot_id: snapshotIdOfCall(call),
     snapshot_index: readback.latest_snapshot_index,
