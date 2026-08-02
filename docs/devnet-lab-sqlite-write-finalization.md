@@ -21,10 +21,14 @@ issue:
 
 - Devnet gateway is active.
 - Devnet `/api/latest` is fresh and program-backed.
-- Devnet operator nonce is clean.
-- Devnet staging is empty.
+- Devnet Lab mirror systemd units are installed, but disabled/inactive.
 - Lab DB is upgraded and ready.
 - Lab mirror writer remains disabled until writes settle cleanly.
+
+After the 2026-08-02 controlled write-smoke retry, the operator staging lane is
+dirty until tx `a916049ba1ad899d98611785c902abccffc41d271b026a7da59c8c2b26899f13`
+confirms or drops. Do not re-enable snapshot cadence or Lab mirroring while
+`pending_nonce > nonce`.
 
 ## Environment
 
@@ -33,6 +37,7 @@ issue:
 - Operator: `oct1FnMzPjPXxXViAco3y7iAwjxvGg4gwjCbwnYx4hujd7p`
 - Lab RPC: `https://devnet.octrascan.io/rpc`
 - Lab SQLite binary: `/opt/octra-sqlite/bin/octra-sqlite`
+- Lab SQLite CLI: `octra-sqlite 0.6.3`
 - Lab SQLite version after upgrade: `3.53.4`
 
 ## Confirmed Fixes
@@ -103,6 +108,63 @@ While pending:
   },
   "staging_count": 1,
   "ours_in_staging": true
+}
+```
+
+### Independent octra-sqlite 0.6.3 Write Smoke
+
+This used the deployed devnet service identity and `OCTRA_SQLITE_CONFIG`.
+
+Command shape:
+
+```sh
+octra-sqlite verify "$VITALS_LAB_HISTORY_DATABASE_URI" \
+  --rpc "$VITALS_LAB_HISTORY_RPC" \
+  --write-smoke \
+  --write-ou "$VITALS_LAB_HISTORY_WRITE_OU" \
+  --json
+```
+
+- CLI: `octra-sqlite 0.6.3`
+- Requested OU: `200000`
+- Result: submitted, then `contract_receipt` returned `receipt not found`
+- Example tx: `a916049ba1ad899d98611785c902abccffc41d271b026a7da59c8c2b26899f13`
+
+While pending:
+
+```json
+{
+  "tx_status": "pending",
+  "tx_ou": "200000",
+  "nonce": 10233,
+  "receipt_error": {
+    "code": 112,
+    "message": "not found",
+    "data": "receipt not found"
+  },
+  "staging_estimateOu": {
+    "staging_size": 1,
+    "p50": "200000",
+    "p75": "200000",
+    "p95": "200000",
+    "recommended": "1000",
+    "staging_ou": "1000"
+  },
+  "staging_stats": {
+    "total_transactions": 1,
+    "total_ou": "1000",
+    "by_sender": [
+      {
+        "address": "oct1FnMzPjPXxXViAco3y7iAwjxvGg4gwjCbwnYx4hujd7p",
+        "tx_count": 1,
+        "total_value": "0.200000"
+      }
+    ]
+  },
+  "balance": {
+    "nonce": 10232,
+    "pending_nonce": 10233
+  }
 }
 ```
 
