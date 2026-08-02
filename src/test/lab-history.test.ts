@@ -544,6 +544,7 @@ test("configure-programmed-circle carries lab staging guard without removing upd
   assert.match(script, /VITALS_LAB_HISTORY_STAGING_GUARD/);
   assert.match(script, /OCTRA_SQLITE_WRITE_OU/);
   assert.match(script, /OCTRA_SQLITE_VERIFY_WRITE_OU/);
+  assert.match(script, /lab_history_write_ou="200000"/);
   assert.match(script, /operator_address="\$\(optional_env_value VITALS_OPERATOR_ADDRESS\)"/);
   assert.match(script, /set_env "\$\{lab_env\}" VITALS_OPERATOR_ADDRESS/);
   assert.doesNotMatch(labLoop, /VITALS_OPERATOR_ADDRESS/);

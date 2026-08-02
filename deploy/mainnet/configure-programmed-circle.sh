@@ -277,6 +277,22 @@ for key in \
 done
 remove_env "${gateway_env}" VITALS_LAB_HISTORY_WRITE_TOKEN 640 "${APP_USER}"
 
+lab_history_enabled="$(optional_env_value VITALS_LAB_HISTORY_ENABLED)"
+lab_history_write_ou="$(optional_env_value VITALS_LAB_HISTORY_WRITE_OU)"
+if [ -z "${lab_history_write_ou}" ]; then
+  lab_history_write_ou="$(optional_env_value OCTRA_SQLITE_WRITE_OU)"
+fi
+if [ -z "${lab_history_write_ou}" ]; then
+  lab_history_write_ou="$(optional_env_value OCTRA_SQLITE_VERIFY_WRITE_OU)"
+fi
+if [ -z "${lab_history_write_ou}" ] && [ "${lab_history_enabled}" = "1" ]; then
+  lab_history_write_ou="200000"
+fi
+if [ -n "${lab_history_write_ou}" ]; then
+  set_env "${gateway_env}" VITALS_LAB_HISTORY_WRITE_OU "${lab_history_write_ou}" 640 "${APP_USER}"
+  set_env "${lab_env}" VITALS_LAB_HISTORY_WRITE_OU "${lab_history_write_ou}" 600 root
+fi
+
 operator_address="$(optional_env_value VITALS_OPERATOR_ADDRESS)"
 if [ -n "${operator_address}" ]; then
   set_env "${lab_env}" VITALS_OPERATOR_ADDRESS "${operator_address}" 600 root
