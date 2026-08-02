@@ -248,6 +248,13 @@ export async function runLabHistoryMirror(): Promise<Record<string, any>> {
     lock: lockPath,
     manifest: manifestPath
   };
+  const config = octraSqliteConfig();
+  const configDiagnostics = {
+    lab_database_network: config.network,
+    lab_database: config.database,
+    lab_write_ou: config.writeOu,
+    lab_write_ou_source: config.writeOuSource
+  };
 
   if (startDelayMs > 0) {
     await timed(timings, "start_delay_ms", () => sleep(startDelayMs));
@@ -262,6 +269,7 @@ export async function runLabHistoryMirror(): Promise<Record<string, any>> {
       run_id: runId,
       started_at: startedAt,
       generated_at: isoNow(),
+      ...configDiagnostics,
       paths,
       timings_ms: { total_ms: 0 }
     };
@@ -271,7 +279,6 @@ export async function runLabHistoryMirror(): Promise<Record<string, any>> {
 
   try {
     await mkdir(runDir, { recursive: true });
-    const config = octraSqliteConfig();
     if (!config.enabled) {
       const report = {
         schema: "octra-vitals-lab-history-mirror-report-v0",
@@ -280,8 +287,7 @@ export async function runLabHistoryMirror(): Promise<Record<string, any>> {
         run_id: runId,
         started_at: startedAt,
         generated_at: isoNow(),
-        lab_database_network: config.network,
-        lab_database: config.database,
+        ...configDiagnostics,
         paths,
         timings_ms: { total_ms: ms(performance.now() - totalStarted) }
       };
@@ -310,8 +316,7 @@ export async function runLabHistoryMirror(): Promise<Record<string, any>> {
         run_id: runId,
         started_at: startedAt,
         generated_at: isoNow(),
-        lab_database_network: config.network,
-        lab_database: config.database,
+        ...configDiagnostics,
         state_target_mode: target.kind,
         state_target_id: targetId,
         source_history: {
@@ -361,8 +366,7 @@ export async function runLabHistoryMirror(): Promise<Record<string, any>> {
       run_id: runId,
       started_at: startedAt,
       generated_at: isoNow(),
-      lab_database_network: config.network,
-      lab_database: config.database,
+      ...configDiagnostics,
       state_target_mode: target.kind,
       state_target_id: targetId,
       source_history: {
@@ -393,6 +397,7 @@ export async function runLabHistoryMirror(): Promise<Record<string, any>> {
       started_at: startedAt,
       generated_at: isoNow(),
       error: errorMessage(error),
+      ...configDiagnostics,
       paths,
       timings_ms: timings
     };
@@ -415,6 +420,8 @@ async function main(): Promise<void> {
     generated_at: report.generated_at,
     lab_database_network: report.lab_database_network || null,
     lab_database: report.lab_database || null,
+    lab_write_ou: report.lab_write_ou || null,
+    lab_write_ou_source: report.lab_write_ou_source || null,
     state_target_mode: report.state_target_mode || null,
     state_target_id: report.state_target_id || null,
     mirror: report.mirror || null,

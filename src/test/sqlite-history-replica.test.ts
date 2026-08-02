@@ -4,7 +4,7 @@ import test from "node:test";
 import { type HistorySummaryAnchor } from "../lib/canonical-history.js";
 import { readSqliteHistoryReplica } from "../lib/sqlite-history-replica.js";
 import { encodeSummaryRow, type SummaryRow } from "../lib/summary-window.js";
-import type { OctraSqliteResult } from "../lib/octra-sqlite-client.js";
+import type { OctraSqliteConfig, OctraSqliteResult } from "../lib/octra-sqlite-client.js";
 import type { SnapshotArtifact } from "../lib/types.js";
 
 function row(index: number): SummaryRow {
@@ -101,6 +101,20 @@ function fakeOpen(rows: SummaryRow[]): (sql: string) => Promise<OctraSqliteResul
   };
 }
 
+function devnetSqliteConfig(): OctraSqliteConfig {
+  return {
+    enabled: true,
+    reason: null,
+    bin: "octra-sqlite",
+    configPath: null,
+    database: "oct://devnet/octDb",
+    databaseUri: "oct://devnet/octDb",
+    network: "devnet",
+    writeOu: null,
+    writeOuSource: null
+  };
+}
+
 test("SQLite history replica rebuilds a paged tail and verifies it against latest AML summary", async () => {
   const rows = Array.from({ length: 60 }, (_, offset) => row(offset + 1));
   const previousPageRows = process.env.VITALS_HISTORY_REPLICA_PAGE_ROWS;
@@ -112,15 +126,7 @@ test("SQLite history replica rebuilds a paged tail and verifies it against lates
       latestFor(rows[59]!),
       { maxSealedCapsules: 1 },
       fakeOpen(rows),
-      {
-        enabled: true,
-        reason: null,
-        bin: "octra-sqlite",
-        configPath: null,
-        database: "oct://devnet/octDb",
-        databaseUri: "oct://devnet/octDb",
-        network: "devnet"
-      }
+      devnetSqliteConfig()
     );
   } finally {
     if (previousPageRows === undefined) delete process.env.VITALS_HISTORY_REPLICA_PAGE_ROWS;
@@ -144,15 +150,7 @@ test("SQLite history replica rejects a mirror that does not tail-match latest AM
       latestFor(row(61)),
       { maxSealedCapsules: 1 },
       fakeOpen(rows),
-      {
-        enabled: true,
-        reason: null,
-        bin: "octra-sqlite",
-        configPath: null,
-        database: "oct://devnet/octDb",
-        databaseUri: "oct://devnet/octDb",
-        network: "devnet"
-      }
+      devnetSqliteConfig()
     ),
     /canonical history tail lag 1 exceeds max 0/
   );
@@ -165,15 +163,7 @@ test("SQLite history replica accepts a one-snapshot lag when the tail matches a 
     latestFor(row(61)),
     { maxSealedCapsules: 1 },
     fakeOpen(rows),
-    {
-      enabled: true,
-      reason: null,
-      bin: "octra-sqlite",
-      configPath: null,
-      database: "oct://devnet/octDb",
-      databaseUri: "oct://devnet/octDb",
-      network: "devnet"
-    },
+    devnetSqliteConfig(),
     {
       maxLagSnapshots: 1,
       rememberedSummaries: remembered(rows[59]!)
@@ -196,15 +186,7 @@ test("SQLite history replica rejects a one-snapshot lag after restart when no re
       latestFor(row(61)),
       { maxSealedCapsules: 1 },
       fakeOpen(rows),
-      {
-        enabled: true,
-        reason: null,
-        bin: "octra-sqlite",
-        configPath: null,
-        database: "oct://devnet/octDb",
-        databaseUri: "oct://devnet/octDb",
-        network: "devnet"
-      },
+      devnetSqliteConfig(),
       { maxLagSnapshots: 1, rememberedSummaries: new Map() }
     ),
     /remembered latest summary unavailable/
@@ -223,15 +205,7 @@ test("SQLite history replica rejects a forged lagged tail even inside the one-sn
       latestFor(row(61)),
       { maxSealedCapsules: 1 },
       fakeOpen(rows),
-      {
-        enabled: true,
-        reason: null,
-        bin: "octra-sqlite",
-        configPath: null,
-        database: "oct://devnet/octDb",
-        databaseUri: "oct://devnet/octDb",
-        network: "devnet"
-      },
+      devnetSqliteConfig(),
       {
         maxLagSnapshots: 1,
         rememberedSummaries: remembered(forged)

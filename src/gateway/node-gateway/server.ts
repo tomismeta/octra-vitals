@@ -2467,6 +2467,8 @@ function labHistoryAuthority(config = octraSqliteConfig()): Record<string, any> 
     lab_database_network: config.network,
     lab_database: config.database,
     lab_database_uri: config.databaseUri,
+    lab_write_ou: config.writeOu,
+    lab_write_ou_source: config.writeOuSource,
     lab_read_token_required: false,
     lab_admin_sync_token_required: true,
     lab_admin_sync_token_configured: Boolean(labWriteToken())

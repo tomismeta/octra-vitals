@@ -7,7 +7,7 @@ import { join, resolve } from "node:path";
 import { promisify } from "node:util";
 
 import { buildLabHistoryMirrorSql, labHistorySql, mirrorLabHistory, planLabHistoryMirrorRows } from "../lib/lab-history.js";
-import { normalizeReadOnlySql, octraSqliteConfig, octraSqliteQueryProof, parseOctraSqliteOutput, publicLabQueryError } from "../lib/octra-sqlite-client.js";
+import { normalizeReadOnlySql, octraSqliteConfig, octraSqliteOpen, octraSqliteQueryProof, parseOctraSqliteOutput, publicLabQueryError } from "../lib/octra-sqlite-client.js";
 import { acquireLock, historyReadOptionsForGap, runLabHistoryMirror } from "../scripts/run-lab-history-mirror.js";
 import type { ProgramHistoryWindow, SummaryRow } from "../lib/summary-window.js";
 
@@ -133,6 +133,15 @@ test("lab canned history queries are bounded by snapshot cadence", () => {
   assert.match(labHistorySql("7d"), /order by s\.snapshot_index desc\s+limit 768/i);
   assert.match(labHistorySql("30d"), /order by s\.snapshot_index desc\s+limit 3072/i);
   assert.match(labHistorySql("anything-else"), /order by s\.snapshot_index desc\s+limit 128/i);
+});
+
+test("lab canned history follows the most recently mirrored source", () => {
+  const sql = labHistorySql("1d");
+
+  assert.match(sql, /with active_source as/i);
+  assert.match(sql, /from mirror_watermarks/i);
+  assert.match(sql, /order by last_aml_readback_verified_at desc, rowid desc/i);
+  assert.match(sql, /where s\.source_id = \(select source_id from active_source\)/i);
 });
 
 test("lab query guard rejects mutating SQL", () => {
@@ -261,7 +270,9 @@ test("lab query proof describes Circle read without exposing auth material", asy
     configPath: null,
     database: "oct://devnet/octExample",
     databaseUri: "oct://devnet/octExample",
-    network: "devnet"
+    network: "devnet",
+    writeOu: null,
+    writeOuSource: null
   } as const;
   const proof = await withEnv({
     OCTRA_RPC_URL: "https://octra.network/rpc",
@@ -348,6 +359,120 @@ test("lab database config requires an explicit oct URI and explicit mainnet enab
   assert.equal(devnet.enabled, true);
   assert.equal(devnet.network, "devnet");
   assert.equal(devnet.database, "oct://devnet/octExample");
+});
+
+test("lab database config exposes the owner-signed SQLite write OU budget", () => {
+  const labSpecific = octraSqliteConfig({
+    VITALS_LAB_HISTORY_ENABLED: "1",
+    VITALS_LAB_HISTORY_DATABASE_URI: "oct://devnet/octExample",
+    VITALS_LAB_HISTORY_WRITE_OU: "250000",
+    OCTRA_SQLITE_WRITE_OU: "200000",
+    VITALS_CALL_OU: "150000"
+  } as NodeJS.ProcessEnv);
+
+  assert.equal(labSpecific.enabled, true);
+  assert.equal(labSpecific.writeOu, "250000");
+  assert.equal(labSpecific.writeOuSource, "VITALS_LAB_HISTORY_WRITE_OU");
+
+  const callFallback = octraSqliteConfig({
+    VITALS_LAB_HISTORY_ENABLED: "1",
+    VITALS_LAB_HISTORY_DATABASE_URI: "oct://devnet/octExample",
+    VITALS_CALL_OU: "175000"
+  } as NodeJS.ProcessEnv);
+
+  assert.equal(callFallback.enabled, true);
+  assert.equal(callFallback.writeOu, "175000");
+  assert.equal(callFallback.writeOuSource, "VITALS_CALL_OU");
+
+  const invalid = octraSqliteConfig({
+    VITALS_LAB_HISTORY_ENABLED: "1",
+    VITALS_LAB_HISTORY_DATABASE_URI: "oct://devnet/octExample",
+    VITALS_LAB_HISTORY_WRITE_OU: "0"
+  } as NodeJS.ProcessEnv);
+
+  assert.equal(invalid.enabled, false);
+  assert.equal(invalid.reason, "lab_history_write_ou_invalid:VITALS_LAB_HISTORY_WRITE_OU");
+});
+
+test("octra-sqlite child process receives Lab write OU and devnet RPC isolation", async () => {
+  const dir = await mkdtemp(join(tmpdir(), `octra-vitals-sqlite-env-${process.pid}-`));
+  const bin = join(dir, "fake-octra-sqlite.mjs");
+  await writeFile(bin, `#!/usr/bin/env node
+const row = [
+  process.env.OCTRA_RPC_URL || null,
+  process.env.OCTRA_SQLITE_WRITE_OU || null,
+  process.env.OCTRA_PROGRAM_RPC_URL || null,
+  process.env.OCTRA_OBSERVATION_RPC_URL || null,
+  process.argv.includes("--ou") ? process.argv[process.argv.indexOf("--ou") + 1] : null
+];
+console.log(JSON.stringify({ ok: true, columns: ["rpc", "write_ou", "program_rpc", "observation_rpc", "arg_ou"], rows: [row], row_count: 1 }));
+`, { mode: 0o755 });
+
+  try {
+    const config = octraSqliteConfig({
+      VITALS_LAB_HISTORY_ENABLED: "1",
+      VITALS_LAB_HISTORY_DATABASE_URI: "oct://devnet/octExample",
+      VITALS_LAB_HISTORY_WRITE_OU: "250000",
+      VITALS_LAB_HISTORY_OCTRA_SQLITE_BIN: bin
+    } as NodeJS.ProcessEnv);
+    const result = await withEnv({
+      OCTRA_RPC_URL: "https://octra.network/rpc",
+      OCTRA_PROGRAM_RPC_URL: "https://octra.network/rpc",
+      OCTRA_OBSERVATION_RPC_URL: "https://octra.network/rpc"
+    }, () => octraSqliteOpen("select 1", config));
+
+    assert.deepEqual(result.rows[0], [
+      "https://devnet.octrascan.io/rpc",
+      "250000",
+      null,
+      null,
+      "250000"
+    ]);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("lab history setup pins an octra-sqlite build with configurable write OU", async () => {
+  const script = await readFile(resolve("deploy/devnet/setup-lab-history-db.sh"), "utf8");
+
+  assert.match(script, /OCTRA_SQLITE_COMMIT="\$\{OCTRA_SQLITE_COMMIT:-bbdb23e9818f07d10550116ddb5704373ac15560\}"/);
+  assert.match(script, /REPO_ROOT="\$\(cd -- "\$\{SCRIPT_DIR\}\/\.\.\/\.\." && pwd\)"/);
+  assert.match(script, /VITALS_REPO_DIR="\$\{VITALS_REPO_DIR:-\$REPO_ROOT\}"/);
+  assert.match(script, /octra-sqlite" setup --yes/);
+  assert.match(script, /sudo chgrp "\$OCTRA_SQLITE_GROUP" "\$OCTRA_SQLITE_CONFIG"/);
+  assert.match(script, /sudo chmod 0640 "\$OCTRA_SQLITE_CONFIG"/);
+  assert.match(script, /--schema "\$LAB_SCHEMA"/);
+  assert.match(script, /--wallet "\$OCTRA_SQLITE_WALLET"/);
+  assert.match(script, /OCTRA_SQLITE_WRITE_OU="\$LAB_WRITE_OU"/);
+  assert.match(script, /--ou "\$LAB_WRITE_OU"/);
+  assert.match(script, /--write-ou "\$LAB_WRITE_OU"/);
+  assert.match(script, /VITALS_LAB_HISTORY_ALLOW_MAINNET/);
+});
+
+test("failed lab mirror reports retain write OU diagnostics", async () => {
+  const dir = await mkdtemp(join(tmpdir(), `octra-vitals-lab-failure-${process.pid}-`));
+  const latestReport = join(dir, "latest.json");
+  try {
+    await assert.rejects(withEnv({
+      VITALS_LAB_HISTORY_RUN_ID: "failure-diagnostics-test",
+      VITALS_LAB_HISTORY_DATA_DIR: dir,
+      VITALS_LAB_HISTORY_REPORT_PATH: latestReport,
+      VITALS_LAB_HISTORY_MANIFEST_PATH: join(dir, "missing-manifest.json"),
+      VITALS_LAB_HISTORY_ENABLED: "1",
+      VITALS_LAB_HISTORY_DATABASE_URI: "oct://devnet/octExample",
+      VITALS_LAB_HISTORY_WRITE_OU: "250000"
+    }, () => runLabHistoryMirror()), /ENOENT/);
+
+    const report = JSON.parse(await readFile(latestReport, "utf8"));
+    assert.equal(report.status, "failed");
+    assert.equal(report.lab_database_network, "devnet");
+    assert.equal(report.lab_database, "oct://devnet/octExample");
+    assert.equal(report.lab_write_ou, "250000");
+    assert.equal(report.lab_write_ou_source, "VITALS_LAB_HISTORY_WRITE_OU");
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
 });
 
 test("lab mirror SQL preserves AML authority and derived query fields", () => {
@@ -488,9 +613,38 @@ test("lab mirror stale-lock reclaim does not steal the fresh active lock", async
   }
 });
 
+test("lab mirror lock-skipped report includes write OU diagnostics", async () => {
+  const dir = await mkdtemp(join(tmpdir(), `octra-vitals-lab-lock-skip-${process.pid}-`));
+  const lockPath = join(dir, "lab-history-mirror.lock");
+  const latestReport = join(dir, "latest.json");
+  const lock = await acquireLock(lockPath, "active-mirror", 10 * 60_000);
+  assert.ok(lock);
+
+  try {
+    const report = await withEnv({
+      VITALS_LAB_HISTORY_RUN_ID: "lock-skip-diagnostics-test",
+      VITALS_LAB_HISTORY_DATA_DIR: dir,
+      VITALS_LAB_HISTORY_LOCK_PATH: lockPath,
+      VITALS_LAB_HISTORY_REPORT_PATH: latestReport,
+      VITALS_LAB_HISTORY_ENABLED: "1",
+      VITALS_LAB_HISTORY_DATABASE_URI: "oct://devnet/octExample",
+      VITALS_LAB_HISTORY_WRITE_OU: "250000"
+    }, () => runLabHistoryMirror());
+
+    assert.equal(report.status, "skipped");
+    assert.equal(report.reason, "mirror_already_running");
+    assert.equal(report.lab_write_ou, "250000");
+    assert.equal(report.lab_write_ou_source, "VITALS_LAB_HISTORY_WRITE_OU");
+  } finally {
+    await lock.release();
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
 test("lab mirror waits for post-write readback to become visible", async () => {
   const history = sampleHistory();
   let watermarkChecks = 0;
+  let rowCountSql = "";
   const open = async (sql: string) => {
     if (/select\s+source_range_first_index/i.test(sql)) {
       return sqliteResult(["source_range_first_index", "source_range_latest_index", "last_complete_snapshot_index"]);
@@ -502,6 +656,7 @@ test("lab mirror waits for post-write readback to become visible", async () => {
         : sqliteResult(["source_range_latest_index", "last_complete_snapshot_index", "complete"], [[11, 11, 1]]);
     }
     if (/select count\(\*\) as row_count\s+from snapshots/i.test(sql)) {
+      rowCountSql = sql;
       return sqliteResult(["row_count"], [[2]]);
     }
     return sqliteResult([]);
@@ -513,6 +668,7 @@ test("lab mirror waits for post-write readback to become visible", async () => {
   }, open));
 
   assert.equal(watermarkChecks, 2);
+  assert.match(rowCountSql, /where source_id = 'circle_program:octDevCircle'/);
   assert.equal(summary.complete_through_index, 11);
   assert.equal(summary.readback_status, "verified");
 });

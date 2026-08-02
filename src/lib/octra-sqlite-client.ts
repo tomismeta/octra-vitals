@@ -10,6 +10,8 @@ export interface OctraSqliteConfig {
   database: string | null;
   databaseUri: string | null;
   network: string;
+  writeOu: string | null;
+  writeOuSource: string | null;
 }
 
 export interface OctraSqliteResult {
@@ -82,6 +84,18 @@ function envValue(env: NodeJS.ProcessEnv, key: string): string | null {
   return value && value.trim() ? value.trim() : null;
 }
 
+function writeOuSetting(env: NodeJS.ProcessEnv): { value: string | null; source: string | null; reason: string | null } {
+  for (const key of ["VITALS_LAB_HISTORY_WRITE_OU", "OCTRA_SQLITE_WRITE_OU", "VITALS_CALL_OU"]) {
+    const value = envValue(env, key);
+    if (!value) continue;
+    if (!/^[1-9]\d*$/.test(value)) {
+      return { value: null, source: key, reason: `lab_history_write_ou_invalid:${key}` };
+    }
+    return { value, source: key, reason: null };
+  }
+  return { value: null, source: null, reason: null };
+}
+
 function networkFromUri(uri: string | null): string | null {
   if (!uri) return null;
   const match = uri.match(/^oct:\/\/([^/]+)\//);
@@ -129,6 +143,7 @@ async function octraSqliteChildEnv(config: OctraSqliteConfig): Promise<NodeJS.Pr
     delete env[key];
   }
   if (config.configPath) env.OCTRA_SQLITE_CONFIG = config.configPath;
+  if (config.writeOu) env.OCTRA_SQLITE_WRITE_OU = config.writeOu;
   const rpcUrl = await configuredRpcUrl(config, env);
   if (rpcUrl) env.OCTRA_RPC_URL = rpcUrl;
   return env;
@@ -142,6 +157,7 @@ export function octraSqliteConfig(env = process.env): OctraSqliteConfig {
   const configuredNetwork = envValue(env, "VITALS_LAB_HISTORY_NETWORK");
   const network = databaseNetwork || configuredNetwork || "devnet";
   const enabled = env.VITALS_LAB_HISTORY_ENABLED === "1";
+  const writeOu = writeOuSetting(env);
   let reason: string | null = null;
   if (!enabled) reason = "lab_history_disabled";
   else if (!database) reason = "lab_history_database_unconfigured";
@@ -149,6 +165,7 @@ export function octraSqliteConfig(env = process.env): OctraSqliteConfig {
   else if (configuredNetwork && configuredNetwork !== databaseNetwork) reason = "lab_history_network_mismatch";
   else if (network === "mainnet" && env.VITALS_LAB_HISTORY_ALLOW_MAINNET !== "1") reason = "lab_history_mainnet_requires_explicit_enable";
   else if (!["devnet", "mainnet"].includes(network)) reason = "lab_history_network_unsupported";
+  else if (writeOu.reason) reason = writeOu.reason;
   return {
     enabled: enabled && !reason,
     reason,
@@ -156,7 +173,9 @@ export function octraSqliteConfig(env = process.env): OctraSqliteConfig {
     configPath: envValue(env, "OCTRA_SQLITE_CONFIG"),
     database,
     databaseUri,
-    network
+    network,
+    writeOu: writeOu.value,
+    writeOuSource: writeOu.source
   };
 }
 
@@ -304,7 +323,9 @@ export async function octraSqliteOpen(sql: string, config = octraSqliteConfig())
     throw new Error(config.reason || "lab_history_unavailable");
   }
   const env = await octraSqliteChildEnv(config);
-  const args = ["open", "--json", config.database, sql];
+  const args = ["open", "--json"];
+  if (config.writeOu) args.push("--ou", config.writeOu);
+  args.push(config.database, sql);
   const stdout = await new Promise<string>((resolve, reject) => {
     execFile(config.bin, args, {
       env,

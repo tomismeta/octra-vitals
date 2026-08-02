@@ -430,7 +430,8 @@ async function verifyMirrorReadback(
     const rowCheck = rowsAsObjects(await open(`
       select count(*) as row_count
       from snapshots
-      where snapshot_index in (${indices.map(sqlNumber).join(", ")})
+      where source_id = ${sqlString(sourceKey)}
+        and snapshot_index in (${indices.map(sqlNumber).join(", ")})
     `)).rows[0];
     const observedRows = Number(rowCheck?.row_count || 0);
     if (observedRows !== indices.length) {
@@ -698,6 +699,12 @@ export async function labStatus(): Promise<OctraSqliteQueryResult> {
 export function labHistorySql(window: string | null): string {
   const rowLimit = window === "1h" ? 8 : window === "7d" ? 768 : window === "30d" ? 3072 : 128;
   return `
+    with active_source as (
+      select source_id
+      from mirror_watermarks
+      order by last_aml_readback_verified_at desc, rowid desc
+      limit 1
+    )
     select
       s.snapshot_index,
       s.snapshot_id,
@@ -711,6 +718,7 @@ export function labHistorySql(window: string | null): string {
     from snapshots s
     join core_accounting_facts c using(snapshot_index)
     left join derived_snapshot_metrics d on d.snapshot_index = s.snapshot_index and d.metric_key = 'unclassified_raw'
+    where s.source_id = (select source_id from active_source)
     order by s.snapshot_index desc
     limit ${rowLimit}
   `;

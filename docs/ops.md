@@ -204,12 +204,15 @@ VITALS_LAB_HISTORY_DATABASE_URI=oct://devnet/octBa1SdBvjQ38dJWBwiLByPSQrGTdja2HG
 VITALS_LAB_SITE_CIRCLE_ID=octD4K6tHUsUsCb37fjd1Fa6Rv5WzeXhWfKfvzcXJb5tVZK
 VITALS_LAB_HISTORY_OCTRA_SQLITE_BIN=/opt/octra-sqlite/bin/octra-sqlite
 VITALS_LAB_HISTORY_WRITE_TOKEN=<host-local secret>
+VITALS_LAB_HISTORY_WRITE_OU=10000
 VITALS_LAB_HISTORY_SYNC_SQL_MAX_BYTES=6000
 VITALS_LAB_HISTORY_SYNC_MAX_ROWS=8
 VITALS_LAB_HISTORY_SYNC_TAIL_ROWS=0
 VITALS_LAB_HISTORY_REPORT_PATH=/var/lib/octra-vitals/latest_lab_history_mirror_report.json
 OCTRA_SQLITE_CONFIG=/etc/octra-vitals/octra-sqlite/config.json
 ```
+
+`VITALS_LAB_HISTORY_WRITE_OU` controls the owner-signed `octra-sqlite` SQL write budget used by setup, repair, and recurring mirror writes. If it is unset, the mirror falls back to `OCTRA_SQLITE_WRITE_OU`, then `VITALS_CALL_OU`, then octra-sqlite's own default. The setup script pins octra-sqlite `0.6.3+` because earlier builds do not honor this write-OU surface.
 
 Install or refresh the upstream dependency and database with:
 
