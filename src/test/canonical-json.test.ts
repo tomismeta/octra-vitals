@@ -39,6 +39,25 @@ test("sample snapshot canonical payload, evidence, and source refs round trip", 
   assert.equal(sourceRefsHash(snapshot.envelope.source_refs), sha256Tagged(SOURCE_REFS_TAG, canonicalSourceRefs));
 });
 
+test("compact evidence manifest remains hash-verifiable with rich source refs", async () => {
+  const snapshot = await loadSampleSnapshot();
+  const compact = structuredClone(snapshot);
+  compact.evidence_manifest = {
+    ...compact.evidence_manifest,
+    entries: compact.evidence_manifest.entries.map((entry) => ({
+      id: entry.id,
+      request_hash: entry.request_hash,
+      response_hash: entry.response_hash
+    }))
+  };
+  compact.canonical_evidence_manifest = canonicalJson(compact.evidence_manifest);
+  compact.envelope.evidence_manifest_hash = sha256Tagged(EVIDENCE_TAG, compact.canonical_evidence_manifest);
+
+  assert.equal(canonicalJson(compact.evidence_manifest), compact.canonical_evidence_manifest);
+  assert.equal(sourceRefsHash(compact.envelope.source_refs), sourceRefsHash(snapshot.envelope.source_refs));
+  assert.doesNotThrow(() => verifySnapshotArtifactHashes(compact));
+});
+
 test("snapshot hash verification rejects non-canonical program strings", async () => {
   const snapshot = await loadSampleSnapshot();
   const nonCanonical = JSON.stringify(snapshot.envelope.payload, null, 2);

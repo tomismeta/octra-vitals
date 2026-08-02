@@ -37,6 +37,31 @@ test("browser verifier checks complete latest semantics and summary fields", () 
   }), /external_block mismatch/);
 });
 
+test("browser verifier accepts compact evidence entries with rich source refs", () => {
+  const summary = encodeSummaryRow(summaryRowFromSnapshot(snapshot, 1));
+  const observedMs = Date.parse(snapshot.envelope.observed_at);
+  const compactEvidence = {
+    ...snapshot.evidence_manifest,
+    entries: snapshot.evidence_manifest.entries.map((entry) => ({
+      id: entry.id,
+      request_hash: entry.request_hash,
+      response_hash: entry.response_hash
+    }))
+  };
+  const result = verifier.verifySnapshotSemantics({
+    envelope: snapshot.envelope,
+    payload: snapshot.envelope.payload,
+    evidenceManifest: compactEvidence,
+    sourceRefs: snapshot.envelope.source_refs,
+    summaryRow: summary,
+    snapshotIndex: 1,
+    nowMs: observedMs + 1_000,
+    staleAfterMs: 20 * 60_000,
+    maxFutureSkewMs: 5 * 60_000
+  });
+  assert.equal(result.fresh, true);
+});
+
 test("browser verifier rejects malformed rows and future snapshots", () => {
   const summary = encodeSummaryRow(summaryRowFromSnapshot(snapshot, 1));
   assert.throws(() => verifier.parseSummaryRow(`99${summary.slice(2)}`), /version/);

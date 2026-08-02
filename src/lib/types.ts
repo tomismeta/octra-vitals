@@ -26,6 +26,12 @@ export interface EvidenceEntry {
   parser_version: string;
 }
 
+export interface EvidenceManifestEntry {
+  id: string;
+  request_hash: string | null;
+  response_hash: string;
+}
+
 export interface RawEvidenceEntry {
   id: string;
   kind?: string;
@@ -155,7 +161,7 @@ export interface EvidenceManifest {
   schema_version: string;
   observed_at: string;
   parser_version: string;
-  entries: EvidenceEntry[];
+  entries: EvidenceManifestEntry[];
 }
 
 export interface SnapshotEnvelope {

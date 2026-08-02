@@ -16,6 +16,8 @@ Each snapshot has a canonical envelope:
 
 `/api/latest` also exposes parsed `payload` and `source_refs` for app consumers. Parsed fields are convenience views; canonical strings and hashes are the verification surface.
 
+Evidence entries are compact in AML: each entry carries the source id plus request and response hashes. The richer source metadata (`kind`, `method`, `url`) lives in `source_refs`, which is independently hash-gated and ordered to match the evidence entries. Raw response bodies remain addressable by content hash through the evidence API.
+
 Hash domains are fixed compatibility strings, not document versions:
 
 ```text
@@ -60,7 +62,7 @@ Optional auxiliary fact rows may be included in the same atomic AML call after t
 
 ## Latest Versus History
 
-The latest snapshot is intentionally rich. It keeps full payload, evidence manifest, source refs, health verdicts, routes, and source provenance AML-readable.
+The latest snapshot is intentionally rich but not duplicative. It keeps the full payload, compact evidence manifest, source refs, health verdicts, routes, and source provenance AML-readable.
 
 Historical rows are intentionally thin. They preserve the accounting facts needed for long-horizon charts and audit, while historical raw RPC bodies remain outside AML by content hash.
 

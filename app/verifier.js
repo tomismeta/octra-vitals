@@ -102,9 +102,9 @@
       if(!/^sha256:[0-9a-f]{64}$/.test(ref.hash || "")) throw new Error(`source ref ${index} hash is invalid`);
       const entry = evidence.entries[index];
       requireEqual(`source ref ${index} id`, ref.id, entry?.id);
-      requireEqual(`source ref ${index} kind`, ref.kind, entry?.kind);
-      requireEqual(`source ref ${index} method`, ref.method, entry?.method);
-      requireEqual(`source ref ${index} url`, ref.url, entry?.url);
+      if(entry?.kind !== undefined) requireEqual(`source ref ${index} kind`, ref.kind, entry.kind);
+      if(entry?.method !== undefined) requireEqual(`source ref ${index} method`, ref.method, entry.method);
+      if(entry?.url !== undefined) requireEqual(`source ref ${index} url`, ref.url, entry.url);
       requireEqual(`source ref ${index} response hash`, ref.hash, entry?.response_hash);
       ids.add(ref.id);
     }

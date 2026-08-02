@@ -77,6 +77,17 @@ function sourceRefsFromEvidence(evidence: EvidenceEntry[]): SourceRef[] {
   }));
 }
 
+function sourceRefsFromLegacyEvidence(evidence: EvidenceManifest["entries"]): SourceRef[] {
+  if (!evidence.every((entry): entry is EvidenceEntry =>
+    typeof (entry as Partial<EvidenceEntry>).kind === "string" &&
+    typeof (entry as Partial<EvidenceEntry>).method === "string" &&
+    typeof (entry as Partial<EvidenceEntry>).url === "string"
+  )) {
+    throw new Error("latest source refs are missing and compact evidence cannot reconstruct them");
+  }
+  return sourceRefsFromEvidence(evidence);
+}
+
 export function sourceRefsHash(sourceRefs: SourceRef[]): string {
   return sha256Tagged(SOURCE_REFS_HASH_DOMAIN, canonicalJson(sourceRefs));
 }
@@ -535,7 +546,7 @@ async function readLatestProgramSnapshotFromUrl(programAddress: string, url: str
   }
   const sourceRefs = canonicalSourceRefs
     ? JSON.parse(canonicalSourceRefs) as SourceRef[]
-    : sourceRefsFromEvidence(evidenceManifest.entries || []);
+    : sourceRefsFromLegacyEvidence(evidenceManifest.entries || []);
   if (canonicalSourceRefs && canonicalJson(sourceRefs) !== canonicalSourceRefs) {
     throw new Error("latest source refs are not canonical JSON");
   }
@@ -652,7 +663,7 @@ async function readLatestCircleProgramSnapshotFromUrl(circleId: string, url: str
   }
   const sourceRefs = canonicalSourceRefs
     ? JSON.parse(canonicalSourceRefs) as SourceRef[]
-    : sourceRefsFromEvidence(evidenceManifest.entries || []);
+    : sourceRefsFromLegacyEvidence(evidenceManifest.entries || []);
   if (canonicalSourceRefs && canonicalJson(sourceRefs) !== canonicalSourceRefs) {
     throw new Error("latest source refs are not canonical JSON");
   }

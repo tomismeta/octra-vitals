@@ -5,7 +5,7 @@ import { canonicalJson, requestHash, responseHash, sha256Tagged } from "./canoni
 import { octraObservationRpcUrl } from "./octra-rpc.js";
 import { decimalToRawString, hexToRawString, sumRaw } from "./units.js";
 import { assertObservationTimeSafe, configuredObservationFutureSkewMs } from "./observation-time.js";
-import type { EvidenceEntry, EvidenceManifest, JsonRpcRequest, JsonRpcRow, RawEvidenceEntry, SnapshotArtifact, SnapshotEnvelope, SnapshotPayload, SourceRef } from "./types.js";
+import type { EvidenceEntry, EvidenceManifest, EvidenceManifestEntry, JsonRpcRequest, JsonRpcRow, RawEvidenceEntry, SnapshotArtifact, SnapshotEnvelope, SnapshotPayload, SourceRef } from "./types.js";
 
 const DEFAULT_PUBLIC_EVIDENCE_HOSTS = [
   "octra.network",
@@ -830,6 +830,14 @@ function sourceRefsFromEvidence(evidence: EvidenceEntry[]): SourceRef[] {
   }));
 }
 
+function manifestEntriesFromEvidence(evidence: EvidenceEntry[]): EvidenceManifestEntry[] {
+  return evidence.map((entry) => ({
+    id: entry.id,
+    request_hash: entry.request_hash,
+    response_hash: entry.response_hash
+  }));
+}
+
 interface BuildLiveSnapshotOptions {
   observedAt?: string;
 }
@@ -982,7 +990,7 @@ export async function buildLiveSnapshot(options: BuildLiveSnapshotOptions = {}):
     schema_version: EVIDENCE_SCHEMA_VERSION,
     observed_at: observedAt,
     parser_version: PARSER_VERSION,
-    entries: evidence
+    entries: manifestEntriesFromEvidence(evidence)
   };
   const canonicalPayload = canonicalJson(payload);
   const canonicalEvidenceManifest = canonicalJson(evidenceManifest);
