@@ -438,7 +438,7 @@ console.log(JSON.stringify({ ok: true, columns: ["rpc", "write_ou", "program_rpc
       "250000",
       null,
       null,
-      null
+      "250000"
     ]);
   } finally {
     await rm(dir, { recursive: true, force: true });

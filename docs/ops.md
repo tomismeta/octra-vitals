@@ -214,7 +214,7 @@ VITALS_LAB_HISTORY_REPORT_PATH=/var/lib/octra-vitals/latest_lab_history_mirror_r
 OCTRA_SQLITE_CONFIG=/etc/octra-vitals/octra-sqlite/config.json
 ```
 
-`VITALS_LAB_HISTORY_WRITE_OU` controls the owner-signed `octra-sqlite` SQL write budget used by setup, repair, and recurring mirror writes. If it is unset, the mirror falls back to `OCTRA_SQLITE_WRITE_OU`, then `VITALS_CALL_OU`, then octra-sqlite's own default. The setup script pins octra-sqlite `0.6.3+` because earlier builds do not honor this write-OU surface.
+`VITALS_LAB_HISTORY_WRITE_OU` controls the owner-signed `octra-sqlite` SQL write budget used by setup, repair, and recurring mirror writes. If it is unset, the mirror falls back to `OCTRA_SQLITE_WRITE_OU`, then `OCTRA_SQLITE_VERIFY_WRITE_OU`; if none is configured, the mirror refuses to write instead of using octra-sqlite's low default. The setup script pins octra-sqlite `0.6.3+` because earlier builds do not honor this write-OU surface.
 
 `VITALS_LAB_HISTORY_STAGING_GUARD=1` makes the mirror check the Lab operator account nonce before submitting SQL writes. If `pending_nonce > nonce`, or if the guard cannot verify the operator address, the worker writes a skipped report instead of adding another staged transaction. Set `VITALS_LAB_HISTORY_OPERATOR_ADDRESS` when the Lab wallet differs from `VITALS_OPERATOR_ADDRESS`; otherwise the deployment config copies `VITALS_OPERATOR_ADDRESS` into the Lab environment.
 

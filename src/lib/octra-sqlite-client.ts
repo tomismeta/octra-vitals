@@ -324,6 +324,7 @@ export async function octraSqliteOpen(sql: string, config = octraSqliteConfig())
   }
   const env = await octraSqliteChildEnv(config);
   const args = ["open", "--json"];
+  if (config.writeOu) args.push("--ou", config.writeOu);
   args.push(config.database, sql);
   const stdout = await new Promise<string>((resolve, reject) => {
     execFile(config.bin, args, {
