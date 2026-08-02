@@ -367,6 +367,7 @@ test("lab database config exposes the owner-signed SQLite write OU budget", () =
     VITALS_LAB_HISTORY_DATABASE_URI: "oct://devnet/octExample",
     VITALS_LAB_HISTORY_WRITE_OU: "250000",
     OCTRA_SQLITE_WRITE_OU: "200000",
+    OCTRA_SQLITE_VERIFY_WRITE_OU: "175000",
     VITALS_CALL_OU: "150000"
   } as NodeJS.ProcessEnv);
 
@@ -374,15 +375,26 @@ test("lab database config exposes the owner-signed SQLite write OU budget", () =
   assert.equal(labSpecific.writeOu, "250000");
   assert.equal(labSpecific.writeOuSource, "VITALS_LAB_HISTORY_WRITE_OU");
 
-  const callFallback = octraSqliteConfig({
+  const verifyFallback = octraSqliteConfig({
+    VITALS_LAB_HISTORY_ENABLED: "1",
+    VITALS_LAB_HISTORY_DATABASE_URI: "oct://devnet/octExample",
+    OCTRA_SQLITE_VERIFY_WRITE_OU: "175000",
+    VITALS_CALL_OU: "175000"
+  } as NodeJS.ProcessEnv);
+
+  assert.equal(verifyFallback.enabled, true);
+  assert.equal(verifyFallback.writeOu, "175000");
+  assert.equal(verifyFallback.writeOuSource, "OCTRA_SQLITE_VERIFY_WRITE_OU");
+
+  const noLabFallback = octraSqliteConfig({
     VITALS_LAB_HISTORY_ENABLED: "1",
     VITALS_LAB_HISTORY_DATABASE_URI: "oct://devnet/octExample",
     VITALS_CALL_OU: "175000"
   } as NodeJS.ProcessEnv);
 
-  assert.equal(callFallback.enabled, true);
-  assert.equal(callFallback.writeOu, "175000");
-  assert.equal(callFallback.writeOuSource, "VITALS_CALL_OU");
+  assert.equal(noLabFallback.enabled, true);
+  assert.equal(noLabFallback.writeOu, null);
+  assert.equal(noLabFallback.writeOuSource, null);
 
   const invalid = octraSqliteConfig({
     VITALS_LAB_HISTORY_ENABLED: "1",
@@ -508,6 +520,7 @@ test("lab mirror writer refuses to run without an explicit write OU budget", asy
       VITALS_LAB_HISTORY_DATABASE_URI: "oct://devnet/octExample",
       VITALS_LAB_HISTORY_WRITE_OU: undefined,
       OCTRA_SQLITE_WRITE_OU: undefined,
+      OCTRA_SQLITE_VERIFY_WRITE_OU: undefined,
       VITALS_CALL_OU: undefined
     }, () => runLabHistoryMirror());
 

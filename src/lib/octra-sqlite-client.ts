@@ -85,7 +85,7 @@ function envValue(env: NodeJS.ProcessEnv, key: string): string | null {
 }
 
 function writeOuSetting(env: NodeJS.ProcessEnv): { value: string | null; source: string | null; reason: string | null } {
-  for (const key of ["VITALS_LAB_HISTORY_WRITE_OU", "OCTRA_SQLITE_WRITE_OU", "VITALS_CALL_OU"]) {
+  for (const key of ["VITALS_LAB_HISTORY_WRITE_OU", "OCTRA_SQLITE_WRITE_OU", "OCTRA_SQLITE_VERIFY_WRITE_OU"]) {
     const value = envValue(env, key);
     if (!value) continue;
     if (!/^[1-9]\d*$/.test(value)) {
